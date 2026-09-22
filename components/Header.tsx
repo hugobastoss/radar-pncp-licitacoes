@@ -5,6 +5,7 @@ import Image from "next/image";
 import { CircleHelp, Menu, Settings, X } from "lucide-react";
 import { useClickOutside } from "@/lib/hooks/useClickOutside";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { StatusPncp } from "@/components/ui/StatusPncp";
 
 function PopoverAjuda() {
   const [aberto, setAberto] = useState(false);
@@ -60,11 +61,10 @@ function PopoverConfiguracoes() {
               <dt className="text-ink-600 dark:text-ink-300">Fuso horário exibido</dt>
               <dd className="font-medium text-ink-900 dark:text-ink-50">Brasília (UTC-3)</dd>
             </div>
-            <div className="flex items-center justify-between">
-              <dt className="text-ink-600 dark:text-ink-300">Fonte dos dados</dt>
-              <dd className="font-medium text-ink-900 dark:text-ink-50">Demonstração</dd>
-            </div>
           </dl>
+          <div className="mt-3 border-t border-ink-100 pt-3 dark:border-ink-800">
+            <StatusPncp variante="linha" />
+          </div>
           <div className="mt-3 border-t border-ink-100 pt-3 dark:border-ink-800">
             <ThemeToggle variante="linha" />
           </div>
@@ -92,6 +92,7 @@ export function Header() {
         </div>
 
         <div className="hidden items-center gap-2 sm:flex">
+          <StatusPncp />
           <PopoverAjuda />
           <ThemeToggle />
           <PopoverConfiguracoes />
@@ -110,7 +111,8 @@ export function Header() {
 
       {menuMobileAberto && (
         <div className="border-t border-ink-200 bg-white px-4 py-3 dark:border-ink-700 dark:bg-ink-900 sm:hidden">
-          <div className="flex items-center justify-between">
+          <StatusPncp variante="linha" />
+          <div className="mt-3 flex items-center justify-between border-t border-ink-100 pt-3 dark:border-ink-800">
             <span className="text-sm font-medium text-ink-700 dark:text-ink-200">Ajuda</span>
             <CircleHelp className="h-5 w-5 text-ink-500 dark:text-ink-400" aria-hidden />
           </div>
