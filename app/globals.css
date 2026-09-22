@@ -1,0 +1,119 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens do RADAR PNCP.
+ *
+ * Paleta pensada para transmitir tecnologia, confiabilidade e organização:
+ * fundo claro, cards brancos, azul como cor de marca, verde para sinais
+ * positivos e âmbar/vermelho reservados a alertas e erros. Definidos como
+ * variáveis CSS e mapeados no bloco @theme para virarem utilitários do
+ * Tailwind (ex.: bg-primary-600, text-ink-700, bg-success-50).
+ */
+@theme {
+  /* Azul — cor de marca / ações primárias */
+  --color-primary-50: #eff6ff;
+  --color-primary-100: #dbeafe;
+  --color-primary-200: #bfdbfe;
+  --color-primary-300: #93c5fd;
+  --color-primary-400: #60a5fa;
+  --color-primary-500: #3b82f6;
+  --color-primary-600: #2563eb;
+  --color-primary-700: #1d4ed8;
+  --color-primary-800: #1e40af;
+  --color-primary-900: #1e3a8a;
+
+  /* Verde — informações positivas (sucesso, prazo confortável) */
+  --color-success-50: #ecfdf5;
+  --color-success-100: #d1fae5;
+  --color-success-200: #a7f3d0;
+  --color-success-600: #059669;
+  --color-success-700: #047857;
+
+  /* Âmbar — atenção (prazos próximos, avisos) */
+  --color-warning-50: #fffbeb;
+  --color-warning-100: #fef3c7;
+  --color-warning-200: #fde68a;
+  --color-warning-600: #d97706;
+  --color-warning-700: #b45309;
+
+  /* Vermelho — erros e alertas críticos */
+  --color-danger-50: #fef2f2;
+  --color-danger-100: #fee2e2;
+  --color-danger-200: #fecaca;
+  --color-danger-600: #dc2626;
+  --color-danger-700: #b91c1c;
+
+  /* Roxo — usado apenas para diferenciar badges de portal */
+  --color-accent-50: #f5f3ff;
+  --color-accent-100: #ede9fe;
+  --color-accent-600: #7c3aed;
+  --color-accent-700: #6d28d9;
+
+  /* Neutros — texto, bordas e superfícies */
+  --color-ink-25: #fbfcfe;
+  --color-ink-50: #f8fafc;
+  --color-ink-100: #f1f5f9;
+  --color-ink-200: #e2e8f0;
+  --color-ink-300: #cbd5e1;
+  --color-ink-400: #94a3b8;
+  --color-ink-500: #64748b;
+  --color-ink-600: #475569;
+  --color-ink-700: #334155;
+  --color-ink-800: #1e293b;
+  --color-ink-900: #0f172a;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Sombras suaves — evitar contraste forte, comum a SaaS profissionais */
+  --shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.06);
+  --shadow-card-hover: 0 2px 6px 0 rgb(15 23 42 / 0.06), 0 4px 12px -2px rgb(15 23 42 / 0.08);
+  --shadow-popover: 0 8px 24px -4px rgb(15 23 42 / 0.12), 0 2px 8px -2px rgb(15 23 42 / 0.06);
+  --shadow-drawer: -8px 0 32px -8px rgb(15 23 42 / 0.18);
+}
+
+:root {
+  --background: var(--color-ink-50);
+  --surface: #ffffff;
+  --foreground: var(--color-ink-900);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+/* Melhor legibilidade em campos numéricos (valores, datas) */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Foco visível e consistente em toda a aplicação (acessibilidade de teclado) */
+:focus-visible {
+  outline: 2px solid var(--color-primary-500);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Scrollbar discreta para áreas de rolagem horizontal (tabela em tablet) */
+.scrollbar-fina::-webkit-scrollbar {
+  height: 8px;
+}
+.scrollbar-fina::-webkit-scrollbar-thumb {
+  background-color: var(--color-ink-300);
+  border-radius: 9999px;
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+.animate-skeleton {
+  animation: skeleton-pulse 1.6s ease-in-out infinite;
+}
