@@ -71,6 +71,16 @@ function horarioBrasiliaParaIso(dataHoraSemFuso: string | undefined): string | u
   return instante.toISOString();
 }
 
+function montarLinkPncp(raw: ItemBuscaInterna): string | undefined {
+  // `item_url` vem no formato "/compras/{cnpj}/{ano}/{sequencial}", mas essa
+  // rota não existe mais no PNCP (dá "Página não encontrada") — a rota real
+  // é "/editais/...". Em vez de confiar nesse campo, montamos o link do
+  // mesmo jeito que já funciona em lib/server/pncp-client.ts.
+  const cnpjDigitos = raw.orgao_cnpj ? apenasDigitos(raw.orgao_cnpj) : undefined;
+  if (!cnpjDigitos || !raw.ano || !raw.numero_sequencial) return undefined;
+  return `https://pncp.gov.br/app/editais/${cnpjDigitos}/${raw.ano}/${raw.numero_sequencial}`;
+}
+
 function mapearParaLicitacao(raw: ItemBuscaInterna): Licitacao | undefined {
   if (!raw.numero_controle_pncp) return undefined;
 
@@ -94,7 +104,7 @@ function mapearParaLicitacao(raw: ItemBuscaInterna): Licitacao | undefined {
     dataAbertura: horarioBrasiliaParaIso(raw.data_inicio_vigencia),
     dataEncerramento: horarioBrasiliaParaIso(raw.data_fim_vigencia),
     situacao: raw.cancelado ? "Cancelada" : raw.situacao_nome,
-    linkPNCP: raw.item_url ? `https://pncp.gov.br/app${raw.item_url}` : undefined,
+    linkPNCP: montarLinkPncp(raw),
     // `linkSistemaOrigem` não existe nesta API — fica undefined (o portal
     // aparece como "não informado" na tela, sem quebrar nada).
   };

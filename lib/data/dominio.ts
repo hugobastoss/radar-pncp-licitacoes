@@ -56,12 +56,11 @@ export function grupoDaModalidade(nomeModalidade: string | undefined): "pregao" 
 }
 
 export interface OpcaoPeriodo {
-  valor: "7" | "15" | "30" | "60" | "90" | "personalizado";
+  valor: "15" | "30" | "60" | "90" | "personalizado";
   rotulo: string;
 }
 
 export const PERIODOS: OpcaoPeriodo[] = [
-  { valor: "7", rotulo: "Próximos 7 dias" },
   { valor: "15", rotulo: "Próximos 15 dias" },
   { valor: "30", rotulo: "Próximos 30 dias" },
   { valor: "60", rotulo: "Próximos 60 dias" },
@@ -75,6 +74,7 @@ export const PORTAIS_CONHECIDOS = [
   "Portal de Compras Públicas",
   "BLL Compras",
   "Compras BR",
+  "Centro de Serviços Compartilhados",
 ] as const;
 
 export const SITUACOES = [

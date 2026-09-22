@@ -105,12 +105,8 @@ export function SearchPanel({
         />
       </div>
 
-      <div className="mt-3">
-        <QuickSearches onSelecionar={onSelecionarPesquisaRapida} idAtivo={pesquisaRapidaAtiva} />
-      </div>
-
       <Collapsible.Root open={avancadoAberto} onOpenChange={onToggleAvancado}>
-        <div className="mt-5">
+        <div className="mt-3">
           <Collapsible.Trigger asChild>
             <Button
               type="button"
@@ -134,6 +130,10 @@ export function SearchPanel({
           <AdvancedFilters filtros={filtros} onChange={onChange} />
         </Collapsible.Content>
       </Collapsible.Root>
+
+      <div className="mt-5">
+        <QuickSearches onSelecionar={onSelecionarPesquisaRapida} idAtivo={pesquisaRapidaAtiva} />
+      </div>
 
       <div className="mt-5">
         <Button

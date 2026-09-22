@@ -41,6 +41,10 @@ const REGISTRO_PORTAIS: RegraPortal[] = [
     padrao: "comprasbr.com.br",
     info: { nome: "Compras BR", tonalidade: "azul" },
   },
+  {
+    padrao: "e-compras.am.gov.br",
+    info: { nome: "Centro de Serviços Compartilhados", tonalidade: "verde" },
+  },
 ];
 
 const PORTAL_DESCONHECIDO: PortalInfo = { nome: "Outro portal", tonalidade: "neutro" };

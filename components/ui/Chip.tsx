@@ -59,6 +59,8 @@ interface ChipsSelecaoUnicaProps {
   value?: string;
   onChange: (value: string | undefined) => void;
   semFiltroLabel?: string;
+  /** false quando sempre precisa haver uma opção selecionada (sem chip "sem filtro" nem "x" pra limpar). */
+  permitirLimpar?: boolean;
 }
 
 /** Chips de seleção única — clicar em outro chip troca a seleção; o "x" ou o chip "sem filtro" limpam. */
@@ -69,20 +71,23 @@ export function ChipsSelecaoUnica({
   value,
   onChange,
   semFiltroLabel = "Sem filtro",
+  permitirLimpar = true,
 }: ChipsSelecaoUnicaProps) {
   return (
     <div className="flex flex-col gap-1.5">
       <span className="text-sm font-medium text-ink-700 dark:text-ink-200">{label}</span>
       <div className="flex flex-wrap gap-2">
-        <Chip ativo={!value} onClick={() => onChange(undefined)}>
-          {semFiltroLabel}
-        </Chip>
+        {permitirLimpar && (
+          <Chip ativo={!value} onClick={() => onChange(undefined)}>
+            {semFiltroLabel}
+          </Chip>
+        )}
         {options.map((opcao) => (
           <Chip
             key={opcao.value}
             ativo={value === opcao.value}
             onClick={() => onChange(opcao.value)}
-            onLimpar={() => onChange(undefined)}
+            onLimpar={permitirLimpar ? () => onChange(undefined) : undefined}
           >
             {opcao.label}
           </Chip>

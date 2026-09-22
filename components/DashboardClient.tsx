@@ -24,6 +24,7 @@ const FILTROS_PADRAO: FiltrosLicitacao = {
   q: "",
   uf: ESTADO_TODOS,
   municipio: ESTADO_TODOS,
+  periodo: "15",
 };
 
 type StatusBusca = "idle" | "carregando" | "sucesso" | "erro_timeout" | "erro_conexao" | "erro_servidor";
@@ -41,7 +42,7 @@ function lerFiltrosDaUrl(searchParams: URLSearchParams): FiltrosLicitacao | null
     q: searchParams.get("q") ?? "",
     uf: searchParams.get("uf") ?? ESTADO_TODOS,
     municipio: searchParams.get("municipio") ?? ESTADO_TODOS,
-    periodo: (searchParams.get("periodo") as FiltrosLicitacao["periodo"]) || undefined,
+    periodo: (searchParams.get("periodo") as FiltrosLicitacao["periodo"]) || "15",
     dataInicial: searchParams.get("dataInicial") || undefined,
     dataFinal: searchParams.get("dataFinal") || undefined,
     modalidades: searchParams.getAll("modalidade"),

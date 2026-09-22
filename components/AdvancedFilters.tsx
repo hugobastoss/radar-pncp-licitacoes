@@ -21,7 +21,9 @@ const OPCOES_SITUACAO_CHIP = SITUACOES.map((s) => ({ value: s, label: s }));
 
 function contarFiltrosAtivos(filtros: FiltrosLicitacao): number {
   let total = 0;
-  if (filtros.periodo) total += 1;
+  // "15" é o padrão pré-selecionado — só conta como filtro ativo quando o
+  // usuário escolhe outra coisa.
+  if (filtros.periodo && filtros.periodo !== "15") total += 1;
   if (filtros.modalidades && filtros.modalidades.length > 0) total += 1;
   if (filtros.portais && filtros.portais.length > 0) total += 1;
   if (filtros.valorMinimo !== undefined) total += 1;
@@ -36,7 +38,7 @@ export function AdvancedFilters({ filtros, onChange }: AdvancedFiltersProps) {
 
   function limpar() {
     onChange({
-      periodo: undefined,
+      periodo: "15",
       dataInicial: undefined,
       dataFinal: undefined,
       modalidades: [],
@@ -76,6 +78,7 @@ export function AdvancedFilters({ filtros, onChange }: AdvancedFiltersProps) {
             options={OPCOES_PERIODO_CHIP}
             value={filtros.periodo}
             onChange={(valor) => onChange({ periodo: valor as FiltrosLicitacao["periodo"] })}
+            permitirLimpar={false}
           />
 
           {filtros.periodo === "personalizado" && (

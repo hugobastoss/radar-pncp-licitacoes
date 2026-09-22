@@ -45,7 +45,7 @@ export interface Licitacao {
   linkPNCP?: string;
 }
 
-export type PeriodoPreset = "7" | "15" | "30" | "60" | "90" | "personalizado";
+export type PeriodoPreset = "15" | "30" | "60" | "90" | "personalizado";
 
 export type OrdenacaoOpcao =
   | "encerramento_asc"
