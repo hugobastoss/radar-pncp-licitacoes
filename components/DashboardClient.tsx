@@ -18,13 +18,7 @@ import { LicitacaoDetails } from "@/components/LicitacaoDetails";
 import { buscarLicitacoes } from "@/lib/api";
 import { ESTADO_TODOS } from "@/lib/data/estados";
 import type { PesquisaRapida } from "@/lib/data/dominio";
-import type {
-  CenarioDemo,
-  FiltrosLicitacao,
-  Licitacao,
-  LicitacoesResponse,
-  OrdenacaoOpcao,
-} from "@/types/licitacao";
+import type { FiltrosLicitacao, Licitacao, LicitacoesResponse, OrdenacaoOpcao } from "@/types/licitacao";
 
 const FILTROS_PADRAO: FiltrosLicitacao = {
   q: "",
@@ -85,7 +79,6 @@ export function DashboardClient() {
   );
   const [pagina, setPagina] = useState(() => Number(searchParams.get("pagina")) || 1);
   const [tamanhoPagina, setTamanhoPagina] = useState(() => Number(searchParams.get("tamanhoPagina")) || 25);
-  const [cenario, setCenario] = useState<CenarioDemo>("auto");
 
   const [status, setStatus] = useState<StatusBusca>("idle");
   const [resultado, setResultado] = useState<LicitacoesResponse | null>(null);
@@ -139,8 +132,8 @@ export function DashboardClient() {
   }, []);
 
   // Dispara a busca sempre que os filtros aplicados, os refinamentos rápidos
-  // da tabela, a ordenação, a página ou o cenário de demonstração mudarem —
-  // nunca ao digitar no formulário (filtrosRascunho).
+  // da tabela, a ordenação ou a página mudarem — nunca ao digitar no
+  // formulário (filtrosRascunho).
   useEffect(() => {
     if (!filtrosAplicados) return;
 
@@ -152,7 +145,6 @@ export function DashboardClient() {
       ordenarPor,
       pagina,
       tamanhoPagina,
-      cenario,
     };
 
     // executarBusca só chama os setters de estado depois de um `await` (a
@@ -188,7 +180,7 @@ export function DashboardClient() {
 
     router.replace(`${pathname}?${query.toString()}`, { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtrosAplicados, modalidadeRapida, localRapido, portalRapido, ordenarPor, pagina, tamanhoPagina, cenario]);
+  }, [filtrosAplicados, modalidadeRapida, localRapido, portalRapido, ordenarPor, pagina, tamanhoPagina]);
 
   useEffect(() => {
     return () => {
@@ -246,7 +238,6 @@ export function DashboardClient() {
       ordenarPor,
       pagina,
       tamanhoPagina,
-      cenario,
     });
   }
 
@@ -283,15 +274,7 @@ export function DashboardClient() {
 
         {filtrosAplicados && !emErro && resultado && (
           <>
-            <ResultsHeader
-              consultadoEm={resultado.meta.consultadoEm}
-              cenario={cenario}
-              onChangeCenario={(c) => {
-                setCenario(c);
-                setPagina(1);
-              }}
-              atualizando={atualizando}
-            />
+            <ResultsHeader consultadoEm={resultado.meta.consultadoEm} atualizando={atualizando} />
 
             <div className="px-4 py-4 sm:px-6">
               <SummaryCards resumo={resultado.summary} />

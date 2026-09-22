@@ -24,7 +24,7 @@ export function AcoesLicitacao({ item, onVerDetalhes }: AcoesLicitacaoProps) {
       <Button
         variant="secondary"
         size="sm"
-        fullWidth
+        className="flex-1"
         leftIcon={<Eye className="h-4 w-4" aria-hidden />}
         onClick={() => onVerDetalhes(item)}
       >
@@ -50,7 +50,7 @@ export function AcoesLicitacao({ item, onVerDetalhes }: AcoesLicitacaoProps) {
           title="Link do portal não informado pelo órgão"
           aria-label="Link do portal não informado"
         >
-          <ExternalLink className="h-4 w-4" aria-hidden /> Portal indisponível
+          <ExternalLink className="h-4 w-4" aria-hidden /> Indisponível
         </button>
       )}
     </div>

@@ -7,8 +7,7 @@ import type { Licitacao } from "@/types/licitacao";
  * Baseado no Manual de Integração PNCP (consulta pública, sem autenticação):
  * https://www.gov.br/pncp/pt-br/acesso-a-informacao/manuais
  *
- * Duas limitações importantes da API real, que não existem no gerador de
- * dados de demonstração e moldam este arquivo inteiro:
+ * Duas limitações importantes desta API moldam este arquivo inteiro:
  *
  * 1. Não existe busca por texto livre — o endpoint só filtra por data,
  *    modalidade, UF, município e CNPJ. A busca por palavra-chave (`q`),
@@ -93,7 +92,7 @@ function formatarCnpj(cnpj: string | undefined): string | undefined {
  * O PNCP devolve datas/horas sem indicação de fuso (ex.: "2026-09-20T10:00:00"),
  * mas já no horário de Brasília. Fixamos o deslocamento (-03:00, sem horário
  * de verão desde 2019) para virar um instante UTC correto — o mesmo padrão
- * já usado em app/api/licitacoes/route.ts para os dados de demonstração.
+ * já usado em app/api/licitacoes/route.ts para o cálculo do período de busca.
  */
 function horarioBrasiliaParaIso(dataHoraSemFuso: string | undefined): string | undefined {
   if (!dataHoraSemFuso) return undefined;

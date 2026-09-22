@@ -1,4 +1,4 @@
-import { ExternalLink, FileSearch, Info } from "lucide-react";
+import { ExternalLink, FileSearch } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { PortalBadge } from "@/components/PortalBadge";
 import { PrazoIndicador } from "@/components/PrazoIndicador";
@@ -26,11 +26,6 @@ export function LicitacaoDetails({ item }: { item: Licitacao }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-start gap-2 rounded-lg bg-ink-50 p-3 text-xs text-ink-500 dark:bg-ink-800 dark:text-ink-400">
-        <Info className="h-4 w-4 shrink-0 text-ink-400 dark:text-ink-500" aria-hidden />
-        Dados de demonstração — nenhuma informação nesta tela corresponde a uma licitação real.
-      </div>
-
       <div>
         <p className="text-base font-semibold text-ink-900 dark:text-ink-50">
           {formatarNumeroLicitacao(item.modalidade, item.numeroLicitacao)}

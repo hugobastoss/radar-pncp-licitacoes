@@ -1,38 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { obterLicitacoesDemo } from "@/lib/server/mock-licitacoes";
 import { buscarContratacoesPncp } from "@/lib/server/pncp-client";
 import { buscarViaApiInterna } from "@/lib/server/pncp-search-client";
 import { identificarPortal } from "@/lib/portal";
 import { grupoDaModalidade, modalidadesCorrespondem, MODALIDADES } from "@/lib/data/dominio";
 import { MUNICIPIOS_POR_UF } from "@/lib/data/municipios";
-import type {
-  Licitacao,
-  LicitacoesResponse,
-  OrdenacaoOpcao,
-  CenarioDemo,
-} from "@/types/licitacao";
+import type { Licitacao, LicitacoesResponse, OrdenacaoOpcao } from "@/types/licitacao";
 
 /**
- * /api/licitacoes — camada de BACKEND do Next.js.
- *
- * Fonte dos dados por cenário:
- * - "vazio", "sucesso": dados fictícios (lib/server/mock-licitacoes.ts) — o
- *   primeiro força uma lista vazia, o segundo ignora os filtros recebidos.
- *   Ambos existem só para você visualizar esses estados de tela sem
- *   depender da disponibilidade do PNCP.
- * - qualquer outro cenário (incluindo o padrão "auto" e "lento"): busca real
- *   no PNCP, com DUAS fontes em cascata:
- *     1. lib/server/pncp-search-client.ts — a API de busca não-documentada
- *        que sustenta pncp.gov.br/app/editais. Rápida e com texto livre,
- *        mas pode mudar sem aviso por não ser um contrato oficial.
- *     2. lib/server/pncp-client.ts — a API de consulta OFICIAL (Manual de
- *        Integração PNCP). Usada só quando a primeira falha: mais lenta
- *        (uma chamada por modalidade) e sem busca por texto.
+ * /api/licitacoes — camada de BACKEND do Next.js. Busca real no PNCP, com
+ * DUAS fontes em cascata:
+ *   1. lib/server/pncp-search-client.ts — a API de busca não-documentada
+ *      que sustenta pncp.gov.br/app/editais. Rápida e com texto livre, mas
+ *      pode mudar sem aviso por não ser um contrato oficial.
+ *   2. lib/server/pncp-client.ts — a API de consulta OFICIAL (Manual de
+ *      Integração PNCP). Usada só quando a primeira falha: mais lenta (uma
+ *      chamada por modalidade) e sem busca por texto.
  *
  * Nenhuma das duas fontes filtra por órgão, número da licitação, situação
  * ou faixa de valor — por isso esses filtros (e modalidade/município, como
- * rede de segurança) continuam sendo aplicados aqui, sobre o resultado
- * agregado, exatamente como já eram aplicados sobre os dados fictícios.
+ * rede de segurança) são sempre aplicados aqui, sobre o resultado agregado.
  */
 
 export const dynamic = "force-dynamic";
@@ -121,16 +107,6 @@ function ordenar(itens: Licitacao[], ordenarPor: OrdenacaoOpcao | null): Licitac
   }
 }
 
-function aguardar(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(resolve, ms);
-    signal?.addEventListener("abort", () => {
-      clearTimeout(timer);
-      reject(new DOMException("Aborted", "AbortError"));
-    });
-  });
-}
-
 function respostaErroServidor() {
   return NextResponse.json(
     { erro: "Não foi possível concluir a consulta neste momento." },
@@ -141,27 +117,6 @@ function respostaErroServidor() {
 export async function GET(request: NextRequest) {
   const inicioRequisicao = Date.now();
   const params = request.nextUrl.searchParams;
-
-  const cenario = (params.get("cenario") as CenarioDemo | null) ?? "auto";
-
-  // --- Cenários de demonstração (apenas para QA visual do frontend) -------
-  // "erro_conexao" é tratado inteiramente no cliente (lib/api.ts), simulando
-  // uma falha de rede antes mesmo de chamar esta rota.
-  if (cenario === "erro_servidor") {
-    await aguardar(500);
-    return respostaErroServidor();
-  }
-
-  if (cenario === "timeout") {
-    // Atraso deliberadamente maior que o timeout do cliente (ver lib/api.ts),
-    // para exercitar o estado de "O PNCP demorou para responder".
-    try {
-      await aguardar(20000, request.signal);
-    } catch {
-      // requisição abortada pelo cliente — nada a fazer.
-    }
-    return NextResponse.json({ erro: "Tempo de resposta excedido." }, { status: 504 });
-  }
 
   const q = params.get("q") ?? "";
   const uf = params.get("uf") ?? "";
@@ -191,154 +146,123 @@ export async function GET(request: NextRequest) {
   const { inicio, fim } = calcularJanelaPeriodo(periodo, dataInicial, dataFinal);
 
   let resultadoPrincipal: Licitacao[];
-  let fonte: "demonstracao" | "pncp" = "pncp";
   let parcial = false;
 
-  if (cenario === "vazio" || cenario === "sucesso") {
-    // Ambos os cenários seguem usando dados fictícios: "vazio" força lista
-    // vazia, "sucesso" ignora os filtros recebidos deliberadamente — nenhum
-    // dos dois faz sentido pedir à API real do PNCP, que exige parâmetros
-    // obrigatórios (data final + modalidade) para responder qualquer coisa.
-    const latenciaSimulada = inteiroDe(500, 1300);
+  const ufFiltro = uf && uf !== "TODOS" ? uf : undefined;
+  let usouFallbackOficial = false;
+
+  let itensBrutos: Licitacao[];
+  try {
+    const resultadoBusca = await buscarViaApiInterna({
+      q: q.trim() || undefined,
+      ufs: ufFiltro ? [ufFiltro] : undefined,
+      signal: request.signal,
+    });
+    itensBrutos = resultadoBusca.itens;
+    parcial = resultadoBusca.parcial;
+  } catch {
+    // API de busca interna indisponível — cai para a API oficial, que
+    // exige modalidade e data final explícitos (ver pncp-client.ts).
+    usouFallbackOficial = true;
+
+    const codigosModalidade = modalidades.length
+      ? modalidades
+          .map((nome) => MODALIDADES.find((m) => modalidadesCorrespondem(m.nome, nome))?.codigoPncp)
+          .filter((codigo): codigo is number => codigo !== undefined)
+      : undefined;
+
+    let resultadoPncp;
     try {
-      await aguardar(latenciaSimulada, request.signal);
-    } catch {
-      return new NextResponse(null, { status: 499 });
-    }
-
-    fonte = "demonstracao";
-    const base = obterLicitacoesDemo().map((item) => ({
-      ...item,
-      portal: identificarPortal(item.linkSistemaOrigem).nome,
-    }));
-    resultadoPrincipal = cenario === "vazio" ? [] : base;
-  } else {
-    if (cenario === "lento") {
-      try {
-        await aguardar(inteiroDe(3200, 4200), request.signal);
-      } catch {
-        return new NextResponse(null, { status: 499 });
-      }
-    }
-
-    const ufFiltro = uf && uf !== "TODOS" ? uf : undefined;
-    let usouFallbackOficial = false;
-
-    let itensBrutos: Licitacao[];
-    try {
-      const resultadoBusca = await buscarViaApiInterna({
-        q: q.trim() || undefined,
-        ufs: ufFiltro ? [ufFiltro] : undefined,
+      resultadoPncp = await buscarContratacoesPncp({
+        dataFinal: fim ?? finalDoDiaBrasiliaMaisDias(new Date(), DIAS_JANELA_PADRAO),
+        codigosModalidade,
+        uf: ufFiltro,
+        codigoMunicipioIbge: municipio && municipio !== "TODOS" ? municipio : undefined,
         signal: request.signal,
       });
-      itensBrutos = resultadoBusca.itens;
-      parcial = resultadoBusca.parcial;
     } catch {
-      // API de busca interna indisponível — cai para a API oficial, que
-      // exige modalidade e data final explícitos (ver pncp-client.ts).
-      usouFallbackOficial = true;
-
-      const codigosModalidade = modalidades.length
-        ? modalidades
-            .map((nome) => MODALIDADES.find((m) => modalidadesCorrespondem(m.nome, nome))?.codigoPncp)
-            .filter((codigo): codigo is number => codigo !== undefined)
-        : undefined;
-
-      let resultadoPncp;
-      try {
-        resultadoPncp = await buscarContratacoesPncp({
-          dataFinal: fim ?? finalDoDiaBrasiliaMaisDias(new Date(), DIAS_JANELA_PADRAO),
-          codigosModalidade,
-          uf: ufFiltro,
-          codigoMunicipioIbge: municipio && municipio !== "TODOS" ? municipio : undefined,
-          signal: request.signal,
-        });
-      } catch {
-        return respostaErroServidor();
-      }
-
-      if (resultadoPncp.todasFalharam) {
-        return respostaErroServidor();
-      }
-
-      itensBrutos = resultadoPncp.itens;
-      parcial = resultadoPncp.parcial;
+      return respostaErroServidor();
     }
 
-    resultadoPrincipal = itensBrutos.map((item) => ({
-      ...item,
-      portal: identificarPortal(item.linkSistemaOrigem).nome,
-    }));
-
-    // A API oficial já filtra pela data final na própria chamada; a de
-    // busca interna não tem filtro de data nenhum — em ambos os casos o
-    // limite inferior do período, quando informado, é aplicado aqui.
-    if (inicio) {
-      resultadoPrincipal = resultadoPrincipal.filter((item) => {
-        if (!item.dataEncerramento) return false;
-        return new Date(item.dataEncerramento) >= inicio;
-      });
-    }
-    // Data final: só precisa ser reforçada aqui para a API de busca interna
-    // (a oficial já recebeu esse limite na própria requisição).
-    if (fim && !usouFallbackOficial) {
-      resultadoPrincipal = resultadoPrincipal.filter((item) => {
-        if (!item.dataEncerramento) return false;
-        return new Date(item.dataEncerramento) <= fim;
-      });
+    if (resultadoPncp.todasFalharam) {
+      return respostaErroServidor();
     }
 
-    // Modalidade e município: a API de busca interna não filtra nenhum dos
-    // dois (e a oficial usa um id de município próprio, não o IBGE) — por
-    // isso os dois são sempre reforçados aqui, para as duas fontes.
-    if (modalidades.length > 0) {
-      resultadoPrincipal = resultadoPrincipal.filter(
-        (item) => item.modalidade && modalidades.some((nome) => modalidadesCorrespondem(item.modalidade!, nome)),
-      );
-    }
-    if (municipio && municipio !== "TODOS") {
-      const nomeMunicipioFiltro = ufFiltro
-        ? MUNICIPIOS_POR_UF[ufFiltro]?.find((m) => m.codigoIbge === municipio)?.nome
-        : undefined;
-      resultadoPrincipal = resultadoPrincipal.filter((item) => {
-        if (item.codigoMunicipioIbge) return item.codigoMunicipioIbge === municipio;
-        if (!nomeMunicipioFiltro || !item.municipio) return false;
-        return normalizarTexto(item.municipio) === normalizarTexto(nomeMunicipioFiltro);
-      });
-    }
+    itensBrutos = resultadoPncp.itens;
+    parcial = resultadoPncp.parcial;
   }
 
-  if (cenario !== "vazio" && cenario !== "sucesso") {
-    if (q.trim()) {
-      resultadoPrincipal = resultadoPrincipal.filter(
-        (item) => contemTexto(item.objeto, q) || contemTexto(item.orgao, q),
-      );
-    }
-    if (valorMinimo !== undefined && Number.isFinite(valorMinimo)) {
-      resultadoPrincipal = resultadoPrincipal.filter(
-        (item) => item.valorEstimado !== undefined && item.valorEstimado >= valorMinimo,
-      );
-    }
-    if (valorMaximo !== undefined && Number.isFinite(valorMaximo)) {
-      resultadoPrincipal = resultadoPrincipal.filter(
-        (item) => item.valorEstimado !== undefined && item.valorEstimado <= valorMaximo,
-      );
-    }
-    if (orgao.trim()) {
-      resultadoPrincipal = resultadoPrincipal.filter((item) => contemTexto(item.orgao, orgao));
-    }
-    if (numeroLicitacao.trim()) {
-      resultadoPrincipal = resultadoPrincipal.filter((item) => contemTexto(item.numeroLicitacao, numeroLicitacao));
-    }
-    if (situacao.trim()) {
-      resultadoPrincipal = resultadoPrincipal.filter((item) => contemTexto(item.situacao, situacao));
-    }
-    if (portais.length > 0) {
-      const normalizados = portais.map(normalizarTexto);
-      resultadoPrincipal = resultadoPrincipal.filter(
-        (item) => item.portal && normalizados.includes(normalizarTexto(item.portal)),
-      );
-    }
+  resultadoPrincipal = itensBrutos.map((item) => ({
+    ...item,
+    portal: identificarPortal(item.linkSistemaOrigem).nome,
+  }));
+
+  // A API oficial já filtra pela data final na própria chamada; a de busca
+  // interna não tem filtro de data nenhum — em ambos os casos o limite
+  // inferior do período, quando informado, é aplicado aqui.
+  if (inicio) {
+    resultadoPrincipal = resultadoPrincipal.filter((item) => {
+      if (!item.dataEncerramento) return false;
+      return new Date(item.dataEncerramento) >= inicio;
+    });
+  }
+  // Data final: só precisa ser reforçada aqui para a API de busca interna
+  // (a oficial já recebeu esse limite na própria requisição).
+  if (fim && !usouFallbackOficial) {
+    resultadoPrincipal = resultadoPrincipal.filter((item) => {
+      if (!item.dataEncerramento) return false;
+      return new Date(item.dataEncerramento) <= fim;
+    });
+  }
+
+  // Modalidade e município: a API de busca interna não filtra nenhum dos
+  // dois (e a oficial usa um id de município próprio, não o IBGE) — por
+  // isso os dois são sempre reforçados aqui, para as duas fontes.
+  if (modalidades.length > 0) {
+    resultadoPrincipal = resultadoPrincipal.filter(
+      (item) => item.modalidade && modalidades.some((nome) => modalidadesCorrespondem(item.modalidade!, nome)),
+    );
+  }
+  if (municipio && municipio !== "TODOS") {
+    const nomeMunicipioFiltro = ufFiltro
+      ? MUNICIPIOS_POR_UF[ufFiltro]?.find((m) => m.codigoIbge === municipio)?.nome
+      : undefined;
+    resultadoPrincipal = resultadoPrincipal.filter((item) => {
+      if (item.codigoMunicipioIbge) return item.codigoMunicipioIbge === municipio;
+      if (!nomeMunicipioFiltro || !item.municipio) return false;
+      return normalizarTexto(item.municipio) === normalizarTexto(nomeMunicipioFiltro);
+    });
+  }
+
+  if (q.trim()) {
+    resultadoPrincipal = resultadoPrincipal.filter(
+      (item) => contemTexto(item.objeto, q) || contemTexto(item.orgao, q),
+    );
+  }
+  if (valorMinimo !== undefined && Number.isFinite(valorMinimo)) {
+    resultadoPrincipal = resultadoPrincipal.filter(
+      (item) => item.valorEstimado !== undefined && item.valorEstimado >= valorMinimo,
+    );
+  }
+  if (valorMaximo !== undefined && Number.isFinite(valorMaximo)) {
+    resultadoPrincipal = resultadoPrincipal.filter(
+      (item) => item.valorEstimado !== undefined && item.valorEstimado <= valorMaximo,
+    );
+  }
+  if (orgao.trim()) {
+    resultadoPrincipal = resultadoPrincipal.filter((item) => contemTexto(item.orgao, orgao));
+  }
+  if (numeroLicitacao.trim()) {
+    resultadoPrincipal = resultadoPrincipal.filter((item) => contemTexto(item.numeroLicitacao, numeroLicitacao));
+  }
+  if (situacao.trim()) {
+    resultadoPrincipal = resultadoPrincipal.filter((item) => contemTexto(item.situacao, situacao));
+  }
+  if (portais.length > 0) {
+    const normalizados = portais.map(normalizarTexto);
+    resultadoPrincipal = resultadoPrincipal.filter(
+      (item) => item.portal && normalizados.includes(normalizarTexto(item.portal)),
+    );
   }
 
   // Facetas: refletem a pesquisa aplicada (acima), nunca os refinamentos
@@ -403,7 +327,6 @@ export async function GET(request: NextRequest) {
     summary,
     facets,
     meta: {
-      fonte,
       consultadoEm: new Date().toISOString(),
       tempoRespostaMs: Date.now() - inicioRequisicao,
       parcial,
@@ -411,8 +334,4 @@ export async function GET(request: NextRequest) {
   };
 
   return NextResponse.json(resposta);
-}
-
-function inteiroDe(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
 }

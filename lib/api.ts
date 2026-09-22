@@ -38,7 +38,6 @@ function construirQueryString(filtros: FiltrosLicitacao): string {
   set("ordenarPor", filtros.ordenarPor);
   set("pagina", filtros.pagina);
   set("tamanhoPagina", filtros.tamanhoPagina);
-  set("cenario", filtros.cenario);
   set("modalidadeRapida", filtros.modalidadeRapida);
   set("localRapido", filtros.localRapido);
   set("portalRapido", filtros.portalRapido);
@@ -100,14 +99,6 @@ export async function buscarLicitacoes(
   filtros: FiltrosLicitacao,
   options?: { signal?: AbortSignal },
 ): Promise<ResultadoBusca> {
-  // Simulação de erro de conexão: nem chega a chamar o backend, para
-  // representar fielmente uma falha de rede do lado do cliente.
-  if (filtros.cenario === "erro_conexao") {
-    await new Promise((r) => setTimeout(r, 400));
-    if (options?.signal?.aborted) return { status: "cancelado" };
-    return { status: "erro_conexao" };
-  }
-
   const query = construirQueryString(filtros);
 
   let resposta: Response;

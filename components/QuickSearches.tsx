@@ -60,7 +60,7 @@ export function QuickSearches({ onSelecionar, idAtivo }: QuickSearchesProps) {
   }
 
   const CLASSE_SETA =
-    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-ink-200 text-ink-500 hover:bg-ink-50 hover:text-ink-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent dark:border-ink-700 dark:text-ink-400 dark:hover:bg-ink-800 dark:hover:text-ink-200";
+    "hidden sm:flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-ink-200 text-ink-500 hover:bg-ink-50 hover:text-ink-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent dark:border-ink-700 dark:text-ink-400 dark:hover:bg-ink-800 dark:hover:text-ink-200";
 
   return (
     <Collapsible.Root
@@ -116,7 +116,8 @@ export function QuickSearches({ onSelecionar, idAtivo }: QuickSearchesProps) {
                   type="button"
                   onClick={() => onSelecionar(pesquisa)}
                   className={cn(
-                    "flex shrink-0 basis-[calc((100%-2rem)/5)] snap-start flex-col items-start gap-1 rounded-lg border bg-white p-2.5 text-left transition-all duration-150",
+                    "flex shrink-0 basis-[43%] snap-start flex-col items-start gap-1 rounded-lg border bg-white p-2.5 text-left transition-all duration-150",
+                    "sm:basis-[31%] md:basis-[23%] lg:basis-[calc((100%-2rem)/5)]",
                     "hover:-translate-y-0.5 hover:border-primary-300 hover:shadow-card-hover dark:hover:border-primary-700",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500",
                     "dark:bg-ink-900",

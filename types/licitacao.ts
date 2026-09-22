@@ -55,20 +55,6 @@ export type OrdenacaoOpcao =
   | "municipio_asc"
   | "portal_asc";
 
-/**
- * Cenários de demonstração: permitem visualizar todos os estados da tela
- * (sucesso, vazio, erro, timeout) sem depender de uma integração real.
- * Quando o backend real existir, este parâmetro deixa de ter efeito.
- */
-export type CenarioDemo =
-  | "auto"
-  | "sucesso"
-  | "vazio"
-  | "erro_servidor"
-  | "erro_conexao"
-  | "timeout"
-  | "lento";
-
 export interface FiltrosLicitacao {
   q?: string;
   uf?: string;
@@ -87,7 +73,6 @@ export interface FiltrosLicitacao {
   ordenarPor?: OrdenacaoOpcao;
   pagina?: number;
   tamanhoPagina?: number;
-  cenario?: CenarioDemo;
 
   /**
    * Refinamentos rápidos da própria tabela (seção 11 do briefing): não abrem
@@ -115,8 +100,6 @@ export interface FacetasDisponiveis {
 }
 
 export interface MetaConsulta {
-  /** Nesta fase, sempre "demonstracao". Passa a "pncp" quando o backend real for ligado. */
-  fonte: "demonstracao" | "pncp";
   consultadoEm: string; // ISO 8601
   tempoRespostaMs: number;
   /**

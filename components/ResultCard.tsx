@@ -7,7 +7,7 @@ import { PortalBadge } from "@/components/PortalBadge";
 import { PrazoIndicador } from "@/components/PrazoIndicador";
 import { AcoesLicitacao } from "@/components/AcoesLicitacao";
 import { grupoDaModalidade } from "@/lib/data/dominio";
-import { formatarLocal, formatarMoeda, formatarNumeroLicitacao, truncarTexto } from "@/lib/formatters";
+import { formatarLocal, formatarMoeda, truncarTexto } from "@/lib/formatters";
 import type { Licitacao } from "@/types/licitacao";
 
 const TONE_POR_GRUPO = {
@@ -31,9 +31,9 @@ export function ResultCard({ item, onVerDetalhes }: ResultCardProps) {
   return (
     <article className="rounded-xl border border-ink-200 bg-white p-4 shadow-card dark:border-ink-700 dark:bg-ink-900">
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <p className="text-sm font-semibold text-ink-900 dark:text-ink-50">
-            {formatarNumeroLicitacao(item.modalidade, item.numeroLicitacao)}
+            {item.numeroLicitacao ? `Nº ${item.numeroLicitacao}` : "Número não informado"}
           </p>
           <p className="mt-0.5 text-sm text-ink-700 dark:text-ink-200">{item.orgao ?? "Órgão não informado"}</p>
         </div>
@@ -71,7 +71,7 @@ export function ResultCard({ item, onVerDetalhes }: ResultCardProps) {
         <PortalBadge linkSistemaOrigem={item.linkSistemaOrigem} />
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+      <div className="mt-3 flex flex-wrap items-start justify-between gap-2">
         <PrazoIndicador dataEncerramento={item.dataEncerramento} />
         <span className="inline-flex items-center gap-1.5 text-sm font-semibold tabular-nums text-ink-900 dark:text-ink-50">
           <Wallet className="h-4 w-4 text-ink-400 dark:text-ink-500" aria-hidden />
