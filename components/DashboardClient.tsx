@@ -274,7 +274,11 @@ export function DashboardClient() {
 
         {filtrosAplicados && !emErro && resultado && (
           <>
-            <ResultsHeader consultadoEm={resultado.meta.consultadoEm} atualizando={atualizando} />
+            <ResultsHeader
+              consultadoEm={resultado.meta.consultadoEm}
+              atualizando={atualizando}
+              parcial={resultado.meta.parcial}
+            />
 
             <div className="px-4 py-4 sm:px-6">
               <SummaryCards resumo={resultado.summary} />

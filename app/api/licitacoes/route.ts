@@ -145,6 +145,18 @@ export async function GET(request: NextRequest) {
 
   const { inicio, fim } = calcularJanelaPeriodo(periodo, dataInicial, dataFinal);
 
+  // Sem período explícito, o padrão passa a ser "oportunidades em aberto,
+  // próximos 180 dias" — mesma janela que a API oficial já aplica (seu
+  // endpoint só lista propostas em aberto, e recebe esse limite via
+  // `dataFinal`). Sem isso, a fonte primária (que não filtra data nenhuma)
+  // podia devolver licitações encerradas há meses misturadas com as abertas.
+  // Exceção: se o usuário já filtrou por "Situação" (ex.: "Encerrada"), não
+  // forçamos o limite inferior — senão esse filtro ficaria impossível de
+  // satisfazer.
+  const agora = new Date();
+  const fimEfetivo = fim ?? finalDoDiaBrasiliaMaisDias(agora, DIAS_JANELA_PADRAO);
+  const inicioEfetivo = inicio ?? (situacao.trim() ? undefined : agora);
+
   let resultadoPrincipal: Licitacao[];
   let parcial = false;
 
@@ -153,6 +165,13 @@ export async function GET(request: NextRequest) {
 
   let itensBrutos: Licitacao[];
   try {
+    // A fonte primária nunca preenche o portal de origem — se o usuário
+    // filtrou por um portal específico, só a API oficial pode satisfazer
+    // esse filtro corretamente, então vamos direto para ela.
+    if (portais.length > 0) {
+      throw new Error("Filtro de portal exige a API oficial");
+    }
+
     const resultadoBusca = await buscarViaApiInterna({
       q: q.trim() || undefined,
       ufs: ufFiltro ? [ufFiltro] : undefined,
@@ -161,8 +180,9 @@ export async function GET(request: NextRequest) {
     itensBrutos = resultadoBusca.itens;
     parcial = resultadoBusca.parcial;
   } catch {
-    // API de busca interna indisponível — cai para a API oficial, que
-    // exige modalidade e data final explícitos (ver pncp-client.ts).
+    // API de busca interna indisponível (ou filtro de portal, acima) — cai
+    // para a API oficial, que exige modalidade e data final explícitos (ver
+    // pncp-client.ts).
     usouFallbackOficial = true;
 
     const codigosModalidade = modalidades.length
@@ -174,7 +194,7 @@ export async function GET(request: NextRequest) {
     let resultadoPncp;
     try {
       resultadoPncp = await buscarContratacoesPncp({
-        dataFinal: fim ?? finalDoDiaBrasiliaMaisDias(new Date(), DIAS_JANELA_PADRAO),
+        dataFinal: fimEfetivo,
         codigosModalidade,
         uf: ufFiltro,
         codigoMunicipioIbge: municipio && municipio !== "TODOS" ? municipio : undefined,
@@ -197,21 +217,20 @@ export async function GET(request: NextRequest) {
     portal: identificarPortal(item.linkSistemaOrigem).nome,
   }));
 
-  // A API oficial já filtra pela data final na própria chamada; a de busca
-  // interna não tem filtro de data nenhum — em ambos os casos o limite
-  // inferior do período, quando informado, é aplicado aqui.
-  if (inicio) {
+  // Limite inferior (inicioEfetivo): reforçado para as duas fontes — nenhuma
+  // das duas garante sozinha que só devolve licitações ainda em aberto.
+  if (inicioEfetivo) {
     resultadoPrincipal = resultadoPrincipal.filter((item) => {
       if (!item.dataEncerramento) return false;
-      return new Date(item.dataEncerramento) >= inicio;
+      return new Date(item.dataEncerramento) >= inicioEfetivo;
     });
   }
-  // Data final: só precisa ser reforçada aqui para a API de busca interna
-  // (a oficial já recebeu esse limite na própria requisição).
-  if (fim && !usouFallbackOficial) {
+  // Limite superior (fimEfetivo): só precisa ser reforçado aqui para a fonte
+  // primária (a oficial já recebeu esse limite na própria requisição).
+  if (!usouFallbackOficial) {
     resultadoPrincipal = resultadoPrincipal.filter((item) => {
       if (!item.dataEncerramento) return false;
-      return new Date(item.dataEncerramento) <= fim;
+      return new Date(item.dataEncerramento) <= fimEfetivo;
     });
   }
 
@@ -234,7 +253,12 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  if (q.trim()) {
+  // Só reforçado aqui para a fonte oficial, que não tem busca por texto (o
+  // filtro que ela recebeu foi aplicado no lado do PNCP). Para a fonte
+  // primária, o `q` já foi usado na própria busca — refiltrar aqui por um
+  // match literal em objeto/órgão poderia descartar resultados que a busca
+  // do PNCP considerou válidos por outros critérios (ex.: outro campo).
+  if (q.trim() && usouFallbackOficial) {
     resultadoPrincipal = resultadoPrincipal.filter(
       (item) => contemTexto(item.objeto, q) || contemTexto(item.orgao, q),
     );

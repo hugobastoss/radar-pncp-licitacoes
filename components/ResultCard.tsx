@@ -1,13 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronUp, MapPin, Wallet } from "lucide-react";
+import { Calendar, ChevronDown, ChevronUp, MapPin, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
-import { PortalBadge } from "@/components/PortalBadge";
-import { PrazoIndicador } from "@/components/PrazoIndicador";
 import { AcoesLicitacao } from "@/components/AcoesLicitacao";
-import { grupoDaModalidade } from "@/lib/data/dominio";
-import { formatarLocal, formatarMoeda, truncarTexto } from "@/lib/formatters";
+import { grupoDaModalidade, tonalidadeDaSituacao } from "@/lib/data/dominio";
+import { formatarDataHoraCurta, formatarLocal, formatarMoeda, truncarTexto } from "@/lib/formatters";
 import type { Licitacao } from "@/types/licitacao";
 
 const TONE_POR_GRUPO = {
@@ -31,16 +29,28 @@ export function ResultCard({ item, onVerDetalhes }: ResultCardProps) {
   return (
     <article className="rounded-xl border border-ink-200 bg-white p-4 shadow-card dark:border-ink-700 dark:bg-ink-900">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-ink-900 dark:text-ink-50">
-            {item.numeroLicitacao ? `Nº ${item.numeroLicitacao}` : "Número não informado"}
-          </p>
-          <p className="mt-0.5 text-sm text-ink-700 dark:text-ink-200">{item.orgao ?? "Órgão não informado"}</p>
-        </div>
+        <p className="text-sm font-semibold text-ink-900 dark:text-ink-50">
+          {item.numeroLicitacao ? `Nº ${item.numeroLicitacao}` : "Número não informado"}
+        </p>
         <Badge tone={TONE_POR_GRUPO[grupo]} className="shrink-0">
           {item.modalidade ?? "Não informada"}
         </Badge>
       </div>
+
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <span className="inline-flex min-w-0 items-center gap-1.5 text-sm text-ink-600 dark:text-ink-300">
+          <MapPin className="h-4 w-4 shrink-0 text-ink-400 dark:text-ink-500" aria-hidden />
+          <span className="truncate">{formatarLocal(item.municipio, item.uf)}</span>
+        </span>
+        <Badge tone={tonalidadeDaSituacao(item.situacao)} className="shrink-0">
+          {item.situacao ?? "Não informada"}
+        </Badge>
+      </div>
+
+      <p className="mt-2 flex items-center gap-1.5 text-sm text-ink-500 dark:text-ink-400">
+        <Calendar className="h-4 w-4 text-ink-400 dark:text-ink-500" aria-hidden />
+        {formatarDataHoraCurta(item.dataEncerramento)}
+      </p>
 
       <p className="mt-2 text-sm text-ink-500 dark:text-ink-400">
         {expandido ? item.objeto ?? "Objeto não informado" : truncado}
@@ -63,21 +73,10 @@ export function ResultCard({ item, onVerDetalhes }: ResultCardProps) {
         )}
       </p>
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-ink-600 dark:text-ink-300">
-        <span className="inline-flex items-center gap-1.5">
-          <MapPin className="h-4 w-4 text-ink-400 dark:text-ink-500" aria-hidden />
-          {formatarLocal(item.municipio, item.uf)}
-        </span>
-        <PortalBadge linkSistemaOrigem={item.linkSistemaOrigem} />
-      </div>
-
-      <div className="mt-3 flex flex-wrap items-start justify-between gap-2">
-        <PrazoIndicador dataEncerramento={item.dataEncerramento} />
-        <span className="inline-flex items-center gap-1.5 text-sm font-semibold tabular-nums text-ink-900 dark:text-ink-50">
-          <Wallet className="h-4 w-4 text-ink-400 dark:text-ink-500" aria-hidden />
-          {formatarMoeda(item.valorEstimado, item.valorSigiloso)}
-        </span>
-      </div>
+      <p className="mt-2 flex items-center gap-1.5 text-sm font-semibold tabular-nums text-ink-900 dark:text-ink-50">
+        <Wallet className="h-4 w-4 text-ink-400 dark:text-ink-500" aria-hidden />
+        {formatarMoeda(item.valorEstimado, item.valorSigiloso)}
+      </p>
 
       <div className="mt-4 flex gap-2">
         <AcoesLicitacao item={item} onVerDetalhes={onVerDetalhes} />
