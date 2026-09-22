@@ -1,11 +1,12 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 import Image from "next/image";
 import { ChevronDown, ChevronUp, CircleHelp, Clock, Menu, X } from "lucide-react";
 import { useClickOutside } from "@/lib/hooks/useClickOutside";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { StatusPncp } from "@/components/ui/StatusPncp";
+import { formatarDataHoraCurta } from "@/lib/formatters";
 
 const DICAS_AJUDA = [
   "Digite o que procura e escolha estado e município na pesquisa rápida.",
@@ -43,14 +44,37 @@ function PopoverAjuda() {
   );
 }
 
-function FusoHorario() {
+function inscreverRelogio(callback: () => void) {
+  const intervalo = setInterval(callback, 10000);
+  return () => clearInterval(intervalo);
+}
+
+function lerAgora() {
+  return Date.now();
+}
+
+function lerAgoraNoServidor() {
+  return null;
+}
+
+/**
+ * Relógio ao vivo no horário de Brasília (o fuso usado pelo PNCP), via
+ * useSyncExternalStore — no servidor sempre reporta `null` (getServerSnapshot)
+ * e o React corrige para o horário real logo após montar, sem o anti-padrão
+ * de setState dentro de useEffect.
+ */
+function RelogioBrasilia() {
+  const agora = useSyncExternalStore(inscreverRelogio, lerAgora, lerAgoraNoServidor);
+
+  if (agora === null) return null;
+
   return (
     <span
-      className="hidden items-center gap-1.5 rounded-full border border-ink-200 px-2.5 py-1 text-xs font-medium text-ink-500 dark:border-ink-700 dark:text-ink-400 sm:inline-flex"
+      className="hidden items-center gap-1.5 text-sm font-medium text-ink-500 dark:text-ink-400 sm:inline-flex"
       title="Todos os horários exibidos são de Brasília, o fuso usado pelo PNCP."
     >
-      <Clock className="h-3.5 w-3.5" aria-hidden />
-      Brasília (UTC-3)
+      <Clock className="h-4 w-4" aria-hidden />
+      {formatarDataHoraCurta(new Date(agora).toISOString())} (UTC-3)
     </span>
   );
 }
@@ -76,7 +100,7 @@ export function Header() {
 
         <div className="hidden items-center gap-2 sm:flex">
           <StatusPncp />
-          <FusoHorario />
+          <RelogioBrasilia />
           <PopoverAjuda />
           <ThemeToggle />
         </div>

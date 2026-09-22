@@ -11,8 +11,16 @@ import type { FiltrosLicitacao, ResultadoBusca } from "@/types/licitacao";
  * precisam mudar.
  */
 
-const TIMEOUT_PRIMEIRA_TENTATIVA_MS = 8000;
-const TIMEOUT_SEGUNDA_TENTATIVA_MS = 9000;
+// No pior caso, o backend tenta a fonte primária (até 8s, ver
+// lib/server/pncp-search-client.ts) e depois a oficial (até 10s de
+// fan-out em paralelo, ver lib/server/pncp-client.ts) antes de desistir —
+// até ~18s. A primeira tentativa aqui precisa cobrir esse tempo com folga;
+// senão o cliente desiste antes do servidor, e o usuário vê um timeout
+// genérico em vez do erro real (ex.: "servidor indisponível") que o
+// backend já calculou. A segunda tentativa é só uma checagem rápida extra,
+// não um novo ciclo completo.
+const TIMEOUT_PRIMEIRA_TENTATIVA_MS = 20000;
+const TIMEOUT_SEGUNDA_TENTATIVA_MS = 10000;
 
 function construirQueryString(filtros: FiltrosLicitacao): string {
   const params = new URLSearchParams();
