@@ -258,13 +258,6 @@ export function DashboardClient() {
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-ink-900 dark:text-ink-50">Pesquisar licitações</h1>
-        <p className="mt-1 text-sm text-ink-500 dark:text-ink-400">
-          Consulte oportunidades diretamente no PNCP utilizando filtros personalizados.
-        </p>
-      </div>
-
       <SearchPanel
         filtros={filtrosRascunho}
         onChange={atualizarRascunho}

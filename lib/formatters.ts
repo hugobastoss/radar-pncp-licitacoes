@@ -56,7 +56,7 @@ export function formatarDataHora(isoDate: string | Date | undefined): string {
   const data = typeof isoDate === "string" ? new Date(isoDate) : isoDate;
   if (Number.isNaN(data.getTime())) return "—";
   // O PNCP publica horários no fuso de Brasília; deixamos isso explícito
-  // porque o RADAR PNCP também atende usuários em outros fusos (AM, AC, RR).
+  // porque o Radar Licitações também atende usuários em outros fusos (AM, AC, RR).
   return `${formatadorDataHora.format(data)} (horário de Brasília)`;
 }
 

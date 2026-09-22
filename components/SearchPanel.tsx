@@ -53,7 +53,14 @@ export function SearchPanel({
       className="rounded-2xl border border-ink-200 bg-white p-5 shadow-card dark:border-ink-700 dark:bg-ink-900 sm:p-6"
       aria-label="Pesquisa rápida de licitações"
     >
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="border-b border-ink-200 pb-4 dark:border-ink-700">
+        <h1 className="text-base font-semibold text-ink-900 dark:text-ink-50">Pesquisar licitações</h1>
+        <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">
+          Consulte oportunidades diretamente no PNCP utilizando filtros personalizados.
+        </p>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Select
           label="Estado"
           value={uf}

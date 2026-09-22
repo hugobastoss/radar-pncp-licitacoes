@@ -1,5 +1,5 @@
 /**
- * Vocabulário de domínio do RADAR PNCP.
+ * Vocabulário de domínio do Radar Licitações.
  *
  * Estas listas cobrem os valores mais comuns hoje. A API do PNCP pode
  * devolver modalidades ou portais fora desta lista — nesse caso a interface
@@ -10,26 +10,48 @@
 export interface OpcaoModalidade {
   codigo: string;
   nome: string;
+  /** codigoModalidadeContratacao da API de consulta do PNCP — ver lib/server/pncp-client.ts. */
+  codigoPncp: number;
   /** Usado para os cards de resumo: "pregao" | "dispensa" | "outra". */
   grupo: "pregao" | "dispensa" | "outra";
 }
 
+/**
+ * As 13 modalidades da API de consulta do PNCP (tabela de domínio
+ * "codigoModalidadeContratacao" do Manual de Integração PNCP). Os nomes
+ * seguem exatamente o que a API retorna em `modalidadeNome`, para que o
+ * agrupamento (grupoDaModalidade) e os filtros batam com os dados reais.
+ */
 export const MODALIDADES: OpcaoModalidade[] = [
-  { codigo: "pregao_eletronico", nome: "Pregão Eletrônico", grupo: "pregao" },
-  { codigo: "pregao_presencial", nome: "Pregão Presencial", grupo: "pregao" },
-  { codigo: "concorrencia", nome: "Concorrência", grupo: "outra" },
-  { codigo: "dispensa", nome: "Dispensa", grupo: "dispensa" },
-  { codigo: "inexigibilidade", nome: "Inexigibilidade", grupo: "dispensa" },
-  { codigo: "credenciamento", nome: "Credenciamento", grupo: "outra" },
-  { codigo: "concurso", nome: "Concurso", grupo: "outra" },
-  { codigo: "leilao", nome: "Leilão", grupo: "outra" },
+  { codigo: "leilao_eletronico", nome: "Leilão - Eletrônico", codigoPncp: 1, grupo: "outra" },
+  { codigo: "dialogo_competitivo", nome: "Diálogo Competitivo", codigoPncp: 2, grupo: "outra" },
+  { codigo: "concurso", nome: "Concurso", codigoPncp: 3, grupo: "outra" },
+  { codigo: "concorrencia_eletronica", nome: "Concorrência - Eletrônica", codigoPncp: 4, grupo: "outra" },
+  { codigo: "concorrencia_presencial", nome: "Concorrência - Presencial", codigoPncp: 5, grupo: "outra" },
+  { codigo: "pregao_eletronico", nome: "Pregão - Eletrônico", codigoPncp: 6, grupo: "pregao" },
+  { codigo: "pregao_presencial", nome: "Pregão - Presencial", codigoPncp: 7, grupo: "pregao" },
+  { codigo: "dispensa", nome: "Dispensa de Licitação", codigoPncp: 8, grupo: "dispensa" },
+  { codigo: "inexigibilidade", nome: "Inexigibilidade", codigoPncp: 9, grupo: "dispensa" },
+  { codigo: "manifestacao_interesse", nome: "Manifestação de Interesse", codigoPncp: 10, grupo: "outra" },
+  { codigo: "pre_qualificacao", nome: "Pré-qualificação", codigoPncp: 11, grupo: "outra" },
+  { codigo: "credenciamento", nome: "Credenciamento", codigoPncp: 12, grupo: "outra" },
+  { codigo: "leilao_presencial", nome: "Leilão - Presencial", codigoPncp: 13, grupo: "outra" },
 ];
+
+/**
+ * Comparação tolerante: a API de busca interna do PNCP às vezes abrevia o
+ * nome da modalidade (ex.: "Dispensa" em vez de "Dispensa de Licitação"),
+ * então um match exato perderia esses casos.
+ */
+export function modalidadesCorrespondem(a: string, b: string): boolean {
+  const na = a.toLowerCase();
+  const nb = b.toLowerCase();
+  return na === nb || na.includes(nb) || nb.includes(na);
+}
 
 export function grupoDaModalidade(nomeModalidade: string | undefined): "pregao" | "dispensa" | "outra" {
   if (!nomeModalidade) return "outra";
-  const encontrada = MODALIDADES.find(
-    (m) => m.nome.toLowerCase() === nomeModalidade.toLowerCase(),
-  );
+  const encontrada = MODALIDADES.find((m) => modalidadesCorrespondem(m.nome, nomeModalidade));
   return encontrada?.grupo ?? "outra";
 }
 

@@ -1,7 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { CircleHelp, Menu, Radar, Settings, X } from "lucide-react";
+import Image from "next/image";
+import { CircleHelp, Menu, Settings, X } from "lucide-react";
 import { useClickOutside } from "@/lib/hooks/useClickOutside";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
@@ -23,7 +24,7 @@ function PopoverAjuda() {
       </button>
       {aberto && (
         <div className="absolute right-0 z-40 mt-2 w-72 rounded-lg border border-ink-200 bg-white p-4 shadow-popover dark:border-ink-700 dark:bg-ink-900">
-          <h3 className="text-sm font-semibold text-ink-900 dark:text-ink-50">Como usar o RADAR PNCP</h3>
+          <h3 className="text-sm font-semibold text-ink-900 dark:text-ink-50">Como usar o Radar Licitações</h3>
           <ul className="mt-2 space-y-2 text-sm text-ink-600 dark:text-ink-300">
             <li>Digite o que procura e escolha estado e município na pesquisa rápida.</li>
             <li>Use a pesquisa avançada para refinar por período, modalidade, portal e valor.</li>
@@ -81,11 +82,9 @@ export function Header() {
     <header className="sticky top-0 z-40 border-b border-ink-200 bg-white/95 backdrop-blur dark:border-ink-700 dark:bg-ink-900/95">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-600 text-white">
-            <Radar className="h-5 w-5" aria-hidden />
-          </span>
+          <Image src="/logo.png" alt="" width={36} height={36} className="h-9 w-9" priority />
           <div className="leading-tight">
-            <p className="text-base font-semibold tracking-tight text-ink-900 dark:text-ink-50">RADAR PNCP</p>
+            <p className="text-base font-semibold tracking-tight text-ink-900 dark:text-ink-50">Radar Licitações</p>
             <p className="hidden text-xs text-ink-500 dark:text-ink-400 sm:block">
               Pesquisa inteligente de licitações públicas
             </p>

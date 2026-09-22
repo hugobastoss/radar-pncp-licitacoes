@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import Script from "next/script";
 import { Header } from "@/components/Header";
+import { Footer } from "@/components/Footer";
 import { SCRIPT_INICIALIZACAO_TEMA } from "@/lib/theme";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "RADAR PNCP — Pesquisa inteligente de licitações públicas",
+  metadataBase: new URL("https://radar-pncp-licitacoes.vercel.app"),
+  title: "Radar Licitações — Pesquisa inteligente de licitações públicas",
   description:
     "Encontre oportunidades públicas de forma rápida e inteligente. Pesquise licitações e contratações diretamente no Portal Nacional de Contratações Públicas (PNCP).",
 };
@@ -19,6 +21,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         </Script>
         <Header />
         <main className="flex-1">{children}</main>
+        <Footer />
       </body>
     </html>
   );

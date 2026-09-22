@@ -1,5 +1,5 @@
 /**
- * Modelo de dados do RADAR PNCP.
+ * Modelo de dados do Radar Licitações.
  *
  * `Licitacao` é o formato que o FRONTEND consome. Ele é próximo do que a API
  * de consulta do PNCP retorna, mas alguns campos são derivados pelo backend
