@@ -1,12 +1,16 @@
 "use client";
 
-import { Search, SlidersHorizontal } from "lucide-react";
+import * as Collapsible from "@radix-ui/react-collapsible";
+import { ChevronDown, ChevronUp, Hash, Search, SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Combobox } from "@/components/ui/Combobox";
 import { Button } from "@/components/ui/Button";
+import { QuickSearches } from "@/components/QuickSearches";
+import { AdvancedFilters } from "@/components/AdvancedFilters";
 import { ESTADOS, ESTADO_TODOS } from "@/lib/data/estados";
 import { MUNICIPIOS_POR_UF } from "@/lib/data/municipios";
+import type { PesquisaRapida } from "@/lib/data/dominio";
 import type { FiltrosLicitacao } from "@/types/licitacao";
 
 interface SearchPanelProps {
@@ -16,6 +20,8 @@ interface SearchPanelProps {
   onToggleAvancado: () => void;
   onPesquisar: () => void;
   carregando: boolean;
+  onSelecionarPesquisaRapida: (pesquisa: PesquisaRapida) => void;
+  pesquisaRapidaAtiva?: string;
 }
 
 export function SearchPanel({
@@ -25,6 +31,8 @@ export function SearchPanel({
   onToggleAvancado,
   onPesquisar,
   carregando,
+  onSelecionarPesquisaRapida,
+  pesquisaRapidaAtiva,
 }: SearchPanelProps) {
   const uf = filtros.uf ?? ESTADO_TODOS;
   const municipiosDisponiveis = uf !== ESTADO_TODOS ? (MUNICIPIOS_POR_UF[uf] ?? []) : [];
@@ -42,24 +50,10 @@ export function SearchPanel({
   return (
     <form
       onSubmit={aoSubmeter}
-      className="rounded-2xl border border-ink-200 bg-white p-5 shadow-card sm:p-6"
+      className="rounded-2xl border border-ink-200 bg-white p-5 shadow-card dark:border-ink-700 dark:bg-ink-900 sm:p-6"
       aria-label="Pesquisa rápida de licitações"
     >
-      <p className="text-xs font-semibold uppercase tracking-wide text-primary-600">Pesquisa rápida</p>
-
-      <div className="mt-3">
-        <Input
-          label="O que você está procurando?"
-          hideLabel
-          placeholder="Ex.: medicamentos, material hospitalar, odontológico"
-          leftIcon={<Search className="h-4 w-4" aria-hidden />}
-          className="h-12 text-base"
-          value={filtros.q ?? ""}
-          onChange={(e) => onChange({ q: e.target.value })}
-        />
-      </div>
-
-      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Select
           label="Estado"
           value={uf}
@@ -84,25 +78,63 @@ export function SearchPanel({
         />
       </div>
 
-      <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Button
-          type="button"
-          variant="ghost"
-          size="md"
-          leftIcon={<SlidersHorizontal className="h-4 w-4" aria-hidden />}
-          onClick={onToggleAvancado}
-          aria-expanded={avancadoAberto}
-        >
-          Pesquisa avançada
-        </Button>
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Input
+          label="Número da licitação"
+          placeholder="Ex.: 90015/2026"
+          leftIcon={<Hash className="h-4 w-4" aria-hidden />}
+          value={filtros.numeroLicitacao ?? ""}
+          onChange={(e) => onChange({ numeroLicitacao: e.target.value })}
+          onClear={() => onChange({ numeroLicitacao: "" })}
+        />
 
+        <Input
+          label="O que você está procurando?"
+          placeholder="Busca no objeto da licitação e no nome do órgão."
+          leftIcon={<Search className="h-4 w-4" aria-hidden />}
+          value={filtros.q ?? ""}
+          onChange={(e) => onChange({ q: e.target.value })}
+          onClear={() => onChange({ q: "" })}
+        />
+      </div>
+
+      <div className="mt-3">
+        <QuickSearches onSelecionar={onSelecionarPesquisaRapida} idAtivo={pesquisaRapidaAtiva} />
+      </div>
+
+      <Collapsible.Root open={avancadoAberto} onOpenChange={onToggleAvancado}>
+        <div className="mt-5">
+          <Collapsible.Trigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="md"
+              leftIcon={<SlidersHorizontal className="h-4 w-4" aria-hidden />}
+              rightIcon={
+                avancadoAberto ? (
+                  <ChevronUp className="h-4 w-4" aria-hidden />
+                ) : (
+                  <ChevronDown className="h-4 w-4" aria-hidden />
+                )
+              }
+            >
+              Pesquisa avançada
+            </Button>
+          </Collapsible.Trigger>
+        </div>
+
+        <Collapsible.Content className="overflow-hidden data-[state=open]:animate-[collapsible-down_200ms_ease-out] data-[state=closed]:animate-[collapsible-up_200ms_ease-out]">
+          <AdvancedFilters filtros={filtros} onChange={onChange} />
+        </Collapsible.Content>
+      </Collapsible.Root>
+
+      <div className="mt-5">
         <Button
           type="submit"
           size="lg"
           leftIcon={<Search className="h-4 w-4" aria-hidden />}
           loading={carregando}
           fullWidth
-          className="sm:w-auto sm:min-w-56"
         >
           Pesquisar licitações
         </Button>

@@ -11,11 +11,11 @@ import {
 import { isLinkExternoSeguro } from "@/lib/portal";
 import type { Licitacao } from "@/types/licitacao";
 
-function Campo({ rotulo, valor }: { rotulo: string; valor: React.ReactNode }) {
+export function Campo({ rotulo, valor }: { rotulo: string; valor: React.ReactNode }) {
   return (
     <div>
-      <dt className="text-xs font-medium uppercase tracking-wide text-ink-500">{rotulo}</dt>
-      <dd className="mt-1 text-sm text-ink-900">{valor}</dd>
+      <dt className="text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">{rotulo}</dt>
+      <dd className="mt-1 text-sm text-ink-900 dark:text-ink-50">{valor}</dd>
     </div>
   );
 }
@@ -26,16 +26,16 @@ export function LicitacaoDetails({ item }: { item: Licitacao }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-start gap-2 rounded-lg bg-ink-50 p-3 text-xs text-ink-500">
-        <Info className="h-4 w-4 shrink-0 text-ink-400" aria-hidden />
+      <div className="flex items-start gap-2 rounded-lg bg-ink-50 p-3 text-xs text-ink-500 dark:bg-ink-800 dark:text-ink-400">
+        <Info className="h-4 w-4 shrink-0 text-ink-400 dark:text-ink-500" aria-hidden />
         Dados de demonstração — nenhuma informação nesta tela corresponde a uma licitação real.
       </div>
 
       <div>
-        <p className="text-base font-semibold text-ink-900">
+        <p className="text-base font-semibold text-ink-900 dark:text-ink-50">
           {formatarNumeroLicitacao(item.modalidade, item.numeroLicitacao)}
         </p>
-        <p className="mt-0.5 text-sm text-ink-600">{item.orgao ?? "Órgão não informado"}</p>
+        <p className="mt-0.5 text-sm text-ink-600 dark:text-ink-300">{item.orgao ?? "Órgão não informado"}</p>
       </div>
 
       <PrazoIndicador dataEncerramento={item.dataEncerramento} className="self-start" />
@@ -54,14 +54,14 @@ export function LicitacaoDetails({ item }: { item: Licitacao }) {
       </dl>
 
       <div>
-        <dt className="text-xs font-medium uppercase tracking-wide text-ink-500">Objeto completo</dt>
-        <dd className="mt-1 whitespace-pre-line text-sm leading-relaxed text-ink-700">
+        <dt className="text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">Objeto completo</dt>
+        <dd className="mt-1 whitespace-pre-line text-sm leading-relaxed text-ink-700 dark:text-ink-200">
           {item.objeto ?? "Objeto não informado"}
         </dd>
       </div>
 
       <div>
-        <p className="text-xs font-medium uppercase tracking-wide text-ink-500">Portal de origem</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">Portal de origem</p>
         <div className="mt-1.5">
           <PortalBadge linkSistemaOrigem={item.linkSistemaOrigem} />
         </div>

@@ -41,18 +41,7 @@ export function TableFilters({
   ];
 
   return (
-    <div className="flex flex-col gap-3 border-b border-ink-200 bg-ink-25 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-end sm:gap-4 sm:px-6">
-      <div className="w-full sm:w-48">
-        <Select label="Modalidade" hideLabel value={modalidadeRapida} onChange={(e) => onChangeModalidade(e.target.value)}>
-          <option value="">Todas as modalidades</option>
-          {facets.modalidades.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </Select>
-      </div>
-
+    <div className="flex flex-col gap-3 border-b border-ink-200 bg-ink-25 px-4 py-3 dark:border-ink-700 dark:bg-ink-800 sm:flex-row sm:flex-wrap sm:items-end sm:gap-4 sm:px-6">
       <div className="w-full sm:w-56">
         <Combobox
           label="Local"
@@ -62,6 +51,17 @@ export function TableFilters({
           onChange={onChangeLocal}
           placeholder="Todos os locais"
         />
+      </div>
+
+      <div className="w-full sm:w-48">
+        <Select label="Modalidade" hideLabel value={modalidadeRapida} onChange={(e) => onChangeModalidade(e.target.value)}>
+          <option value="">Todas as modalidades</option>
+          {facets.modalidades.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </Select>
       </div>
 
       <div className="w-full sm:w-52">

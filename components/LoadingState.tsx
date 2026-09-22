@@ -18,7 +18,7 @@ function LinhaSkeleton() {
 
 function CartaoSkeleton() {
   return (
-    <div className="rounded-xl border border-ink-200 p-4">
+    <div className="rounded-xl border border-ink-200 p-4 dark:border-ink-700">
       <Skeleton className="h-4 w-40" />
       <Skeleton className="mt-2 h-3 w-full" />
       <Skeleton className="mt-2 h-3 w-2/3" />
@@ -30,15 +30,15 @@ function CartaoSkeleton() {
 export function LoadingState({ linhas = 6 }: { linhas?: number }) {
   return (
     <div>
-      <div className="flex items-center gap-2 border-b border-ink-200 bg-primary-50 px-4 py-3 text-sm text-primary-700 sm:px-6">
+      <div className="flex items-center gap-2 border-b border-ink-200 bg-primary-50 px-4 py-3 text-sm text-primary-700 dark:border-ink-700 dark:bg-primary-900 dark:text-primary-300 sm:px-6">
         <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
         <span className="font-medium">Consultando o PNCP…</span>
-        <span className="hidden text-primary-600 sm:inline">
+        <span className="hidden text-primary-600 dark:text-primary-400 sm:inline">
           Estamos consultando os dados diretamente no PNCP. Isso pode levar alguns segundos.
         </span>
       </div>
 
-      <div className="hidden divide-y divide-ink-100 sm:block" aria-hidden="true">
+      <div className="hidden divide-y divide-ink-100 dark:divide-ink-800 sm:block" aria-hidden="true">
         {Array.from({ length: linhas }).map((_, i) => (
           <LinhaSkeleton key={i} />
         ))}

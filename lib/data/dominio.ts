@@ -65,6 +65,24 @@ export const SITUACOES = [
   "Cancelada",
 ] as const;
 
+export type TonalidadeBadge = "neutral" | "primary" | "success" | "warning" | "danger" | "accent";
+
+const TONALIDADE_POR_SITUACAO: Record<string, TonalidadeBadge> = {
+  "recebendo propostas": "success",
+  "em julgamento": "warning",
+  homologada: "primary",
+  encerrada: "neutral",
+  suspensa: "warning",
+  revogada: "danger",
+  cancelada: "danger",
+};
+
+/** Usado para colorir o badge de situação — mesmo texto exibido nos detalhes da licitação. */
+export function tonalidadeDaSituacao(situacao: string | undefined): TonalidadeBadge {
+  if (!situacao) return "neutral";
+  return TONALIDADE_POR_SITUACAO[situacao.toLowerCase()] ?? "neutral";
+}
+
 export interface OpcaoOrdenacao {
   valor:
     | "encerramento_asc"
@@ -116,5 +134,35 @@ export const PESQUISAS_RAPIDAS: PesquisaRapida[] = [
     titulo: "Laboratório",
     descricao: "Materiais e reagentes laboratoriais",
     palavrasChave: "laboratório",
+  },
+  {
+    id: "equipamentos_medicos",
+    titulo: "Equipamentos médicos",
+    descricao: "Aparelhos e equipamentos médico-hospitalares",
+    palavrasChave: "equipamento médico",
+  },
+  {
+    id: "epi",
+    titulo: "EPI",
+    descricao: "Equipamentos de proteção individual",
+    palavrasChave: "equipamento de proteção individual",
+  },
+  {
+    id: "vacinas",
+    titulo: "Vacinas",
+    descricao: "Vacinas e imunobiológicos",
+    palavrasChave: "vacina",
+  },
+  {
+    id: "limpeza",
+    titulo: "Limpeza e higienização",
+    descricao: "Materiais de limpeza e higienização",
+    palavrasChave: "material de limpeza",
+  },
+  {
+    id: "ambulancias",
+    titulo: "Ambulâncias",
+    descricao: "Veículos e equipamentos de transporte de pacientes",
+    palavrasChave: "ambulância",
   },
 ];

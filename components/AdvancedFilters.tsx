@@ -1,18 +1,23 @@
 "use client";
 
-import { Building2, CalendarRange, Hash, RotateCcw, Wallet } from "lucide-react";
+import { Building2, CalendarRange, RotateCcw, Wallet } from "lucide-react";
 import { Input } from "@/components/ui/Input";
-import { Select } from "@/components/ui/Select";
-import { MultiSelect } from "@/components/ui/MultiSelect";
+import { ChipsSelecaoMultipla, ChipsSelecaoUnica } from "@/components/ui/Chip";
 import { Button } from "@/components/ui/Button";
 import { MODALIDADES, PERIODOS, PORTAIS_CONHECIDOS, SITUACOES } from "@/lib/data/dominio";
 import type { FiltrosLicitacao } from "@/types/licitacao";
 
 interface AdvancedFiltersProps {
-  aberto: boolean;
   filtros: FiltrosLicitacao;
   onChange: (patch: Partial<FiltrosLicitacao>) => void;
 }
+
+const OPCOES_PERIODO_CHIP = PERIODOS.map((p) => ({
+  value: p.valor,
+  label: p.valor === "personalizado" ? "Personalizado" : p.rotulo.replace("Próximos ", ""),
+}));
+
+const OPCOES_SITUACAO_CHIP = SITUACOES.map((s) => ({ value: s, label: s }));
 
 function contarFiltrosAtivos(filtros: FiltrosLicitacao): number {
   let total = 0;
@@ -22,14 +27,11 @@ function contarFiltrosAtivos(filtros: FiltrosLicitacao): number {
   if (filtros.valorMinimo !== undefined) total += 1;
   if (filtros.valorMaximo !== undefined) total += 1;
   if (filtros.orgao?.trim()) total += 1;
-  if (filtros.numeroLicitacao?.trim()) total += 1;
   if (filtros.situacao?.trim()) total += 1;
   return total;
 }
 
-export function AdvancedFilters({ aberto, filtros, onChange }: AdvancedFiltersProps) {
-  if (!aberto) return null;
-
+export function AdvancedFilters({ filtros, onChange }: AdvancedFiltersProps) {
   const filtrosAtivos = contarFiltrosAtivos(filtros);
 
   function limpar() {
@@ -42,51 +44,42 @@ export function AdvancedFilters({ aberto, filtros, onChange }: AdvancedFiltersPr
       valorMinimo: undefined,
       valorMaximo: undefined,
       orgao: "",
-      numeroLicitacao: "",
-      situacao: "",
+      situacao: undefined,
     });
   }
 
   return (
-    <section
-      aria-label="Pesquisa avançada"
-      className="mt-4 rounded-2xl border border-ink-200 bg-white p-5 shadow-card sm:p-6"
-    >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold text-ink-900">Pesquisa avançada</h2>
-          {filtrosAtivos > 0 && (
-            <span className="rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700">
-              {filtrosAtivos} {filtrosAtivos === 1 ? "filtro aplicado" : "filtros aplicados"}
-            </span>
-          )}
-        </div>
-        {filtrosAtivos > 0 && (
+    <div className="mt-4">
+      <div className="flex items-center gap-3">
+        <div className="h-px flex-1 bg-ink-200 dark:bg-ink-700" />
+        <span className="text-xs font-semibold uppercase tracking-wide text-ink-400 dark:text-ink-500">
+          Filtros avançados
+        </span>
+        <div className="h-px flex-1 bg-ink-200 dark:bg-ink-700" />
+      </div>
+
+      {filtrosAtivos > 0 && (
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <span className="rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700 dark:bg-primary-900 dark:text-primary-300">
+            {filtrosAtivos} {filtrosAtivos === 1 ? "filtro aplicado" : "filtros aplicados"}
+          </span>
           <Button variant="ghost" size="sm" leftIcon={<RotateCcw className="h-3.5 w-3.5" aria-hidden />} onClick={limpar}>
             Limpar
           </Button>
-        )}
-      </div>
+        </div>
+      )}
 
-      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="flex flex-col gap-1.5">
-          <Select
+      <div className="mt-4 flex flex-col gap-5">
+        <div>
+          <ChipsSelecaoUnica
             label="Período"
-            value={filtros.periodo ?? ""}
-            onChange={(e) =>
-              onChange({ periodo: (e.target.value || undefined) as FiltrosLicitacao["periodo"] })
-            }
-          >
-            <option value="">Sem filtro de período</option>
-            {PERIODOS.map((p) => (
-              <option key={p.valor} value={p.valor}>
-                {p.rotulo}
-              </option>
-            ))}
-          </Select>
+            options={OPCOES_PERIODO_CHIP}
+            value={filtros.periodo}
+            onChange={(valor) => onChange({ periodo: valor as FiltrosLicitacao["periodo"] })}
+          />
 
           {filtros.periodo === "personalizado" && (
-            <div className="mt-1 grid grid-cols-2 gap-3">
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:max-w-sm">
               <Input
                 type="date"
                 label="Data inicial"
@@ -103,78 +96,68 @@ export function AdvancedFilters({ aberto, filtros, onChange }: AdvancedFiltersPr
           )}
         </div>
 
-        <MultiSelect
+        <ChipsSelecaoMultipla
           label="Modalidade"
           options={MODALIDADES.map((m) => ({ value: m.nome, label: m.nome }))}
           selected={filtros.modalidades ?? []}
           onChange={(next) => onChange({ modalidades: next })}
-          allLabel="Todas as modalidades"
+          allLabel="Todas"
         />
 
-        <MultiSelect
+        <ChipsSelecaoMultipla
           label="Portal"
           options={PORTAIS_CONHECIDOS.map((p) => ({ value: p, label: p }))}
           selected={filtros.portais ?? []}
           onChange={(next) => onChange({ portais: next })}
-          allLabel="Todos os portais"
+          allLabel="Todos"
         />
 
-        <div className="grid grid-cols-2 gap-3">
-          <Input
-            type="number"
-            inputMode="decimal"
-            label="Valor mínimo"
-            placeholder="0,00"
-            leftIcon={<Wallet className="h-4 w-4" aria-hidden />}
-            value={filtros.valorMinimo ?? ""}
-            onChange={(e) => onChange({ valorMinimo: e.target.value ? Number(e.target.value) : undefined })}
-          />
-          <Input
-            type="number"
-            inputMode="decimal"
-            label="Valor máximo"
-            placeholder="0,00"
-            leftIcon={<Wallet className="h-4 w-4" aria-hidden />}
-            value={filtros.valorMaximo ?? ""}
-            onChange={(e) => onChange({ valorMaximo: e.target.value ? Number(e.target.value) : undefined })}
-          />
-        </div>
-
-        <Input
-          label="Órgão"
-          placeholder="Digite o nome do órgão"
-          leftIcon={<Building2 className="h-4 w-4" aria-hidden />}
-          value={filtros.orgao ?? ""}
-          onChange={(e) => onChange({ orgao: e.target.value })}
-        />
-
-        <Input
-          label="Número da licitação"
-          placeholder="Ex.: 90015/2026"
-          leftIcon={<Hash className="h-4 w-4" aria-hidden />}
-          value={filtros.numeroLicitacao ?? ""}
-          onChange={(e) => onChange({ numeroLicitacao: e.target.value })}
-        />
-
-        <Select
+        <ChipsSelecaoUnica
           label="Situação"
           hint="Filtra pela situação informada pelo órgão no PNCP."
-          value={filtros.situacao ?? ""}
-          onChange={(e) => onChange({ situacao: e.target.value })}
-        >
-          <option value="">Todas as situações</option>
-          {SITUACOES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </Select>
+          options={OPCOES_SITUACAO_CHIP}
+          value={filtros.situacao}
+          onChange={(valor) => onChange({ situacao: valor })}
+          semFiltroLabel="Todas"
+        />
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              type="number"
+              inputMode="decimal"
+              label="Valor mínimo"
+              placeholder="0,00"
+              leftIcon={<Wallet className="h-4 w-4" aria-hidden />}
+              value={filtros.valorMinimo ?? ""}
+              onChange={(e) => onChange({ valorMinimo: e.target.value ? Number(e.target.value) : undefined })}
+            />
+            <Input
+              type="number"
+              inputMode="decimal"
+              label="Valor máximo"
+              placeholder="0,00"
+              leftIcon={<Wallet className="h-4 w-4" aria-hidden />}
+              value={filtros.valorMaximo ?? ""}
+              onChange={(e) => onChange({ valorMaximo: e.target.value ? Number(e.target.value) : undefined })}
+            />
+          </div>
+
+          <Input
+            label="Órgão"
+            placeholder="Digite o nome do órgão"
+            leftIcon={<Building2 className="h-4 w-4" aria-hidden />}
+            value={filtros.orgao ?? ""}
+            onChange={(e) => onChange({ orgao: e.target.value })}
+            onClear={() => onChange({ orgao: "" })}
+          />
+        </div>
       </div>
 
-      <p className="mt-4 flex items-center gap-1.5 text-xs text-ink-500">
+      <p className="mt-4 flex items-center gap-1.5 text-xs text-ink-500 dark:text-ink-400">
         <CalendarRange className="h-3.5 w-3.5" aria-hidden />
         Todos os prazos são calculados no horário de Brasília, usado pelo PNCP.
       </p>
-    </section>
+    </div>
   );
 }

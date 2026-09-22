@@ -24,6 +24,12 @@ const formatadorDataHora = new Intl.DateTimeFormat("pt-BR", {
   timeZone: "America/Sao_Paulo",
 });
 
+const formatadorHora = new Intl.DateTimeFormat("pt-BR", {
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: "America/Sao_Paulo",
+});
+
 export function formatarMoeda(valor: number | undefined, sigiloso?: boolean): string {
   if (sigiloso) return "Valor sigiloso";
   if (valor === undefined || valor === null || Number.isNaN(valor)) return "Valor não informado";
@@ -35,6 +41,14 @@ export function formatarData(isoDate: string | undefined): string {
   const data = new Date(isoDate);
   if (Number.isNaN(data.getTime())) return "Data não informada";
   return formatadorData.format(data);
+}
+
+/** Data + hora compactas, sem o sufixo "(horário de Brasília)" — para espaços apertados como células de tabela. */
+export function formatarDataHoraCurta(isoDate: string | undefined): string {
+  if (!isoDate) return "Data não informada";
+  const data = new Date(isoDate);
+  if (Number.isNaN(data.getTime())) return "Data não informada";
+  return `${formatadorData.format(data)} · ${formatadorHora.format(data)}`;
 }
 
 export function formatarDataHora(isoDate: string | Date | undefined): string {
@@ -93,7 +107,7 @@ export function calcularUrgenciaPrazo(
   if (diffHoras <= 0) return { urgencia: "encerrada", rotulo: "Encerrada" };
   if (diffHoras <= 48) return { urgencia: "critico", rotulo: "Encerra em breve" };
   if (diffHoras <= 24 * 7) return { urgencia: "atencao", rotulo: "Encerra esta semana" };
-  return { urgencia: "confortavel", rotulo: "Prazo confortável" };
+  return { urgencia: "confortavel", rotulo: "Recebendo propostas" };
 }
 
 export function formatarQuantidade(valor: number): string {

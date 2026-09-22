@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Header } from "@/components/Header";
+import { SCRIPT_INICIALIZACAO_TEMA } from "@/lib/theme";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -10,8 +12,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="pt-BR" className="h-full antialiased">
-      <body className="flex min-h-full flex-col bg-ink-50">
+    <html lang="pt-BR" className="h-full antialiased" suppressHydrationWarning>
+      <body className="flex min-h-full flex-col" suppressHydrationWarning>
+        <Script id="tema-inicial" strategy="beforeInteractive">
+          {SCRIPT_INICIALIZACAO_TEMA}
+        </Script>
         <Header />
         <main className="flex-1">{children}</main>
       </body>

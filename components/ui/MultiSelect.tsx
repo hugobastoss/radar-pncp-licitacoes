@@ -72,7 +72,7 @@ export function MultiSelect({
 
   return (
     <div className="flex flex-col gap-1.5" ref={containerRef}>
-      <span id={botaoId} className={cn("text-sm font-medium text-ink-700", hideLabel && "sr-only")}>
+      <span id={botaoId} className={cn("text-sm font-medium text-ink-700 dark:text-ink-200", hideLabel && "sr-only")}>
         {label}
       </span>
       <div className="relative">
@@ -85,13 +85,17 @@ export function MultiSelect({
           className={cn(
             "flex h-10 w-full items-center justify-between rounded-lg border border-ink-200 bg-white px-3 text-sm text-ink-900",
             "focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100",
-            aberto && "border-primary-500 ring-2 ring-primary-100",
+            "dark:border-ink-700 dark:bg-ink-900 dark:text-ink-50 dark:focus:ring-primary-900",
+            aberto && "border-primary-500 ring-2 ring-primary-100 dark:ring-primary-900",
           )}
         >
-          <span id={`${botaoId}-valor`} className={cn("truncate text-left", selected.length === 0 && "text-ink-500")}>
+          <span
+            id={`${botaoId}-valor`}
+            className={cn("truncate text-left", selected.length === 0 && "text-ink-500 dark:text-ink-400")}
+          >
             {rotulo}
           </span>
-          <ChevronDown className="h-4 w-4 shrink-0 text-ink-400" aria-hidden />
+          <ChevronDown className="h-4 w-4 shrink-0 text-ink-400 dark:text-ink-500" aria-hidden />
         </button>
 
         {aberto && (
@@ -100,12 +104,12 @@ export function MultiSelect({
             role="listbox"
             aria-multiselectable="true"
             aria-labelledby={botaoId}
-            className="absolute z-30 mt-1 max-h-72 w-full min-w-[16rem] overflow-auto rounded-lg border border-ink-200 bg-white py-1 shadow-popover"
+            className="absolute z-30 mt-1 max-h-72 w-full min-w-[16rem] overflow-auto rounded-lg border border-ink-200 bg-white py-1 shadow-popover dark:border-ink-700 dark:bg-ink-900"
           >
-            <label className="flex cursor-pointer items-center gap-2 border-b border-ink-100 px-3 py-2 text-sm font-medium text-ink-700 hover:bg-ink-50">
+            <label className="flex cursor-pointer items-center gap-2 border-b border-ink-100 px-3 py-2 text-sm font-medium text-ink-700 hover:bg-ink-50 dark:border-ink-800 dark:text-ink-200 dark:hover:bg-ink-800">
               <input
                 type="checkbox"
-                className="h-4 w-4 rounded border-ink-300 text-primary-600 focus-visible:ring-2 focus-visible:ring-primary-500"
+                className="h-4 w-4 rounded border-ink-300 text-primary-600 focus-visible:ring-2 focus-visible:ring-primary-500 dark:border-ink-600 dark:bg-ink-800"
                 checked={selected.length === 0}
                 onChange={() => onChange([])}
               />
@@ -118,23 +122,23 @@ export function MultiSelect({
                   key={opcao.value}
                   role="option"
                   aria-selected={marcado}
-                  className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-ink-700 hover:bg-ink-50"
+                  className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-ink-700 hover:bg-ink-50 dark:text-ink-200 dark:hover:bg-ink-800"
                 >
                   <input
                     type="checkbox"
-                    className="h-4 w-4 rounded border-ink-300 text-primary-600 focus-visible:ring-2 focus-visible:ring-primary-500"
+                    className="h-4 w-4 rounded border-ink-300 text-primary-600 focus-visible:ring-2 focus-visible:ring-primary-500 dark:border-ink-600 dark:bg-ink-800"
                     checked={marcado}
                     onChange={() => alternar(opcao.value)}
                   />
                   <span className="flex-1">{opcao.label}</span>
-                  {marcado && <Check className="h-4 w-4 text-primary-600" aria-hidden />}
+                  {marcado && <Check className="h-4 w-4 text-primary-600 dark:text-primary-400" aria-hidden />}
                 </label>
               );
             })}
           </div>
         )}
       </div>
-      {hint && <p className="text-xs text-ink-500">{hint}</p>}
+      {hint && <p className="text-xs text-ink-500 dark:text-ink-400">{hint}</p>}
     </div>
   );
 }

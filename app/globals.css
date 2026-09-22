@@ -1,13 +1,23 @@
 @import "tailwindcss";
 
 /*
+ * Modo escuro por classe (".dark" na <html>), não por media query — permite
+ * alternância manual pelo usuário. Ver components/ui/ThemeToggle.tsx e o
+ * script inline em app/layout.tsx que aplica a classe antes da hidratação
+ * (evita flash do tema errado).
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
  * Design tokens do RADAR PNCP.
  *
  * Paleta pensada para transmitir tecnologia, confiabilidade e organização:
  * fundo claro, cards brancos, azul como cor de marca, verde para sinais
  * positivos e âmbar/vermelho reservados a alertas e erros. Definidos como
  * variáveis CSS e mapeados no bloco @theme para virarem utilitários do
- * Tailwind (ex.: bg-primary-600, text-ink-700, bg-success-50).
+ * Tailwind (ex.: bg-primary-600, text-ink-700, bg-success-50). Os tons 300 e
+ * 900 de success/warning/danger/accent existem só para o modo escuro
+ * (texto/fundo com contraste adequado sobre superfícies escuras).
  */
 @theme {
   /* Azul — cor de marca / ações primárias */
@@ -26,28 +36,36 @@
   --color-success-50: #ecfdf5;
   --color-success-100: #d1fae5;
   --color-success-200: #a7f3d0;
+  --color-success-300: #6ee7b7;
   --color-success-600: #059669;
   --color-success-700: #047857;
+  --color-success-900: #064e3b;
 
   /* Âmbar — atenção (prazos próximos, avisos) */
   --color-warning-50: #fffbeb;
   --color-warning-100: #fef3c7;
   --color-warning-200: #fde68a;
+  --color-warning-300: #fcd34d;
   --color-warning-600: #d97706;
   --color-warning-700: #b45309;
+  --color-warning-900: #78350f;
 
   /* Vermelho — erros e alertas críticos */
   --color-danger-50: #fef2f2;
   --color-danger-100: #fee2e2;
   --color-danger-200: #fecaca;
+  --color-danger-300: #fca5a5;
   --color-danger-600: #dc2626;
   --color-danger-700: #b91c1c;
+  --color-danger-900: #7f1d1d;
 
   /* Roxo — usado apenas para diferenciar badges de portal */
   --color-accent-50: #f5f3ff;
   --color-accent-100: #ede9fe;
+  --color-accent-300: #c4b5fd;
   --color-accent-600: #7c3aed;
   --color-accent-700: #6d28d9;
+  --color-accent-900: #4c1d95;
 
   /* Neutros — texto, bordas e superfícies */
   --color-ink-25: #fbfcfe;
@@ -61,6 +79,7 @@
   --color-ink-700: #334155;
   --color-ink-800: #1e293b;
   --color-ink-900: #0f172a;
+  --color-ink-950: #020617;
 
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
@@ -76,6 +95,14 @@
   --background: var(--color-ink-50);
   --surface: #ffffff;
   --foreground: var(--color-ink-900);
+  color-scheme: light;
+}
+
+:root.dark {
+  --background: var(--color-ink-950);
+  --surface: var(--color-ink-900);
+  --foreground: var(--color-ink-50);
+  color-scheme: dark;
 }
 
 body {
@@ -104,6 +131,19 @@ body {
   background-color: var(--color-ink-300);
   border-radius: 9999px;
 }
+.dark .scrollbar-fina::-webkit-scrollbar-thumb {
+  background-color: var(--color-ink-600);
+}
+
+/* Esconde a barra de rolagem (o scroll continua funcionando por arrasto/toque
+   e pelas setas do carrossel) — usado nas Pesquisas rápidas. */
+.scrollbar-oculta {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-oculta::-webkit-scrollbar {
+  display: none;
+}
 
 @keyframes skeleton-pulse {
   0%,
@@ -116,4 +156,23 @@ body {
 }
 .animate-skeleton {
   animation: skeleton-pulse 1.6s ease-in-out infinite;
+}
+
+/* Transição suave do Radix Collapsible (Pesquisa avançada) — a altura real
+   do conteúdo vem da variável --radix-collapsible-content-height. */
+@keyframes collapsible-down {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-collapsible-content-height);
+  }
+}
+@keyframes collapsible-up {
+  from {
+    height: var(--radix-collapsible-content-height);
+  }
+  to {
+    height: 0;
+  }
 }

@@ -3,8 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { SearchPanel } from "@/components/SearchPanel";
-import { AdvancedFilters } from "@/components/AdvancedFilters";
-import { QuickSearches } from "@/components/QuickSearches";
 import { SummaryCards } from "@/components/SummaryCards";
 import { TableFilters } from "@/components/TableFilters";
 import { ResultsTable } from "@/components/ResultsTable";
@@ -97,6 +95,23 @@ export function DashboardClient() {
   const [licitacaoSelecionada, setLicitacaoSelecionada] = useState<Licitacao | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
+  const resultadoRef = useRef<HTMLDivElement>(null);
+
+  // Só rola depois que o React já pintou o novo estado (ex.: LoadingState no
+  // lugar do EstadoInicial, bem mais alto) — chamar scrollIntoView direto no
+  // clique media a posição com o layout antigo e o deslocamento fica curto
+  // demais pra perceber. O duplo rAF garante que o layout novo já existe.
+  useEffect(() => {
+    if (!filtrosAplicados) return;
+
+    const primeiroFrame = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        resultadoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+
+    return () => cancelAnimationFrame(primeiroFrame);
+  }, [filtrosAplicados]);
 
   const executarBusca = useCallback(async (filtros: FiltrosLicitacao) => {
     abortRef.current?.abort();
@@ -194,6 +209,17 @@ export function DashboardClient() {
     setFiltrosAplicados({ ...filtrosRascunho });
   }
 
+  function limparFiltros() {
+    setFiltrosRascunho(FILTROS_PADRAO);
+    setPesquisaRapidaAtiva(undefined);
+    setModalidadeRapida("");
+    setLocalRapido("");
+    setPortalRapido("");
+    setAvancadoAberto(false);
+    setPagina(1);
+    setFiltrosAplicados({ ...FILTROS_PADRAO });
+  }
+
   function aoSelecionarPesquisaRapida(pesquisa: PesquisaRapida) {
     const proximosFiltros = { ...filtrosRascunho, q: pesquisa.palavrasChave };
     setFiltrosRascunho(proximosFiltros);
@@ -233,8 +259,8 @@ export function DashboardClient() {
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-ink-900">Pesquisar licitações</h1>
-        <p className="mt-1 text-sm text-ink-500">
+        <h1 className="text-2xl font-semibold tracking-tight text-ink-900 dark:text-ink-50">Pesquisar licitações</h1>
+        <p className="mt-1 text-sm text-ink-500 dark:text-ink-400">
           Consulte oportunidades diretamente no PNCP utilizando filtros personalizados.
         </p>
       </div>
@@ -246,13 +272,14 @@ export function DashboardClient() {
         onToggleAvancado={() => setAvancadoAberto((v) => !v)}
         onPesquisar={pesquisar}
         carregando={status === "carregando"}
+        onSelecionarPesquisaRapida={aoSelecionarPesquisaRapida}
+        pesquisaRapidaAtiva={pesquisaRapidaAtiva}
       />
 
-      <AdvancedFilters aberto={avancadoAberto} filtros={filtrosRascunho} onChange={atualizarRascunho} />
-
-      <QuickSearches onSelecionar={aoSelecionarPesquisaRapida} idAtivo={pesquisaRapidaAtiva} />
-
-      <div className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card">
+      <div
+        ref={resultadoRef}
+        className="scroll-mt-20 overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card dark:border-ink-700 dark:bg-ink-900"
+      >
         {!filtrosAplicados && <EstadoInicial />}
 
         {filtrosAplicados && emErro && (
@@ -264,7 +291,6 @@ export function DashboardClient() {
         {filtrosAplicados && !emErro && resultado && (
           <>
             <ResultsHeader
-              total={resultado.total}
               consultadoEm={resultado.meta.consultadoEm}
               cenario={cenario}
               onChangeCenario={(c) => {
@@ -302,7 +328,7 @@ export function DashboardClient() {
                 />
 
                 <div className={atualizando ? "opacity-60 transition-opacity" : "transition-opacity"}>
-                  <ResultsTable itens={resultado.items} onVerDetalhes={abrirDetalhes} />
+                  <ResultsTable itens={resultado.items} />
                   <div className="space-y-3 p-4 sm:hidden">
                     {resultado.items.map((item) => (
                       <ResultCard key={item.id} item={item} onVerDetalhes={abrirDetalhes} />
@@ -323,7 +349,7 @@ export function DashboardClient() {
                 />
               </>
             ) : (
-              <EmptyState />
+              <EmptyState onLimparFiltros={limparFiltros} />
             )}
           </>
         )}

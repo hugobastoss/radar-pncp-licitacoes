@@ -19,11 +19,13 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const VARIANT_CLASSES: Record<Variant, string> = {
   primary:
-    "bg-primary-600 text-white hover:bg-primary-700 active:bg-primary-800 disabled:bg-ink-200 disabled:text-ink-400",
+    "bg-primary-600 text-white hover:bg-primary-700 active:bg-primary-800 disabled:bg-ink-200 disabled:text-ink-400 dark:disabled:bg-ink-800 dark:disabled:text-ink-600",
   secondary:
-    "bg-white text-ink-700 border border-ink-200 hover:bg-ink-50 active:bg-ink-100 disabled:text-ink-300 disabled:bg-ink-50",
-  ghost: "bg-transparent text-ink-600 hover:bg-ink-100 active:bg-ink-200 disabled:text-ink-300",
-  danger: "bg-danger-600 text-white hover:bg-danger-700 active:bg-danger-700 disabled:bg-ink-200 disabled:text-ink-400",
+    "bg-white text-ink-700 border border-ink-200 hover:bg-ink-50 active:bg-ink-100 disabled:text-ink-300 disabled:bg-ink-50 dark:bg-ink-900 dark:text-ink-200 dark:border-ink-700 dark:hover:bg-ink-800 dark:active:bg-ink-700 dark:disabled:text-ink-600 dark:disabled:bg-ink-900",
+  ghost:
+    "bg-transparent text-ink-600 hover:bg-ink-100 active:bg-ink-200 disabled:text-ink-300 dark:text-ink-300 dark:hover:bg-ink-800 dark:active:bg-ink-700 dark:disabled:text-ink-600",
+  danger:
+    "bg-danger-600 text-white hover:bg-danger-700 active:bg-danger-700 disabled:bg-ink-200 disabled:text-ink-400 dark:disabled:bg-ink-800 dark:disabled:text-ink-600",
 };
 
 const SIZE_CLASSES: Record<Size, string> = {

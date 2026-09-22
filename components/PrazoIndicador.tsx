@@ -38,7 +38,7 @@ export function PrazoIndicador({ dataEncerramento, comData = true, className }: 
       >
         {rotulo}
       </Badge>
-      {comData && <div className="mt-1 text-xs text-ink-500">{formatarData(dataEncerramento)}</div>}
+      {comData && <div className="mt-1 text-xs text-ink-500 dark:text-ink-400">{formatarData(dataEncerramento)}</div>}
     </div>
   );
 }

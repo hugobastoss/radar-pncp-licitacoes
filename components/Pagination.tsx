@@ -40,11 +40,11 @@ export function Pagination({ page, pageSize, total, totalPages, onChangePage, on
   const paginas = construirPaginas(page, totalPages);
 
   return (
-    <div className="flex flex-col gap-3 border-t border-ink-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-      <p className="text-sm text-ink-500">
-        Exibindo <span className="font-medium text-ink-700">{formatarQuantidade(inicio)}</span>–
-        <span className="font-medium text-ink-700">{formatarQuantidade(fim)}</span> de{" "}
-        <span className="font-medium text-ink-700">{formatarQuantidade(total)}</span> resultados
+    <div className="flex flex-col gap-3 border-t border-ink-200 px-4 py-4 dark:border-ink-700 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+      <p className="text-sm text-ink-500 dark:text-ink-400">
+        Exibindo <span className="font-medium text-ink-700 dark:text-ink-200">{formatarQuantidade(inicio)}</span>–
+        <span className="font-medium text-ink-700 dark:text-ink-200">{formatarQuantidade(fim)}</span> de{" "}
+        <span className="font-medium text-ink-700 dark:text-ink-200">{formatarQuantidade(total)}</span> resultados
       </p>
 
       <div className="flex items-center gap-3">
@@ -68,14 +68,14 @@ export function Pagination({ page, pageSize, total, totalPages, onChangePage, on
               onClick={() => onChangePage(Math.max(1, page - 1))}
               disabled={page === 1}
               aria-label="Página anterior"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-ink-200 text-ink-500 hover:bg-ink-50 disabled:opacity-40"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-ink-200 text-ink-500 hover:bg-ink-50 disabled:opacity-40 dark:border-ink-700 dark:text-ink-400 dark:hover:bg-ink-800"
             >
               <ChevronLeft className="h-4 w-4" aria-hidden />
             </button>
 
             {paginas.map((p, indice) =>
               p === "…" ? (
-                <span key={`ellipsis-${indice}`} className="px-1 text-sm text-ink-400">
+                <span key={`ellipsis-${indice}`} className="px-1 text-sm text-ink-400 dark:text-ink-500">
                   …
                 </span>
               ) : (
@@ -86,7 +86,9 @@ export function Pagination({ page, pageSize, total, totalPages, onChangePage, on
                   aria-current={p === page ? "page" : undefined}
                   className={cn(
                     "inline-flex h-8 min-w-8 items-center justify-center rounded-lg px-2 text-sm font-medium",
-                    p === page ? "bg-primary-600 text-white" : "text-ink-600 hover:bg-ink-100",
+                    p === page
+                      ? "bg-primary-600 text-white"
+                      : "text-ink-600 hover:bg-ink-100 dark:text-ink-300 dark:hover:bg-ink-800",
                   )}
                 >
                   {p}
@@ -99,7 +101,7 @@ export function Pagination({ page, pageSize, total, totalPages, onChangePage, on
               onClick={() => onChangePage(Math.min(totalPages, page + 1))}
               disabled={page === totalPages}
               aria-label="Próxima página"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-ink-200 text-ink-500 hover:bg-ink-50 disabled:opacity-40"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-ink-200 text-ink-500 hover:bg-ink-50 disabled:opacity-40 dark:border-ink-700 dark:text-ink-400 dark:hover:bg-ink-800"
             >
               <ChevronRight className="h-4 w-4" aria-hidden />
             </button>

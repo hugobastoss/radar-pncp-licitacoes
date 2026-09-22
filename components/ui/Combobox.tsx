@@ -110,11 +110,14 @@ export function Combobox({
 
   return (
     <div className="flex flex-col gap-1.5" ref={containerRef}>
-      <label htmlFor={inputId} className={cn("text-sm font-medium text-ink-700", hideLabel && "sr-only")}>
+      <label htmlFor={inputId} className={cn("text-sm font-medium text-ink-700 dark:text-ink-200", hideLabel && "sr-only")}>
         {label}
       </label>
       <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" aria-hidden />
+        <Search
+          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400 dark:text-ink-500"
+          aria-hidden
+        />
         <input
           id={inputId}
           role="combobox"
@@ -128,6 +131,8 @@ export function Combobox({
             "h-10 w-full rounded-lg border border-ink-200 bg-white pl-9 pr-9 text-sm text-ink-900 placeholder:text-ink-400",
             "focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100",
             "disabled:bg-ink-50 disabled:text-ink-400",
+            "dark:border-ink-700 dark:bg-ink-900 dark:text-ink-50 dark:placeholder:text-ink-500",
+            "dark:focus:ring-primary-900 dark:disabled:bg-ink-800 dark:disabled:text-ink-600",
           )}
           placeholder={placeholder}
           value={aberto ? termo : (selecionado?.label ?? "")}
@@ -143,7 +148,7 @@ export function Combobox({
           onKeyDown={aoTeclar}
         />
         <ChevronDown
-          className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400"
+          className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400 dark:text-ink-500"
           aria-hidden
         />
 
@@ -153,9 +158,11 @@ export function Combobox({
             id={listboxId}
             role="listbox"
             aria-label={label}
-            className="absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-ink-200 bg-white py-1 shadow-popover"
+            className="absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-ink-200 bg-white py-1 shadow-popover dark:border-ink-700 dark:bg-ink-900"
           >
-            {filtradas.length === 0 && <li className="px-3 py-2 text-sm text-ink-500">{emptyMessage}</li>}
+            {filtradas.length === 0 && (
+              <li className="px-3 py-2 text-sm text-ink-500 dark:text-ink-400">{emptyMessage}</li>
+            )}
             {filtradas.map((opcao, indice) => (
               <li
                 key={opcao.value}
@@ -169,7 +176,9 @@ export function Combobox({
                 onMouseEnter={() => setIndiceAtivo(indice)}
                 className={cn(
                   "flex cursor-pointer items-center justify-between px-3 py-2 text-sm",
-                  indice === indiceAtivo ? "bg-primary-50 text-primary-700" : "text-ink-700",
+                  indice === indiceAtivo
+                    ? "bg-primary-50 text-primary-700 dark:bg-primary-900 dark:text-primary-300"
+                    : "text-ink-700 dark:text-ink-200",
                 )}
               >
                 {opcao.label}
@@ -179,7 +188,7 @@ export function Combobox({
           </ul>
         )}
       </div>
-      {hint && <p className="text-xs text-ink-500">{hint}</p>}
+      {hint && <p className="text-xs text-ink-500 dark:text-ink-400">{hint}</p>}
     </div>
   );
 }

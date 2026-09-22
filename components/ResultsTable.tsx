@@ -1,19 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { Calendar, ChevronDown, ChevronsDownUp, ChevronsUpDown, ChevronUp, ExternalLink, FileSearch } from "lucide-react";
+import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { PortalBadge } from "@/components/PortalBadge";
-import { PrazoIndicador } from "@/components/PrazoIndicador";
-import { AcoesLicitacao } from "@/components/AcoesLicitacao";
-import { grupoDaModalidade } from "@/lib/data/dominio";
-import {
-  formatarLocal,
-  formatarMoeda,
-  formatarNumeroLicitacao,
-  truncarTexto,
-} from "@/lib/formatters";
+import { Campo } from "@/components/LicitacaoDetails";
+import { cn } from "@/lib/cn";
+import { grupoDaModalidade, tonalidadeDaSituacao } from "@/lib/data/dominio";
+import { formatarDataHora, formatarDataHoraCurta, formatarLocal, formatarMoeda } from "@/lib/formatters";
+import { identificarPortal, isLinkExternoSeguro } from "@/lib/portal";
 import type { Licitacao } from "@/types/licitacao";
+
+interface ResultsTableProps {
+  itens: Licitacao[];
+}
 
 const TONE_POR_GRUPO = {
   pregao: "primary",
@@ -21,14 +21,60 @@ const TONE_POR_GRUPO = {
   outra: "accent",
 } as const;
 
-interface ResultsTableProps {
-  itens: Licitacao[];
-  onVerDetalhes: (item: Licitacao) => void;
+const COLUNAS =
+  "grid grid-cols-[minmax(180px,1.3fr)_minmax(130px,0.9fr)_minmax(150px,1fr)_minmax(110px,0.7fr)_minmax(120px,0.8fr)_40px]";
+
+function PainelExpandido({ item }: { item: Licitacao }) {
+  const pncpSeguro = isLinkExternoSeguro(item.linkPNCP);
+  const portalSeguro = isLinkExternoSeguro(item.linkSistemaOrigem);
+
+  return (
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div>
+        <Campo rotulo="Órgão" valor={item.orgao ?? "Órgão não informado"} />
+        <div className="mt-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">Objeto completo</p>
+          <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-ink-700 dark:text-ink-200">
+            {item.objeto ?? "Objeto não informado"}
+          </p>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            leftIcon={<FileSearch className="h-4 w-4" aria-hidden />}
+            disabled={!pncpSeguro}
+            title={pncpSeguro ? undefined : "Link do PNCP não informado"}
+            onClick={() => pncpSeguro && window.open(item.linkPNCP, "_blank", "noopener,noreferrer")}
+          >
+            Abrir no PNCP
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            leftIcon={<ExternalLink className="h-4 w-4" aria-hidden />}
+            disabled={!portalSeguro}
+            title={portalSeguro ? undefined : "Link do portal de origem não informado"}
+            onClick={() => portalSeguro && window.open(item.linkSistemaOrigem, "_blank", "noopener,noreferrer")}
+          >
+            Portal de origem
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+        <Campo rotulo="Situação" valor={item.situacao ?? "Não informada"} />
+        <Campo rotulo="Modo de disputa" valor={item.modoDisputa ?? "Não informado"} />
+        <Campo rotulo="Portal" valor={identificarPortal(item.linkSistemaOrigem).nome} />
+        <Campo rotulo="Abertura" valor={formatarDataHora(item.dataAbertura)} />
+        <Campo rotulo="Encerramento" valor={formatarDataHora(item.dataEncerramento)} />
+        <Campo rotulo="CNPJ do órgão" valor={item.cnpjOrgao ?? "Não informado"} />
+        <Campo rotulo="Controle PNCP" valor={item.numeroControlePNCP ?? "Não informado"} />
+      </div>
+    </div>
+  );
 }
 
-const LIMITE_CARACTERES_OBJETO = 90;
-
-export function ResultsTable({ itens, onVerDetalhes }: ResultsTableProps) {
+export function ResultsTable({ itens }: ResultsTableProps) {
   const [expandidos, setExpandidos] = useState<Set<string>>(new Set());
 
   function alternarExpandido(id: string) {
@@ -40,81 +86,122 @@ export function ResultsTable({ itens, onVerDetalhes }: ResultsTableProps) {
     });
   }
 
+  const todosExpandidos = itens.length > 0 && itens.every((item) => expandidos.has(item.id));
+
+  function alternarTodos() {
+    setExpandidos(todosExpandidos ? new Set() : new Set(itens.map((item) => item.id)));
+  }
+
   return (
-    <div className="hidden overflow-x-auto scrollbar-fina sm:block">
-      <table className="w-full min-w-[960px] border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-ink-200 bg-ink-25 text-left text-xs font-semibold uppercase tracking-wide text-ink-500">
-            <th scope="col" className="px-4 py-3">Encerramento</th>
-            <th scope="col" className="px-4 py-3">Licitação</th>
-            <th scope="col" className="px-4 py-3">Órgão / Objeto</th>
-            <th scope="col" className="px-4 py-3">Modalidade</th>
-            <th scope="col" className="px-4 py-3">Local</th>
-            <th scope="col" className="px-4 py-3">Portal</th>
-            <th scope="col" className="px-4 py-3 text-right">Valor estimado</th>
-            <th scope="col" className="px-4 py-3 text-right">Ações</th>
-          </tr>
-        </thead>
-        <tbody>
+    <div className="hidden overflow-x-auto scrollbar-fina p-4 sm:block">
+      <div className="min-w-[800px]">
+        <div
+          className={cn(
+            COLUNAS,
+            "items-center gap-4 px-4 pb-2 text-xs font-semibold uppercase tracking-wide text-ink-500 dark:text-ink-400",
+          )}
+        >
+          <span>Local</span>
+          <span>Situação</span>
+          <span>Licitação</span>
+          <span>Número</span>
+          <span className="text-right">Valor</span>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={alternarTodos}
+              aria-label={todosExpandidos ? "Recolher todos os detalhes" : "Expandir todos os detalhes"}
+              title={todosExpandidos ? "Recolher todos" : "Expandir todos"}
+              className="inline-flex h-6 w-6 items-center justify-center rounded-md normal-case text-ink-400 hover:bg-ink-100 hover:text-ink-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-ink-500 dark:hover:bg-ink-800 dark:hover:text-ink-200"
+            >
+              {todosExpandidos ? (
+                <ChevronsDownUp className="h-4 w-4" aria-hidden />
+              ) : (
+                <ChevronsUpDown className="h-4 w-4" aria-hidden />
+              )}
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3">
           {itens.map((item) => {
-            const grupo = grupoDaModalidade(item.modalidade);
-            const objetoExpandido = expandidos.has(item.id);
-            const { truncado, foiTruncado } = truncarTexto(item.objeto, LIMITE_CARACTERES_OBJETO);
+            const expandido = expandidos.has(item.id);
+            const idPainel = `detalhes-licitacao-${item.id}`;
 
             return (
-              <tr key={item.id} className="border-b border-ink-100 align-top hover:bg-ink-25/60">
-                <td className="px-4 py-4">
-                  <PrazoIndicador dataEncerramento={item.dataEncerramento} />
-                </td>
-                <td className="px-4 py-4">
-                  <span className="font-medium text-ink-900">
-                    {formatarNumeroLicitacao(item.modalidade, item.numeroLicitacao)}
-                  </span>
-                  {item.numeroControlePNCP && (
-                    <p className="mt-0.5 text-xs text-ink-500">PNCP {item.numeroControlePNCP}</p>
+              <div
+                key={item.id}
+                className="overflow-hidden rounded-xl border border-ink-200 bg-white shadow-card dark:border-ink-700 dark:bg-ink-900"
+              >
+                <div
+                  onClick={() => alternarExpandido(item.id)}
+                  aria-expanded={expandido}
+                  className={cn(
+                    COLUNAS,
+                    "cursor-pointer items-center gap-4 px-4 py-4",
+                    !expandido && "hover:bg-ink-25/60 dark:hover:bg-ink-800/60",
                   )}
-                </td>
-                <td className="max-w-xs px-4 py-4">
-                  <p className="font-medium text-ink-900">{item.orgao ?? "Órgão não informado"}</p>
-                  <p className="mt-0.5 text-ink-500">
-                    {objetoExpandido ? item.objeto ?? "Objeto não informado" : truncado}
-                  </p>
-                  {foiTruncado && (
+                >
+                  <div>
+                    <p className="text-lg font-semibold text-ink-900 dark:text-ink-50">
+                      {formatarLocal(item.municipio, item.uf)}
+                    </p>
+                    <p className="mt-1.5 flex items-center gap-1.5 text-sm text-ink-500 dark:text-ink-400">
+                      <Calendar className="h-3.5 w-3.5" aria-hidden />
+                      {formatarDataHoraCurta(item.dataEncerramento)}
+                    </p>
+                  </div>
+
+                  <div>
+                    <Badge tone={tonalidadeDaSituacao(item.situacao)}>{item.situacao ?? "Não informada"}</Badge>
+                  </div>
+
+                  <div>
+                    <Badge tone={TONE_POR_GRUPO[grupoDaModalidade(item.modalidade)]}>
+                      {item.modalidade ?? "Não informada"}
+                    </Badge>
+                  </div>
+
+                  <div>
+                    <span className="font-medium tabular-nums text-ink-900 dark:text-ink-50">
+                      {item.numeroLicitacao ?? "Não informado"}
+                    </span>
+                  </div>
+
+                  <div className="text-right font-medium tabular-nums text-ink-900 dark:text-ink-50">
+                    {formatarMoeda(item.valorEstimado, item.valorSigiloso)}
+                  </div>
+
+                  <div className="flex justify-end">
                     <button
                       type="button"
-                      onClick={() => alternarExpandido(item.id)}
-                      className="mt-1 inline-flex items-center gap-0.5 text-xs font-medium text-primary-600 hover:text-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        alternarExpandido(item.id);
+                      }}
+                      aria-expanded={expandido}
+                      aria-controls={idPainel}
+                      aria-label={expandido ? "Recolher detalhes da licitação" : "Expandir detalhes da licitação"}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-400 hover:bg-ink-100 hover:text-ink-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-ink-500 dark:hover:bg-ink-800 dark:hover:text-ink-200"
                     >
-                      {objetoExpandido ? (
-                        <>
-                          Ver menos <ChevronUp className="h-3 w-3" aria-hidden />
-                        </>
-                      ) : (
-                        <>
-                          Ver objeto completo <ChevronDown className="h-3 w-3" aria-hidden />
-                        </>
-                      )}
+                      {expandido ? <ChevronUp className="h-4 w-4" aria-hidden /> : <ChevronDown className="h-4 w-4" aria-hidden />}
                     </button>
-                  )}
-                </td>
-                <td className="px-4 py-4">
-                  <Badge tone={TONE_POR_GRUPO[grupo]}>{item.modalidade ?? "Não informada"}</Badge>
-                </td>
-                <td className="px-4 py-4 text-ink-700">{formatarLocal(item.municipio, item.uf)}</td>
-                <td className="px-4 py-4">
-                  <PortalBadge linkSistemaOrigem={item.linkSistemaOrigem} />
-                </td>
-                <td className="px-4 py-4 text-right font-medium tabular-nums text-ink-900">
-                  {formatarMoeda(item.valorEstimado, item.valorSigiloso)}
-                </td>
-                <td className="px-4 py-4">
-                  <AcoesLicitacao item={item} variante="tabela" onVerDetalhes={onVerDetalhes} />
-                </td>
-              </tr>
+                  </div>
+                </div>
+
+                {expandido && (
+                  <div
+                    id={idPainel}
+                    className="border-t border-ink-200 bg-primary-50 px-4 py-5 dark:border-ink-700 dark:bg-ink-800 sm:px-6"
+                  >
+                    <PainelExpandido item={item} />
+                  </div>
+                )}
+              </div>
             );
           })}
-        </tbody>
-      </table>
+        </div>
+      </div>
     </div>
   );
 }

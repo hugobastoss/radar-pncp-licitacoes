@@ -33,11 +33,11 @@ export function ErrorState({ tipo, mensagem, onTentarNovamente }: ErrorStateProp
 
   return (
     <div className="flex flex-col items-center gap-3 px-6 py-16 text-center" role="alert">
-      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-danger-50 text-danger-600">
+      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-danger-50 text-danger-600 dark:bg-danger-900 dark:text-danger-300">
         <Icone className="h-6 w-6" aria-hidden />
       </span>
-      <h3 className="text-base font-semibold text-ink-900">{titulo}</h3>
-      <p className="max-w-sm text-sm text-ink-500">{mensagem ?? texto}</p>
+      <h3 className="text-base font-semibold text-ink-900 dark:text-ink-50">{titulo}</h3>
+      <p className="max-w-sm text-sm text-ink-500 dark:text-ink-400">{mensagem ?? texto}</p>
       <Button variant="secondary" leftIcon={<RefreshCcw className="h-4 w-4" aria-hidden />} onClick={onTentarNovamente}>
         Tentar novamente
       </Button>
