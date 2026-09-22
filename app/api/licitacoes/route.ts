@@ -150,12 +150,13 @@ export async function GET(request: NextRequest) {
   // endpoint só lista propostas em aberto, e recebe esse limite via
   // `dataFinal`). Sem isso, a fonte primária (que não filtra data nenhuma)
   // podia devolver licitações encerradas há meses misturadas com as abertas.
-  // Exceção: se o usuário já filtrou por "Situação" (ex.: "Encerrada"), não
-  // forçamos o limite inferior — senão esse filtro ficaria impossível de
-  // satisfazer.
+  // Exceção: se o usuário filtrou por "Situação" (ex.: "Encerrada"), nunca
+  // forçamos o limite inferior — mesmo com um período pré-selecionado tipo
+  // "Próximos 15 dias", que é sempre para frente e tornaria esse filtro
+  // impossível de satisfazer.
   const agora = new Date();
   const fimEfetivo = fim ?? finalDoDiaBrasiliaMaisDias(agora, DIAS_JANELA_PADRAO);
-  const inicioEfetivo = inicio ?? (situacao.trim() ? undefined : agora);
+  const inicioEfetivo = situacao.trim() ? undefined : (inicio ?? agora);
 
   let resultadoPrincipal: Licitacao[];
   let parcial = false;
