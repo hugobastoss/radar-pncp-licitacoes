@@ -1,0 +1,28 @@
+import { NextRequest, NextResponse } from "next/server";
+import { buscarNomesTecnicos } from "@/lib/server/anvisa-client";
+
+export const dynamic = "force-dynamic";
+
+export async function GET(request: NextRequest) {
+  const termo = (request.nextUrl.searchParams.get("q") ?? "").trim();
+
+  if (!termo) {
+    return NextResponse.json({ erro: "Informe um nome técnico." }, { status: 400 });
+  }
+
+  const clientId = process.env.ANVISA_CLIENT_ID;
+  const clientSecret = process.env.ANVISA_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    return NextResponse.json(
+      { erro: "Consulta de nomenclatura técnica ainda não configurada nesta instância." },
+      { status: 501 },
+    );
+  }
+
+  try {
+    const resultado = await buscarNomesTecnicos(termo, { clientId, clientSecret }, request.signal);
+    return NextResponse.json(resultado);
+  } catch {
+    return NextResponse.json({ erro: "Não foi possível consultar a ANVISA neste momento." }, { status: 502 });
+  }
+}

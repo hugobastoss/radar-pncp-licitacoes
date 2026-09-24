@@ -11,7 +11,7 @@ Pesquisa rápida de licitações e contratações públicas brasileiras, com dad
 - Busca de licitações por texto livre (objeto e nome do órgão), estado, município e número
 - Filtros avançados por período, modalidade, portal e situação
 - Pesquisas rápidas pré-configuradas para categorias comuns (medicamentos, hospitalar, EPI, vacinas, etc.)
-- Consulta de CNPJ, CEP, NCM, sanções (CEIS/CNEP) e produtos para saúde (ANVISA), cada uma em sua própria tela
+- Consulta de CNPJ, CEP, NCM, sanções (CEIS/CNEP), produtos para saúde e nomenclatura técnica (ANVISA), cada uma em sua própria tela
 - Modo claro/escuro com preferência salva no navegador
 
 ## Como a busca de licitações funciona

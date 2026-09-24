@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, HeartPulse, MapPin, Search, ShieldAlert, Tag } from "lucide-react";
+import { Building2, HeartPulse, MapPin, Search, ShieldAlert, Tag, Tags } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 const ITENS_NAV = [
@@ -12,6 +12,7 @@ const ITENS_NAV = [
   { href: "/cep", label: "CEP", icone: MapPin },
   { href: "/ncm", label: "NCM", icone: Tag },
   { href: "/produtos-saude", label: "Produtos p/ Saúde", icone: HeartPulse },
+  { href: "/nome-tecnico", label: "Nome Técnico", icone: Tags },
 ] as const;
 
 export function Sidebar() {
