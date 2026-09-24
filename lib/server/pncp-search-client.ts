@@ -1,3 +1,4 @@
+import { formatarCnpj } from "@/lib/formatters";
 import type { Licitacao } from "@/types/licitacao";
 
 /**
@@ -54,13 +55,6 @@ interface RespostaBuscaInterna {
 
 function apenasDigitos(texto: string): string {
   return texto.replace(/\D/g, "");
-}
-
-function formatarCnpj(cnpj: string | undefined): string | undefined {
-  if (!cnpj) return undefined;
-  const digitos = apenasDigitos(cnpj);
-  if (digitos.length !== 14) return cnpj;
-  return `${digitos.slice(0, 2)}.${digitos.slice(2, 5)}.${digitos.slice(5, 8)}/${digitos.slice(8, 12)}-${digitos.slice(12, 14)}`;
 }
 
 /** Mesmo tratamento de fuso que lib/server/pncp-client.ts — ver comentário lá. */

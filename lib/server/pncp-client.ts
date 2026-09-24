@@ -1,4 +1,5 @@
 import { MODALIDADES } from "@/lib/data/dominio";
+import { formatarCnpj } from "@/lib/formatters";
 import type { Licitacao } from "@/types/licitacao";
 
 /**
@@ -79,13 +80,6 @@ interface PaginaContratacoesPncp {
 
 function apenasDigitos(texto: string): string {
   return texto.replace(/\D/g, "");
-}
-
-function formatarCnpj(cnpj: string | undefined): string | undefined {
-  if (!cnpj) return undefined;
-  const digitos = apenasDigitos(cnpj);
-  if (digitos.length !== 14) return cnpj;
-  return `${digitos.slice(0, 2)}.${digitos.slice(2, 5)}.${digitos.slice(5, 8)}/${digitos.slice(8, 12)}-${digitos.slice(12, 14)}`;
 }
 
 /**

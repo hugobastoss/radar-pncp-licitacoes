@@ -30,6 +30,27 @@ const formatadorHora = new Intl.DateTimeFormat("pt-BR", {
   timeZone: "America/Sao_Paulo",
 });
 
+/**
+ * Formata uma data-calendário pura ("AAAA-MM-DD", sem instante/fuso
+ * associado — ex.: data de abertura de uma empresa) só rearranjando o
+ * texto. NÃO usar `new Date(...)` aqui: converteria pra um instante UTC e,
+ * ao reformatar em horário de Brasília (ver formatarData), a data podia
+ * voltar um dia.
+ */
+export function formatarDataSimples(data: string | undefined): string | undefined {
+  if (!data) return undefined;
+  const partes = /^(\d{4})-(\d{2})-(\d{2})/.exec(data);
+  if (!partes) return data;
+  return `${partes[3]}/${partes[2]}/${partes[1]}`;
+}
+
+export function formatarCnpj(cnpj: string | undefined): string | undefined {
+  if (!cnpj) return undefined;
+  const digitos = cnpj.replace(/\D/g, "");
+  if (digitos.length !== 14) return cnpj;
+  return `${digitos.slice(0, 2)}.${digitos.slice(2, 5)}.${digitos.slice(5, 8)}/${digitos.slice(8, 12)}-${digitos.slice(12, 14)}`;
+}
+
 export function formatarMoeda(valor: number | undefined, sigiloso?: boolean): string {
   if (sigiloso) return "Valor sigiloso";
   if (valor === undefined || valor === null || Number.isNaN(valor)) return "Valor não informado";

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buscarContratacoesPncp } from "@/lib/server/pncp-client";
 import { buscarViaApiInterna } from "@/lib/server/pncp-search-client";
+import { buscarContratacoesCompras } from "@/lib/server/compras-client";
 import { identificarPortal } from "@/lib/portal";
 import { grupoDaModalidade, modalidadesCorrespondem, MODALIDADES } from "@/lib/data/dominio";
 import { MUNICIPIOS_POR_UF } from "@/lib/data/municipios";
@@ -8,15 +9,18 @@ import type { Licitacao, LicitacoesResponse, OrdenacaoOpcao } from "@/types/lici
 
 /**
  * /api/licitacoes — camada de BACKEND do Next.js. Busca real no PNCP, com
- * DUAS fontes em cascata:
+ * TRÊS fontes em cascata:
  *   1. lib/server/pncp-search-client.ts — a API de busca não-documentada
  *      que sustenta pncp.gov.br/app/editais. Rápida e com texto livre, mas
  *      pode mudar sem aviso por não ser um contrato oficial.
- *   2. lib/server/pncp-client.ts — a API de consulta OFICIAL (Manual de
- *      Integração PNCP). Usada só quando a primeira falha: mais lenta (uma
- *      chamada por modalidade) e sem busca por texto.
+ *   2. lib/server/pncp-client.ts — a API de consulta OFICIAL do PNCP
+ *      (Manual de Integração). Usada quando a primeira falha: mais lenta
+ *      (uma chamada por modalidade) e sem busca por texto.
+ *   3. lib/server/compras-client.ts — Dados Abertos do Compras.gov.br,
+ *      infraestrutura independente do pncp.gov.br, com os mesmos dados.
+ *      Último recurso, só quando as duas fontes do PNCP falham juntas.
  *
- * Nenhuma das duas fontes filtra por órgão, número da licitação, situação
+ * Nenhuma das três fontes filtra por órgão, número da licitação, situação
  * ou faixa de valor — por isso esses filtros (e modalidade/município, como
  * rede de segurança) são sempre aplicados aqui, sobre o resultado agregado.
  */
@@ -191,26 +195,53 @@ export async function GET(request: NextRequest) {
           .map((nome) => MODALIDADES.find((m) => modalidadesCorrespondem(m.nome, nome))?.codigoPncp)
           .filter((codigo): codigo is number => codigo !== undefined)
       : undefined;
+    const codigoMunicipioFiltro = municipio && municipio !== "TODOS" ? municipio : undefined;
 
-    let resultadoPncp;
+    let resultadoOficial: { itens: Licitacao[]; parcial: boolean } | undefined;
     try {
-      resultadoPncp = await buscarContratacoesPncp({
+      const resposta = await buscarContratacoesPncp({
         dataFinal: fimEfetivo,
         codigosModalidade,
         uf: ufFiltro,
-        codigoMunicipioIbge: municipio && municipio !== "TODOS" ? municipio : undefined,
+        codigoMunicipioIbge: codigoMunicipioFiltro,
         signal: request.signal,
       });
+      if (!resposta.todasFalharam) resultadoOficial = resposta;
     } catch {
-      return respostaErroServidor();
+      // segue para a terceira fonte, abaixo
     }
 
-    if (resultadoPncp.todasFalharam) {
-      return respostaErroServidor();
-    }
+    if (resultadoOficial) {
+      itensBrutos = resultadoOficial.itens;
+      parcial = resultadoOficial.parcial;
+    } else {
+      // Terceira fonte: Compras.gov.br, infraestrutura independente do
+      // pncp.gov.br — as duas fontes acima falharam juntas. Ela não aplica
+      // limite de encerramento no servidor (só filtra por publicação), por
+      // isso NÃO conta como "usouFallbackOficial" — o filtro local de
+      // fimEfetivo abaixo precisa reforçar o corte, como já faz pra fonte
+      // primária.
+      usouFallbackOficial = false;
 
-    itensBrutos = resultadoPncp.itens;
-    parcial = resultadoPncp.parcial;
+      let resultadoCompras;
+      try {
+        resultadoCompras = await buscarContratacoesCompras({
+          codigosModalidade,
+          uf: ufFiltro,
+          codigoMunicipioIbge: codigoMunicipioFiltro,
+          signal: request.signal,
+        });
+      } catch {
+        return respostaErroServidor();
+      }
+
+      if (resultadoCompras.todasFalharam) {
+        return respostaErroServidor();
+      }
+
+      itensBrutos = resultadoCompras.itens;
+      parcial = resultadoCompras.parcial;
+    }
   }
 
   resultadoPrincipal = itensBrutos.map((item) => ({
