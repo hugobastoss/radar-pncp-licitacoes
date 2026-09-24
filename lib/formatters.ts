@@ -51,6 +51,29 @@ export function formatarCnpj(cnpj: string | undefined): string | undefined {
   return `${digitos.slice(0, 2)}.${digitos.slice(2, 5)}.${digitos.slice(5, 8)}/${digitos.slice(8, 12)}-${digitos.slice(12, 14)}`;
 }
 
+/**
+ * Máscara de CNPJ aplicada enquanto o usuário digita (aceita colar com ou
+ * sem pontuação) — diferente de `formatarCnpj`, que só formata um CNPJ já
+ * completo vindo de uma API.
+ */
+export function mascararCnpj(valor: string): string {
+  const digitos = valor.replace(/\D/g, "").slice(0, 14);
+  if (digitos.length <= 2) return digitos;
+  if (digitos.length <= 5) return `${digitos.slice(0, 2)}.${digitos.slice(2)}`;
+  if (digitos.length <= 8) return `${digitos.slice(0, 2)}.${digitos.slice(2, 5)}.${digitos.slice(5)}`;
+  if (digitos.length <= 12) {
+    return `${digitos.slice(0, 2)}.${digitos.slice(2, 5)}.${digitos.slice(5, 8)}/${digitos.slice(8)}`;
+  }
+  return `${digitos.slice(0, 2)}.${digitos.slice(2, 5)}.${digitos.slice(5, 8)}/${digitos.slice(8, 12)}-${digitos.slice(12)}`;
+}
+
+/** Máscara de CEP aplicada enquanto o usuário digita (00000-000). */
+export function mascararCep(valor: string): string {
+  const digitos = valor.replace(/\D/g, "").slice(0, 8);
+  if (digitos.length <= 5) return digitos;
+  return `${digitos.slice(0, 5)}-${digitos.slice(5)}`;
+}
+
 export function formatarMoeda(valor: number | undefined, sigiloso?: boolean): string {
   if (sigiloso) return "Valor sigiloso";
   if (valor === undefined || valor === null || Number.isNaN(valor)) return "Valor não informado";

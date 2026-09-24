@@ -2,12 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, Search } from "lucide-react";
+import { Building2, MapPin, Search, ShieldAlert, Tag } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 const ITENS_NAV = [
   { href: "/", label: "Licitações", icone: Search },
   { href: "/cnpj", label: "CNPJ", icone: Building2 },
+  { href: "/sancoes", label: "Sanções", icone: ShieldAlert },
+  { href: "/cep", label: "CEP", icone: MapPin },
+  { href: "/ncm", label: "NCM", icone: Tag },
 ] as const;
 
 export function Sidebar() {

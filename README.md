@@ -8,20 +8,21 @@ Pesquisa rápida de licitações e contratações públicas brasileiras, com dad
 
 ## Funcionalidades
 
-- Busca por texto livre (objeto da licitação e nome do órgão), estado, município e número da licitação
+- Busca de licitações por texto livre (objeto e nome do órgão), estado, município e número
 - Filtros avançados por período, modalidade, portal e situação
 - Pesquisas rápidas pré-configuradas para categorias comuns (medicamentos, hospitalar, EPI, vacinas, etc.)
-- Resultados com detalhamento expandido (órgão, objeto, prazos, valor, link direto para o PNCP)
+- Consulta de CNPJ, CEP, NCM e sanções (CEIS/CNEP), cada uma em sua própria tela
 - Modo claro/escuro com preferência salva no navegador
 
-## Como a busca funciona
+## Como a busca de licitações funciona
 
-O PNCP não expõe uma API pública com busca por texto livre — apenas consultas por data, modalidade, UF e município. Para contornar isso, o app combina duas fontes:
+O PNCP não expõe uma API pública com busca por texto livre — apenas consultas por data, modalidade, UF e município. Para contornar isso, e para não depender de uma única fonte, o app combina três APIs em cascata (cada uma só é chamada se a anterior falhar):
 
-1. **API de busca interna do PNCP** (não documentada, usada pelo próprio [pncp.gov.br/app/editais](https://pncp.gov.br/app/editais)) — fonte primária, rápida e com busca por texto livre.
-2. **API de consulta oficial do PNCP** (documentada no Manual de Integração) — fallback, usado quando a primeira falha. Como essa API exige uma modalidade por chamada, o app consulta as 13 modalidades em paralelo e agrega o resultado.
+1. **API de busca interna do PNCP** (não documentada) — fonte primária, rápida e com busca por texto livre.
+2. **API de consulta oficial do PNCP** (documentada no Manual de Integração) — exige modalidade e data, sem busca por texto; consulta as 13 modalidades em paralelo.
+3. **API de Dados Abertos do Compras.gov.br** — último recurso, infraestrutura independente do pncp.gov.br, usada quando as duas fontes acima falham juntas.
 
-Veja [`lib/server/pncp-search-client.ts`](lib/server/pncp-search-client.ts) e [`lib/server/pncp-client.ts`](lib/server/pncp-client.ts) para os detalhes de cada cliente.
+Veja [`docs/APIS.md`](docs/APIS.md) para o detalhamento de todas as APIs externas usadas no projeto (licitações, CNPJ, CEP, NCM e sanções), incluindo particularidades e pegadinhas descobertas em cada uma.
 
 ## Stack
 
@@ -30,7 +31,7 @@ Veja [`lib/server/pncp-search-client.ts`](lib/server/pncp-search-client.ts) e [`
 - [Radix UI](https://www.radix-ui.com) para componentes acessíveis (ex.: painéis animados)
 - [lucide-react](https://lucide.dev) para ícones
 
-Sem banco de dados e sem variáveis de ambiente — os dados vêm direto do PNCP a cada consulta.
+Sem banco de dados — os dados vêm direto das APIs externas a cada consulta (ver [`docs/APIS.md`](docs/APIS.md)).
 
 ## Rodando localmente
 
@@ -42,6 +43,20 @@ npm run dev
 ```
 
 Abra [http://localhost:3000](http://localhost:3000).
+
+### Variáveis de ambiente
+
+Só a tela de sanções (CEIS/CNEP) precisa de uma — as demais funcionam sem nenhuma configuração.
+
+| Variável | Obrigatória? | Descrição |
+| --- | --- | --- |
+| `PORTAL_TRANSPARENCIA_API_KEY` | Não (sem ela, `/sancoes` mostra "não configurado") | Chave gratuita, cadastro em [portaldatransparencia.gov.br/api-de-dados](https://portaldatransparencia.gov.br/api-de-dados) |
+
+Crie um `.env.local` na raiz do projeto (já está no `.gitignore`) com:
+
+```
+PORTAL_TRANSPARENCIA_API_KEY=sua-chave-aqui
+```
 
 ### Scripts
 
