@@ -143,6 +143,32 @@ Lei Anticorrupção) da CGU.
 - Sem a variável de ambiente configurada, `app/api/sancoes/route.ts` devolve
   **501** de propósito, em vez de tentar chamar a API sem chave.
 
+## Consulta de produtos para saúde (`/produtos-saude`)
+
+| | |
+|---|---|
+| **Base URL (token)** | `https://acesso.prd.apps.anvisa.gov.br/auth/realms/externo/protocol/openid-connect/token` |
+| **Base URL (consulta)** | `https://api-gateway.prd.apps.anvisa.gov.br/consultas-externas-api/api/v1/saude` |
+| **Autenticação** | OAuth2 `client_credentials` (Keycloak) — registre um app em [api.anvisa.gov.br](https://api.anvisa.gov.br) para obter `client_id`/`client_secret` |
+| **Variáveis de ambiente** | `ANVISA_CLIENT_ID`, `ANVISA_CLIENT_SECRET` |
+| **Arquivo** | [`lib/server/anvisa-client.ts`](../lib/server/anvisa-client.ts) |
+
+Consulta de dispositivos médicos e materiais hospitalares registrados na
+ANVISA por nome do produto (fabricante, registro, situação, vencimento).
+
+**Particularidades:**
+- É um fluxo de dois passos: primeiro gera um token (`grant_type=client_credentials`,
+  expira em ~29 min), depois usa esse token como `Bearer` na consulta —
+  geramos um token novo a cada busca, dado o volume baixo esperado (não vale
+  a complexidade de cachear entre invocações serverless).
+- A consulta é `POST` com corpo JSON (`{count, page, order, filter}`), não
+  `GET` com query string — resposta vem paginada no formato padrão do Spring
+  (`content`, `totalElements`, `totalPages`).
+- Datas (`dataVencimento` etc.) vêm como **epoch milissegundos**, não string
+  ISO — convertidas com `new Date(ms).toISOString()`.
+- Sem as variáveis de ambiente configuradas, a rota devolve **501**, mesmo
+  padrão da consulta de sanções.
+
 ## IBGE — Localidades (só geração de dados, não roda em produção)
 
 | | |
