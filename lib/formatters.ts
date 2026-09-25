@@ -44,6 +44,22 @@ export function formatarDataSimples(data: string | undefined): string | undefine
   return `${partes[3]}/${partes[2]}/${partes[1]}`;
 }
 
+/**
+ * Monta "número/ano" a partir dos campos brutos da API oficial e do
+ * Compras.gov.br (`numeroCompra` + `anoCompra`) — alguns órgãos já incluem
+ * o ano dentro do próprio `numeroCompra` (ex.: "001/2026"), então
+ * concatenar sempre duplicava o ano ("001/2026/2026"). Só concatena
+ * quando `numeroCompra` não termina exatamente com "/{ano}".
+ */
+export function montarNumeroLicitacao(
+  numeroCompra: string | undefined,
+  ano: number | string | undefined,
+): string | undefined {
+  if (!numeroCompra) return undefined;
+  if (ano === undefined) return numeroCompra;
+  return numeroCompra.endsWith(`/${ano}`) ? numeroCompra : `${numeroCompra}/${ano}`;
+}
+
 export function formatarCnpj(cnpj: string | undefined): string | undefined {
   if (!cnpj) return undefined;
   const digitos = cnpj.replace(/\D/g, "");

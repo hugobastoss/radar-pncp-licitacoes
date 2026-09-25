@@ -1,5 +1,5 @@
 import { MODALIDADES } from "@/lib/data/dominio";
-import { formatarCnpj } from "@/lib/formatters";
+import { formatarCnpj, montarNumeroLicitacao } from "@/lib/formatters";
 import type { Licitacao } from "@/types/licitacao";
 
 /**
@@ -109,8 +109,7 @@ function mapearParaLicitacao(raw: ContratacaoPncp): Licitacao | undefined {
 
   const cnpj = raw.orgaoEntidade?.cnpj;
   const cnpjDigitos = cnpj ? apenasDigitos(cnpj) : undefined;
-  const numeroLicitacao =
-    raw.numeroCompra && raw.anoCompra ? `${raw.numeroCompra}/${raw.anoCompra}` : undefined;
+  const numeroLicitacao = montarNumeroLicitacao(raw.numeroCompra, raw.anoCompra);
 
   return {
     id: raw.numeroControlePNCP,
