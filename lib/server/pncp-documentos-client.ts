@@ -12,7 +12,10 @@ import type { DocumentoLicitacao } from "@/types/licitacao";
  */
 
 const BASE_URL = "https://pncp.gov.br/api/pncp/v1";
-const TIMEOUT_MS = 10000;
+// Esse endpoint é sensivelmente mais lento que os outros da PNCP — chegou a
+// levar 13-15s numa resposta real testada ao vivo, então o timeout precisa
+// de bem mais folga que os 6-10s usados nos outros clientes deste projeto.
+const TIMEOUT_MS = 20000;
 
 interface ArquivoBruto {
   url?: string;

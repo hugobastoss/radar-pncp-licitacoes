@@ -5,7 +5,10 @@ import type { DocumentoLicitacao } from "@/types/licitacao";
  * licitação — mesmo padrão de lib/api-cnpj.ts.
  */
 
-const TIMEOUT_MS = 10000;
+// Um pouco mais folgado que o timeout do servidor (20s em
+// lib/server/pncp-documentos-client.ts), pra dar chance da resposta real do
+// backend chegar antes do cliente desistir primeiro.
+const TIMEOUT_MS = 25000;
 
 export type ResultadoDocumentosLicitacao =
   | { status: "sucesso"; documentos: DocumentoLicitacao[] }
