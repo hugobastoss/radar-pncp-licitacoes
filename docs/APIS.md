@@ -82,17 +82,43 @@ aconteceu várias vezes durante o desenvolvimento.
 
 | | |
 |---|---|
-| **Base URL** | `https://brasilapi.com.br/api/cnpj/v1/{cnpj}` |
+| **Base URL** | `https://brasilapi.com.br/api/cnpj/v1/{cnpj}` (primária) e `https://minhareceita.org/{cnpj}` (fallback) |
 | **Autenticação** | Nenhuma |
 | **Arquivo** | [`lib/server/cnpj-client.ts`](../lib/server/cnpj-client.ts) |
 
-Espelha o cadastro básico da Receita Federal (razão social, situação
-cadastral, sócios, endereço, CNAE, capital social).
+Espelha o cadastro da Receita Federal (razão social, situação cadastral,
+sócios, endereço, CNAE, capital social, Simples/MEI, regime tributário). A
+tela também consulta as sanções (CEIS/CNEP, ver abaixo) em paralelo e mostra
+tudo no mesmo resultado. Aceita `/cnpj?cnpj=...` — é assim que o "CNPJ do
+órgão" das licitações abre a consulta já preenchida.
 
-**Particularidade:** a BrasilAPI bloqueia (403) requisições sem header
-`User-Agent` — o `fetch` do Node, ao contrário do navegador, não manda um por
-padrão. Todos os clientes da BrasilAPI neste projeto mandam
-`User-Agent: RadarLicitacoes/1.0` por causa disso.
+Duas fontes em cascata: a Minha Receita só é chamada quando a BrasilAPI
+falha por instabilidade (rede, timeout, 5xx, 429…). As duas devolvem
+**exatamente o mesmo JSON** (conferido campo a campo), então um único
+mapeamento serve pras duas. Ficam em hospedagens diferentes (Vercel e
+fly.io), mas é provável que a BrasilAPI repasse os dados da própria Minha
+Receita — o fallback cobre queda ou bloqueio da BrasilAPI, não
+necessariamente da origem dos dados.
+
+**Particularidades:**
+- A BrasilAPI bloqueia (403) requisições sem header `User-Agent` — o `fetch`
+  do Node, ao contrário do navegador, não manda um por padrão. Todos os
+  clientes da BrasilAPI neste projeto mandam `User-Agent: RadarLicitacoes/1.0`
+  por causa disso.
+- As duas fontes validam o dígito verificador: CNPJ inválido volta **400**,
+  inexistente volta **404**. Os dois são respostas definitivas — não caem pro
+  fallback.
+- As duas já aceitam o **CNPJ alfanumérico** que a Receita emite desde julho
+  de 2026 (letras nas 12 primeiras posições). O app valida e normaliza os
+  dois formatos em [`lib/cnpj.ts`](../lib/cnpj.ts) — nunca descarte letras
+  com `replace(/\D/g, "")` num CNPJ.
+- Respostas 200 ficam **24 h no cache do Next** (`next: { revalidate }` no
+  `fetch`); 404 e falhas não são guardados.
+- `opcao_pelo_simples`/`opcao_pelo_mei` vêm `null` quando a empresa nunca
+  optou, e `false` com `data_exclusao_*` quando já optou e saiu.
+- O código do CNAE vem como número (`3514000`), sem o zero à esquerda de
+  códigos como `0111-3/01`; o tipo de logradouro ("AVENIDA") vem num campo
+  separado (`descricao_tipo_de_logradouro`).
 
 ## Consulta de CEP (`/cep`)
 
@@ -143,6 +169,12 @@ Lei Anticorrupção) da CGU.
   de navegador, mesmo com uma chave de API válida.
 - Sem a variável de ambiente configurada, `app/api/sancoes/route.ts` devolve
   **501** de propósito, em vez de tentar chamar a API sem chave.
+- Aceita CNPJ alfanumérico em `codigoSancionado` sem erro (testado com o
+  exemplo fictício da Receita, que volta vazio). Ainda não deu pra conferir
+  com uma empresa alfanumérica sancionada de verdade.
+- Pode demorar: chegou a ~4,5 s nos testes (outras chamadas levaram
+  ~0,5 s). Por isso, na tela de CNPJ, as sanções aparecem depois do
+  cadastro, com indicador de carregamento próprio.
 
 ## ANVISA — Consultas Externas (`/produtos-saude`, `/nome-tecnico`)
 

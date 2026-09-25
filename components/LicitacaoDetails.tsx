@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/Button";
 import { PortalBadge } from "@/components/PortalBadge";
 import { PrazoIndicador } from "@/components/PrazoIndicador";
 import { DocumentosLicitacao } from "@/components/DocumentosLicitacao";
+import { LinkCnpj } from "@/components/LinkCnpj";
 import {
   formatarDataHora,
   formatarLocal,
@@ -42,7 +43,7 @@ export function LicitacaoDetails({ item }: { item: Licitacao }) {
         <Campo rotulo="Situação" valor={rotuloSituacao(item.situacao, item.dataAbertura)} />
         <Campo rotulo="Município" valor={item.municipio ?? "Não informado"} />
         <Campo rotulo="Estado" valor={item.uf ?? "Não informado"} />
-        <Campo rotulo="CNPJ do órgão" valor={item.cnpjOrgao ?? "Não informado"} />
+        <Campo rotulo="CNPJ do órgão" valor={item.cnpjOrgao ? <LinkCnpj cnpj={item.cnpjOrgao} /> : "Não informado"} />
         <Campo rotulo="Local" valor={formatarLocal(item.municipio, item.uf)} />
         <Campo rotulo="Data de abertura" valor={formatarDataHora(item.dataAbertura)} />
         <Campo rotulo="Data de encerramento" valor={formatarDataHora(item.dataEncerramento)} />

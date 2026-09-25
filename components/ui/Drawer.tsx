@@ -62,7 +62,7 @@ export function Drawer({ aberto, onFechar, titulo, children, rodape }: DrawerPro
     <div className="fixed inset-0 z-50 flex justify-end">
       <button
         type="button"
-        aria-label="Fechar detalhes da licitação"
+        aria-label={`Fechar ${titulo.toLowerCase()}`}
         className="absolute inset-0 bg-ink-900/40 dark:bg-black/60"
         onClick={onFechar}
       />

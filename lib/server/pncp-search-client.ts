@@ -1,3 +1,4 @@
+import { normalizarCnpj } from "@/lib/cnpj";
 import { formatarCnpj } from "@/lib/formatters";
 import { dominioDoPortalPorNome } from "@/lib/portal";
 import type { Licitacao } from "@/types/licitacao";
@@ -55,10 +56,6 @@ interface RespostaBuscaInterna {
   total: number;
 }
 
-function apenasDigitos(texto: string): string {
-  return texto.replace(/\D/g, "");
-}
-
 /** Mesmo tratamento de fuso que lib/server/pncp-client.ts — ver comentário lá. */
 function horarioBrasiliaParaIso(dataHoraSemFuso: string | undefined): string | undefined {
   if (!dataHoraSemFuso) return undefined;
@@ -72,9 +69,9 @@ function montarLinkPncp(raw: ItemBuscaInterna): string | undefined {
   // rota não existe mais no PNCP (dá "Página não encontrada") — a rota real
   // é "/editais/...". Em vez de confiar nesse campo, montamos o link do
   // mesmo jeito que já funciona em lib/server/pncp-client.ts.
-  const cnpjDigitos = raw.orgao_cnpj ? apenasDigitos(raw.orgao_cnpj) : undefined;
-  if (!cnpjDigitos || !raw.ano || !raw.numero_sequencial) return undefined;
-  return `https://pncp.gov.br/app/editais/${cnpjDigitos}/${raw.ano}/${raw.numero_sequencial}`;
+  const cnpj = raw.orgao_cnpj ? normalizarCnpj(raw.orgao_cnpj) : undefined;
+  if (!cnpj || !raw.ano || !raw.numero_sequencial) return undefined;
+  return `https://pncp.gov.br/app/editais/${cnpj}/${raw.ano}/${raw.numero_sequencial}`;
 }
 
 // Esta API não tem um campo próprio de portal de origem, mas alguns órgãos

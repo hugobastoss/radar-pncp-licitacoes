@@ -1,3 +1,4 @@
+import { normalizarCnpj } from "@/lib/cnpj";
 import { MODALIDADES } from "@/lib/data/dominio";
 import { formatarCnpj, montarNumeroLicitacao } from "@/lib/formatters";
 import type { Licitacao } from "@/types/licitacao";
@@ -78,10 +79,6 @@ interface PaginaContratacoesPncp {
   numeroPagina: number;
 }
 
-function apenasDigitos(texto: string): string {
-  return texto.replace(/\D/g, "");
-}
-
 /**
  * O PNCP devolve datas/horas sem indicação de fuso (ex.: "2026-09-20T10:00:00"),
  * mas já no horário de Brasília. Fixamos o deslocamento (-03:00, sem horário
@@ -108,7 +105,7 @@ function mapearParaLicitacao(raw: ContratacaoPncp): Licitacao | undefined {
   if (!raw.numeroControlePNCP) return undefined;
 
   const cnpj = raw.orgaoEntidade?.cnpj;
-  const cnpjDigitos = cnpj ? apenasDigitos(cnpj) : undefined;
+  const cnpjNormalizado = cnpj ? normalizarCnpj(cnpj) : undefined;
   const numeroLicitacao = montarNumeroLicitacao(raw.numeroCompra, raw.anoCompra);
 
   return {
@@ -130,8 +127,8 @@ function mapearParaLicitacao(raw: ContratacaoPncp): Licitacao | undefined {
     situacao: raw.situacaoCompraNome,
     linkSistemaOrigem: raw.linkSistemaOrigem,
     linkPNCP:
-      cnpjDigitos && raw.anoCompra && raw.sequencialCompra
-        ? `https://pncp.gov.br/app/editais/${cnpjDigitos}/${raw.anoCompra}/${raw.sequencialCompra}`
+      cnpjNormalizado && raw.anoCompra && raw.sequencialCompra
+        ? `https://pncp.gov.br/app/editais/${cnpjNormalizado}/${raw.anoCompra}/${raw.sequencialCompra}`
         : undefined,
   };
 }

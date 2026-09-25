@@ -1,3 +1,4 @@
+import { validarCnpj } from "@/lib/cnpj";
 import type { Empresa } from "@/types/cnpj";
 
 /**
@@ -5,7 +6,9 @@ import type { Empresa } from "@/types/cnpj";
  * o componente nunca chama fetch diretamente, sempre passa por aqui.
  */
 
-const TIMEOUT_MS = 10000;
+// Folga sobre o pior caso do servidor: BrasilAPI e Minha Receita esgotando
+// os 5 s cada (ver lib/server/cnpj-client.ts).
+const TIMEOUT_MS = 12000;
 
 export type ResultadoBuscaCnpj =
   | { status: "sucesso"; empresa: Empresa }
@@ -18,13 +21,17 @@ export async function buscarEmpresa(
   cnpj: string,
   options?: { signal?: AbortSignal },
 ): Promise<ResultadoBuscaCnpj> {
+  // Mesma validação da rota — responde na hora, sem ida ao servidor.
+  const validacao = validarCnpj(cnpj);
+  if (!validacao.valido) return { status: "invalido", mensagem: validacao.mensagem };
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(new DOMException("Timeout", "TimeoutError")), TIMEOUT_MS);
   const onAbortExterno = () => controller.abort(options?.signal?.reason);
   options?.signal?.addEventListener("abort", onAbortExterno);
 
   try {
-    const resposta = await fetch(`/api/cnpj?cnpj=${encodeURIComponent(cnpj)}`, {
+    const resposta = await fetch(`/api/cnpj?cnpj=${validacao.cnpj}`, {
       signal: controller.signal,
       headers: { Accept: "application/json" },
     });

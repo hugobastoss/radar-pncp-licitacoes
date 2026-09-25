@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { buscarNomesTecnicos, ErroConsultaAnvisa } from "@/lib/server/anvisa-client";
+import { buscarNomesTecnicos, ErroConsultaAnvisa, lerCredenciaisAnvisa } from "@/lib/server/anvisa-client";
 
 export const dynamic = "force-dynamic";
 
@@ -10,9 +10,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ erro: "Informe um nome técnico." }, { status: 400 });
   }
 
-  const clientId = process.env.ANVISA_CLIENT_ID;
-  const clientSecret = process.env.ANVISA_CLIENT_SECRET;
-  if (!clientId || !clientSecret) {
+  const credenciais = lerCredenciaisAnvisa();
+  if (!credenciais) {
     return NextResponse.json(
       { erro: "Consulta de nomenclatura técnica ainda não configurada nesta instância." },
       { status: 501 },
@@ -20,7 +19,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const resultado = await buscarNomesTecnicos(termo, { clientId, clientSecret }, request.signal);
+    const resultado = await buscarNomesTecnicos(termo, credenciais, request.signal);
     return NextResponse.json(resultado);
   } catch (erro) {
     const mensagem = erro instanceof ErroConsultaAnvisa ? erro.mensagemAnvisa : undefined;

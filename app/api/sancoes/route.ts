@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { validarCnpj } from "@/lib/cnpj";
 import { buscarSancoes } from "@/lib/server/transparencia-client";
 
 /**
@@ -9,11 +10,10 @@ import { buscarSancoes } from "@/lib/server/transparencia-client";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  const cnpjParam = request.nextUrl.searchParams.get("cnpj") ?? "";
-  const cnpjDigitos = cnpjParam.replace(/\D/g, "");
+  const validacao = validarCnpj(request.nextUrl.searchParams.get("cnpj") ?? "");
 
-  if (cnpjDigitos.length !== 14) {
-    return NextResponse.json({ erro: "CNPJ inválido. Informe os 14 dígitos." }, { status: 400 });
+  if (!validacao.valido) {
+    return NextResponse.json({ erro: validacao.mensagem }, { status: 400 });
   }
 
   const chave = process.env.PORTAL_TRANSPARENCIA_API_KEY;
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const sancoes = await buscarSancoes(cnpjDigitos, chave, request.signal);
+    const sancoes = await buscarSancoes(validacao.cnpj, chave, request.signal);
     return NextResponse.json(sancoes);
   } catch {
     return NextResponse.json({ erro: "Não foi possível consultar sanções neste momento." }, { status: 502 });

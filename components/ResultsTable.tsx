@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Campo } from "@/components/LicitacaoDetails";
 import { DocumentosLicitacao } from "@/components/DocumentosLicitacao";
+import { LinkCnpj } from "@/components/LinkCnpj";
 import { cn } from "@/lib/cn";
 import { grupoDaModalidade, rotuloSituacao, tonalidadeDaSituacao } from "@/lib/data/dominio";
 import { formatarDataHora, formatarDataHoraCurta, formatarLocal, formatarMoeda } from "@/lib/formatters";
@@ -75,7 +76,7 @@ function PainelExpandido({ item }: { item: Licitacao }) {
         <Campo rotulo="Portal" valor={identificarPortal(item.linkSistemaOrigem).nome} />
         <Campo rotulo="Abertura" valor={formatarDataHora(item.dataAbertura)} />
         <Campo rotulo="Encerramento" valor={formatarDataHora(item.dataEncerramento)} />
-        <Campo rotulo="CNPJ do órgão" valor={item.cnpjOrgao ?? "Não informado"} />
+        <Campo rotulo="CNPJ do órgão" valor={item.cnpjOrgao ? <LinkCnpj cnpj={item.cnpjOrgao} /> : "Não informado"} />
         <Campo rotulo="Controle PNCP" valor={item.numeroControlePNCP ?? "Não informado"} />
       </div>
     </div>

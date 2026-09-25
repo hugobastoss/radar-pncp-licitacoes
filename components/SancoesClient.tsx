@@ -12,7 +12,8 @@ import type { Sancao } from "@/lib/server/transparencia-client";
 
 type Status = "idle" | "carregando" | "sucesso" | "invalido" | "nao_configurado" | "erro";
 
-function SancaoItem({ sancao }: { sancao: Sancao }) {
+/** Também usado no resultado da consulta de CNPJ (components/CnpjClient.tsx). */
+export function SancaoItem({ sancao }: { sancao: Sancao }) {
   return (
     <li className="rounded-lg border border-danger-200 bg-danger-50 p-3 dark:border-danger-900 dark:bg-danger-900/30">
       <div className="flex flex-wrap items-center gap-2">

@@ -69,11 +69,11 @@ function mapearSancao(raw: SancaoBruta, tipo: "CEIS" | "CNEP"): Sancao {
   };
 }
 
-async function buscarLista(caminho: "ceis" | "cnep", cnpjDigitos: string, chave: string, signal?: AbortSignal): Promise<Sancao[]> {
+async function buscarLista(caminho: "ceis" | "cnep", cnpj: string, chave: string, signal?: AbortSignal): Promise<Sancao[]> {
   const sinaisAbortar = [AbortSignal.timeout(TIMEOUT_MS)];
   if (signal) sinaisAbortar.push(signal);
 
-  const resposta = await fetch(`${BASE_URL}/${caminho}?codigoSancionado=${cnpjDigitos}&pagina=1`, {
+  const resposta = await fetch(`${BASE_URL}/${caminho}?codigoSancionado=${cnpj}&pagina=1`, {
     signal: AbortSignal.any(sinaisAbortar),
     headers: { Accept: "application/json", "chave-api-dados": chave, "User-Agent": USER_AGENT },
   });
@@ -88,10 +88,10 @@ async function buscarLista(caminho: "ceis" | "cnep", cnpjDigitos: string, chave:
   return Array.isArray(corpo) ? corpo.map((item) => mapearSancao(item, caminho.toUpperCase() as "CEIS" | "CNEP")) : [];
 }
 
-export async function buscarSancoes(cnpjDigitos: string, chave: string, signal?: AbortSignal): Promise<ResultadoSancoes> {
+export async function buscarSancoes(cnpj: string, chave: string, signal?: AbortSignal): Promise<ResultadoSancoes> {
   const [ceis, cnep] = await Promise.all([
-    buscarLista("ceis", cnpjDigitos, chave, signal),
-    buscarLista("cnep", cnpjDigitos, chave, signal),
+    buscarLista("ceis", cnpj, chave, signal),
+    buscarLista("cnep", cnpj, chave, signal),
   ]);
   return { ceis, cnep };
 }

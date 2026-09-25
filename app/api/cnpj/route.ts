@@ -1,22 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
-import { buscarEmpresaPorCnpj, CnpjNaoEncontradoError } from "@/lib/server/cnpj-client";
+import { validarCnpj } from "@/lib/cnpj";
+import { buscarEmpresaPorCnpj, CnpjInvalidoError, CnpjNaoEncontradoError } from "@/lib/server/cnpj-client";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  const cnpjParam = request.nextUrl.searchParams.get("cnpj") ?? "";
-  const cnpjDigitos = cnpjParam.replace(/\D/g, "");
+  const validacao = validarCnpj(request.nextUrl.searchParams.get("cnpj") ?? "");
 
-  if (cnpjDigitos.length !== 14) {
-    return NextResponse.json({ erro: "CNPJ inválido. Informe os 14 dígitos." }, { status: 400 });
+  if (!validacao.valido) {
+    return NextResponse.json({ erro: validacao.mensagem }, { status: 400 });
   }
 
   try {
-    const empresa = await buscarEmpresaPorCnpj(cnpjDigitos, request.signal);
+    const empresa = await buscarEmpresaPorCnpj(validacao.cnpj, request.signal);
     return NextResponse.json({ empresa });
   } catch (erro) {
     if (erro instanceof CnpjNaoEncontradoError) {
       return NextResponse.json({ erro: "CNPJ não encontrado." }, { status: 404 });
+    }
+    if (erro instanceof CnpjInvalidoError) {
+      return NextResponse.json({ erro: "CNPJ inválido. Confira o número digitado." }, { status: 400 });
     }
     return NextResponse.json({ erro: "Não foi possível consultar o CNPJ neste momento." }, { status: 502 });
   }

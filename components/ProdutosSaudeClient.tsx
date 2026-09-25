@@ -1,53 +1,87 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { HeartPulse, Loader2, Search } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
+import { Drawer } from "@/components/ui/Drawer";
+import { Pagination } from "@/components/Pagination";
+import { LinkCnpj } from "@/components/LinkCnpj";
+import { ClasseRisco, DetalheProdutoSaude, SituacaoRegistro } from "@/components/DetalheProdutoSaude";
 import { buscarProdutosSaude } from "@/lib/api-produtos-saude";
-import { formatarCnpj, formatarData } from "@/lib/formatters";
-import type { ProdutoSaude } from "@/types/produto-saude";
+import { buscaAceitaFiltroValidos } from "@/lib/produtos-saude";
+import { formatarCnpj, formatarData, formatarQuantidade } from "@/lib/formatters";
+import type { ProdutoSaude, ResultadoProdutosSaude, TipoBuscaProdutoSaude } from "@/types/produto-saude";
 
 type Status = "idle" | "carregando" | "sucesso" | "invalido" | "nao_configurado" | "erro";
 
-function ProdutoItem({ item }: { item: ProdutoSaude }) {
-  const valido = item.situacao?.toLowerCase() === "válido" && !item.cancelado;
+const DESCRICAO_BUSCA: Record<TipoBuscaProdutoSaude, string> = {
+  nome: "nome do produto",
+  registro: "número de registro",
+  processo: "número de processo",
+  cnpj: "CNPJ da empresa detentora",
+};
 
+function ProdutoItem({ item, onDetalhes }: { item: ProdutoSaude; onDetalhes: (item: ProdutoSaude) => void }) {
   return (
     <li className="rounded-lg border border-ink-200 bg-white p-3 dark:border-ink-700 dark:bg-ink-900">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <p className="text-sm font-medium text-ink-900 dark:text-ink-50">{item.produto}</p>
-        {item.situacao && <Badge tone={valido ? "success" : "danger"}>{item.situacao}</Badge>}
+        <div className="flex flex-wrap gap-1.5">
+          {item.siglaRiscoProduto && <ClasseRisco sigla={item.siglaRiscoProduto} />}
+          <SituacaoRegistro item={item} />
+        </div>
       </div>
       {item.razaoSocialEmpresa && (
-        <p className="mt-1 text-xs text-ink-600 dark:text-ink-300">
+        <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-xs text-ink-600 dark:text-ink-300">
           {item.razaoSocialEmpresa}
-          {item.cnpjEmpresa && ` · ${formatarCnpj(item.cnpjEmpresa)}`}
+          {item.cnpjEmpresa && (
+            <>
+              <span aria-hidden>·</span>
+              <LinkCnpj cnpj={formatarCnpj(item.cnpjEmpresa) ?? item.cnpjEmpresa} />
+            </>
+          )}
         </p>
       )}
-      <p className="mt-1.5 text-xs text-ink-500 dark:text-ink-400">
-        Registro: {item.registro}
-        {item.processo && ` · Processo: ${item.processo}`}
-        {item.dataVencimento && ` · Vencimento: ${formatarData(item.dataVencimento)}`}
-      </p>
+      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-ink-500 dark:text-ink-400">
+          Registro: {item.registro}
+          {item.processo && ` · Processo: ${item.processo}`}
+          {item.dataVencimento && !item.vencido && ` · Vencimento: ${formatarData(item.dataVencimento)}`}
+        </p>
+        {item.processo && (
+          <Button variant="secondary" size="sm" onClick={() => onDetalhes(item)}>
+            Ver detalhes
+          </Button>
+        )}
+      </div>
     </li>
   );
 }
 
 export function ProdutosSaudeClient() {
   const [valor, setValor] = useState("");
+  const [apenasValidos, setApenasValidos] = useState(true);
+  // Termo da última busca enviada: paginação, tamanho da página e o filtro
+  // de válidos reconsultam com ele, não com o que estiver no campo agora.
+  const [termoBuscado, setTermoBuscado] = useState<string | null>(null);
+  const [pagina, setPagina] = useState(1);
+  const [tamanhoPagina, setTamanhoPagina] = useState(25);
   const [status, setStatus] = useState<Status>("idle");
-  const [itens, setItens] = useState<ProdutoSaude[]>([]);
-  const [total, setTotal] = useState(0);
+  const [resultado, setResultado] = useState<ResultadoProdutosSaude | null>(null);
   const [mensagemErro, setMensagemErro] = useState<string | undefined>();
+  const [selecionado, setSelecionado] = useState<ProdutoSaude | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const resultadoRef = useRef<HTMLDivElement>(null);
 
-  async function pesquisar(evento: FormEvent) {
-    evento.preventDefault();
-    if (!valor.trim()) return;
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
 
+  async function executar(termo: string, opcoes: { pagina: number; tamanhoPagina: number; apenasValidos: boolean }) {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -55,29 +89,70 @@ export function ProdutosSaudeClient() {
     setStatus("carregando");
     setMensagemErro(undefined);
 
-    const resultado = await buscarProdutosSaude(valor, { signal: controller.signal });
+    const r = await buscarProdutosSaude(termo, { ...opcoes, signal: controller.signal });
 
-    if (resultado.status === "sucesso") {
-      setItens(resultado.itens);
-      setTotal(resultado.total);
+    if (controller.signal.aborted) return;
+
+    if (r.status === "sucesso") {
+      setResultado({ itens: r.itens, total: r.total, pagina: r.pagina, totalPaginas: r.totalPaginas, tipoBusca: r.tipoBusca });
       setStatus("sucesso");
-    } else if (resultado.status === "invalido") {
+    } else if (r.status === "invalido") {
       setStatus("invalido");
-      setMensagemErro(resultado.mensagem);
-    } else if (resultado.status === "nao_configurado") {
+      setMensagemErro(r.mensagem);
+    } else if (r.status === "nao_configurado") {
       setStatus("nao_configurado");
-    } else if (resultado.status === "erro_servidor") {
+    } else if (r.status === "erro_servidor") {
       setStatus("erro");
-      setMensagemErro(resultado.mensagem);
+      setMensagemErro(r.mensagem);
     }
   }
+
+  function pesquisar(evento: FormEvent) {
+    evento.preventDefault();
+    if (!valor.trim()) return;
+
+    setTermoBuscado(valor);
+    setResultado(null);
+    setPagina(1);
+    void executar(valor, { pagina: 1, tamanhoPagina, apenasValidos });
+  }
+
+  function mudarPagina(novaPagina: number) {
+    if (!termoBuscado) return;
+    setPagina(novaPagina);
+    void executar(termoBuscado, { pagina: novaPagina, tamanhoPagina, apenasValidos });
+    resultadoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function mudarTamanhoPagina(novoTamanho: number) {
+    setTamanhoPagina(novoTamanho);
+    setPagina(1);
+    if (termoBuscado) void executar(termoBuscado, { pagina: 1, tamanhoPagina: novoTamanho, apenasValidos });
+  }
+
+  function alternarApenasValidos(marcado: boolean) {
+    setApenasValidos(marcado);
+    // Busca por registro ou processo ignora o filtro — não precisa reconsultar.
+    if (termoBuscado && resultado && buscaAceitaFiltroValidos(resultado.tipoBusca)) {
+      setPagina(1);
+      void executar(termoBuscado, { pagina: 1, tamanhoPagina, apenasValidos: marcado });
+    }
+  }
+
+  // Estável entre renderizações: o Drawer refaz o efeito de foco quando
+  // `onFechar` muda, o que tiraria o foco de dentro do painel a cada render.
+  const fecharDetalhe = useCallback(() => setSelecionado(null), []);
+
+  // Durante a troca de página a lista anterior continua na tela, com o indicador de carregamento acima.
+  const mostrarLista = resultado !== null && (status === "sucesso" || status === "carregando");
 
   return (
     <div className="flex flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
       <div className="border-b border-ink-200 pb-4 dark:border-ink-700">
         <h1 className="text-base font-semibold text-ink-900 dark:text-ink-50">Consultar produtos para saúde</h1>
         <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">
-          Verifique o registro de dispositivos médicos e materiais hospitalares na ANVISA.
+          Verifique o registro de dispositivos médicos e materiais hospitalares na ANVISA — situação, fabricante,
+          modelos, códigos de barras (UDI) e certificados de boas práticas.
         </p>
       </div>
 
@@ -85,11 +160,12 @@ export function ProdutosSaudeClient() {
         onSubmit={pesquisar}
         className="rounded-2xl border border-ink-200 bg-white p-5 shadow-card dark:border-ink-700 dark:bg-ink-900 sm:p-6"
       >
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
           <div className="flex-1">
             <Input
-              label="Nome do produto"
-              placeholder="Ex.: luva, seringa, cateter"
+              label="Produto, registro, processo ou CNPJ"
+              placeholder="Ex.: cateter, 81467349001 ou o CNPJ da empresa"
+              hint="Registro tem 11 dígitos e processo, 17 — com ou sem pontuação."
               leftIcon={<HeartPulse className="h-4 w-4" aria-hidden />}
               value={valor}
               onChange={(e) => setValor(e.target.value)}
@@ -98,12 +174,22 @@ export function ProdutosSaudeClient() {
           </div>
           <Button
             type="submit"
+            className="sm:mt-7"
             leftIcon={status === "carregando" ? undefined : <Search className="h-4 w-4" aria-hidden />}
             loading={status === "carregando"}
           >
             Consultar
           </Button>
         </div>
+        <label className="mt-4 inline-flex cursor-pointer items-center gap-2 text-sm text-ink-700 dark:text-ink-200">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-ink-300 text-primary-600 focus-visible:ring-2 focus-visible:ring-primary-500 dark:border-ink-600 dark:bg-ink-800"
+            checked={apenasValidos}
+            onChange={(e) => alternarApenasValidos(e.target.checked)}
+          />
+          Mostrar só registros válidos
+        </label>
       </form>
 
       {status === "carregando" && (
@@ -129,23 +215,43 @@ export function ProdutosSaudeClient() {
         </p>
       )}
 
-      {status === "sucesso" && itens.length === 0 && (
-        <p className="text-sm text-ink-600 dark:text-ink-300">Nenhum produto encontrado para esse termo.</p>
+      {status === "sucesso" && resultado?.itens.length === 0 && (
+        <p className="text-sm text-ink-600 dark:text-ink-300">
+          Nenhum registro encontrado por {DESCRICAO_BUSCA[resultado.tipoBusca]}
+          {apenasValidos && buscaAceitaFiltroValidos(resultado.tipoBusca) && " entre os registros válidos"}.
+        </p>
       )}
 
-      {status === "sucesso" && itens.length > 0 && (
-        <div className="flex flex-col gap-3">
-          <p className="text-xs text-ink-500 dark:text-ink-400">
-            {total} {total === 1 ? "resultado encontrado" : "resultados encontrados"}
-            {total > itens.length && ` — mostrando os primeiros ${itens.length}`}
-          </p>
-          <ul className="space-y-2">
-            {itens.map((item) => (
-              <ProdutoItem key={`${item.registro}-${item.processo}`} item={item} />
-            ))}
-          </ul>
+      {mostrarLista && resultado.itens.length > 0 && (
+        <div ref={resultadoRef} className="scroll-mt-20">
+          <div className="rounded-t-2xl border border-b-0 border-ink-200 bg-white p-4 dark:border-ink-700 dark:bg-ink-900 sm:p-5">
+            <p className="text-xs text-ink-500 dark:text-ink-400">
+              {formatarQuantidade(resultado.total)} {resultado.total === 1 ? "registro encontrado" : "registros encontrados"}{" "}
+              por {DESCRICAO_BUSCA[resultado.tipoBusca]}
+              {buscaAceitaFiltroValidos(resultado.tipoBusca)
+                ? apenasValidos && " (só válidos)"
+                : " — aparece mesmo se estiver vencido ou cancelado"}
+            </p>
+            <ul className="mt-3 space-y-2">
+              {resultado.itens.map((item) => (
+                <ProdutoItem key={`${item.registro}-${item.processo}`} item={item} onDetalhes={setSelecionado} />
+              ))}
+            </ul>
+          </div>
+          <Pagination
+            page={pagina}
+            pageSize={tamanhoPagina}
+            total={resultado.total}
+            totalPages={resultado.totalPaginas}
+            onChangePage={mudarPagina}
+            onChangePageSize={mudarTamanhoPagina}
+          />
         </div>
       )}
+
+      <Drawer aberto={selecionado !== null} onFechar={fecharDetalhe} titulo="Detalhes do registro">
+        {selecionado && <DetalheProdutoSaude key={selecionado.processo} produto={selecionado} />}
+      </Drawer>
     </div>
   );
 }

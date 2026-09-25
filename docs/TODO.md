@@ -30,3 +30,19 @@ mais simples e manual.
 caberia numa planilha nem faria sentido como arquivo estático do mesmo jeito.
 
 **Status:** avaliado e decidido, não implementado.
+
+## Empenhos a receber — SEFAZ-AM
+
+**Decisão:** usar o Portal da Transparência Fiscal da SEFAZ-AM pra consultar
+empenhos a receber de alguns órgãos do Amazonas.
+
+**Contexto:** não é uma API — são páginas HTML (Struts), consumidas por
+scraping, sem login nem sessão. O levantamento completo (endpoints,
+parâmetros, colunas, cálculo do saldo e pegadinhas) está em
+[SEFAZ-AM-TRANSPARENCIA.md](SEFAZ-AM-TRANSPARENCIA.md).
+
+**Plano:** ver a seção "Esboço da implementação futura" daquele documento.
+Um GET por órgão traz todos os empenhos do ano com empenhado, liquidado e
+pago; o CNPJ do credor só vem no detalhe de cada empenho.
+
+**Status:** avaliado e documentado, não implementado.

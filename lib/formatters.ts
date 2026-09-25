@@ -3,6 +3,8 @@
  * componente decida sozinho como um valor ausente deve aparecer na tela.
  */
 
+import { normalizarCnpj } from "@/lib/cnpj";
+
 const formatadorMoeda = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
@@ -60,27 +62,46 @@ export function montarNumeroLicitacao(
   return numeroCompra.endsWith(`/${ano}`) ? numeroCompra : `${numeroCompra}/${ano}`;
 }
 
+/** Aceita CNPJ numérico ou alfanumérico (ver lib/cnpj.ts). */
 export function formatarCnpj(cnpj: string | undefined): string | undefined {
   if (!cnpj) return undefined;
-  const digitos = cnpj.replace(/\D/g, "");
-  if (digitos.length !== 14) return cnpj;
-  return `${digitos.slice(0, 2)}.${digitos.slice(2, 5)}.${digitos.slice(5, 8)}/${digitos.slice(8, 12)}-${digitos.slice(12, 14)}`;
+  const c = normalizarCnpj(cnpj);
+  if (c.length !== 14) return cnpj;
+  return `${c.slice(0, 2)}.${c.slice(2, 5)}.${c.slice(5, 8)}/${c.slice(8, 12)}-${c.slice(12, 14)}`;
 }
 
 /**
  * Máscara de CNPJ aplicada enquanto o usuário digita (aceita colar com ou
  * sem pontuação) — diferente de `formatarCnpj`, que só formata um CNPJ já
- * completo vindo de uma API.
+ * completo vindo de uma API. As 12 primeiras posições aceitam letras (CNPJ
+ * alfanumérico); os 2 dígitos verificadores, só números.
  */
 export function mascararCnpj(valor: string): string {
-  const digitos = valor.replace(/\D/g, "").slice(0, 14);
-  if (digitos.length <= 2) return digitos;
-  if (digitos.length <= 5) return `${digitos.slice(0, 2)}.${digitos.slice(2)}`;
-  if (digitos.length <= 8) return `${digitos.slice(0, 2)}.${digitos.slice(2, 5)}.${digitos.slice(5)}`;
-  if (digitos.length <= 12) {
-    return `${digitos.slice(0, 2)}.${digitos.slice(2, 5)}.${digitos.slice(5, 8)}/${digitos.slice(8)}`;
+  const normalizado = normalizarCnpj(valor);
+  const c = normalizado.slice(0, 12) + normalizado.slice(12).replace(/\D/g, "").slice(0, 2);
+  if (c.length <= 2) return c;
+  if (c.length <= 5) return `${c.slice(0, 2)}.${c.slice(2)}`;
+  if (c.length <= 8) return `${c.slice(0, 2)}.${c.slice(2, 5)}.${c.slice(5)}`;
+  if (c.length <= 12) {
+    return `${c.slice(0, 2)}.${c.slice(2, 5)}.${c.slice(5, 8)}/${c.slice(8)}`;
   }
-  return `${digitos.slice(0, 2)}.${digitos.slice(2, 5)}.${digitos.slice(5, 8)}/${digitos.slice(8, 12)}-${digitos.slice(12)}`;
+  return `${c.slice(0, 2)}.${c.slice(2, 5)}.${c.slice(5, 8)}/${c.slice(8, 12)}-${c.slice(12)}`;
+}
+
+/** "9221269182" → "(92) 2126-9182"; "92991234567" → "(92) 99123-4567". Outros formatos voltam como vieram. */
+export function formatarTelefone(telefone: string | undefined): string | undefined {
+  if (!telefone) return undefined;
+  const d = telefone.replace(/\D/g, "");
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  return telefone;
+}
+
+/** "69058807" → "69058-807". Outros formatos voltam como vieram. */
+export function formatarCep(cep: string | undefined): string | undefined {
+  if (!cep) return undefined;
+  const d = cep.replace(/\D/g, "");
+  return d.length === 8 ? `${d.slice(0, 5)}-${d.slice(5)}` : cep;
 }
 
 /** Máscara de CEP aplicada enquanto o usuário digita (00000-000). */
