@@ -5,6 +5,7 @@ import { Calendar, ChevronDown, ChevronsDownUp, ChevronsUpDown, ChevronUp, Exter
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Campo } from "@/components/LicitacaoDetails";
+import { DocumentosLicitacao } from "@/components/DocumentosLicitacao";
 import { cn } from "@/lib/cn";
 import { grupoDaModalidade, rotuloSituacao, tonalidadeDaSituacao } from "@/lib/data/dominio";
 import { formatarDataHora, formatarDataHoraCurta, formatarLocal, formatarMoeda } from "@/lib/formatters";
@@ -40,6 +41,11 @@ function PainelExpandido({ item }: { item: Licitacao }) {
             {item.objeto ?? "Objeto não informado"}
           </p>
         </div>
+
+        <div className="mt-4">
+          <DocumentosLicitacao item={item} />
+        </div>
+
         <div className="mt-4 flex flex-wrap gap-2">
           <Button
             size="sm"
