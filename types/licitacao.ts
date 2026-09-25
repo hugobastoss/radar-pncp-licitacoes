@@ -54,8 +54,6 @@ export interface DocumentoLicitacao {
   dataPublicacao?: string; // ISO 8601
 }
 
-export type PeriodoPreset = "15" | "30" | "60" | "90" | "personalizado";
-
 export type OrdenacaoOpcao =
   | "encerramento_asc"
   | "encerramento_desc"
@@ -69,11 +67,15 @@ export interface FiltrosLicitacao {
   uf?: string;
   /** Código IBGE do município, ou "TODOS". */
   municipio?: string;
-  periodo?: PeriodoPreset;
+  /**
+   * Sem período pré-definido: sem `dataInicial`, a busca começa em agora
+   * (nunca pra trás); sem `dataFinal`, usa uma janela máxima ampla o
+   * bastante pra não ser, na prática, nenhuma limitação real (ver
+   * app/api/licitacoes/route.ts).
+   */
   dataInicial?: string; // yyyy-mm-dd
   dataFinal?: string; // yyyy-mm-dd
   modalidades?: string[];
-  portais?: string[];
   valorMinimo?: number;
   valorMaximo?: number;
   orgao?: string;

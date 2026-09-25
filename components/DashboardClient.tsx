@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { SearchPanel } from "@/components/SearchPanel";
+import { FiltrosAtivosBar, listarFiltrosAtivos } from "@/components/FiltrosAtivosBar";
 import { SummaryCards } from "@/components/SummaryCards";
 import { TableFilters } from "@/components/TableFilters";
 import { ResultsTable } from "@/components/ResultsTable";
@@ -26,7 +27,6 @@ const FILTROS_PADRAO: FiltrosLicitacao = {
   q: "",
   uf: ESTADO_TODOS,
   municipio: ESTADO_TODOS,
-  periodo: "15",
 };
 
 type StatusBusca = "idle" | "carregando" | "sucesso" | "erro_timeout" | "erro_conexao" | "erro_servidor";
@@ -44,11 +44,9 @@ function lerFiltrosDaUrl(searchParams: URLSearchParams): FiltrosLicitacao | null
     q: searchParams.get("q") ?? "",
     uf: searchParams.get("uf") ?? ESTADO_TODOS,
     municipio: searchParams.get("municipio") ?? ESTADO_TODOS,
-    periodo: (searchParams.get("periodo") as FiltrosLicitacao["periodo"]) || "15",
     dataInicial: searchParams.get("dataInicial") || undefined,
     dataFinal: searchParams.get("dataFinal") || undefined,
     modalidades: searchParams.getAll("modalidade"),
-    portais: searchParams.getAll("portal"),
     valorMinimo: searchParams.has("valorMinimo") ? Number(searchParams.get("valorMinimo")) : undefined,
     valorMaximo: searchParams.has("valorMaximo") ? Number(searchParams.get("valorMaximo")) : undefined,
     orgao: searchParams.get("orgao") ?? "",
@@ -171,7 +169,6 @@ export function DashboardClient() {
     set("q", filtrosAplicados.q);
     set("uf", filtrosAplicados.uf);
     set("municipio", filtrosAplicados.municipio);
-    set("periodo", filtrosAplicados.periodo);
     set("dataInicial", filtrosAplicados.dataInicial);
     set("dataFinal", filtrosAplicados.dataFinal);
     set("valorMinimo", filtrosAplicados.valorMinimo);
@@ -186,7 +183,6 @@ export function DashboardClient() {
     set("localRapido", localRapido);
     set("portalRapido", portalRapido);
     for (const m of filtrosAplicados.modalidades ?? []) query.append("modalidade", m);
-    for (const p of filtrosAplicados.portais ?? []) query.append("portal", p);
 
     router.replace(`${pathname}?${query.toString()}`, { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -211,13 +207,23 @@ export function DashboardClient() {
     setFiltrosAplicados({ ...filtrosRascunho });
   }
 
-  function limparFiltros() {
+  // Só reseta o formulário (rascunho) — não mexe na busca aplicada nem
+  // dispara uma nova consulta. Usado pelo botão "Limpar filtros" ao lado de
+  // "Pesquisar licitações": o usuário decide quando pesquisar de novo.
+  function limparRascunho() {
     setFiltrosRascunho(FILTROS_PADRAO);
     setPesquisaRapidaAtiva(undefined);
+    setAvancadoAberto(false);
+  }
+
+  // Reseta o formulário E já busca de novo com os filtros padrão — usado
+  // pelo "Limpar filtros" do EmptyState (zero resultados), onde faz sentido
+  // já mostrar um resultado novo em vez de deixar a tela vazia.
+  function limparFiltros() {
+    limparRascunho();
     setModalidadeRapida("");
     setLocalRapido("");
     setPortalRapido("");
-    setAvancadoAberto(false);
     setPagina(1);
     setFiltrosAplicados({ ...FILTROS_PADRAO });
   }
@@ -283,6 +289,11 @@ export function DashboardClient() {
   const paginaValida = Math.min(pagina, totalPaginasCliente);
   const itensDaPagina = itensOrdenados.slice((paginaValida - 1) * tamanhoPagina, paginaValida * tamanhoPagina);
 
+  // Empilha o cabeçalho congelado da tabela abaixo da FiltrosAtivosBar
+  // (quando ela está visível) em vez de direto sob o Header — ver o `top`
+  // condicional em ResultsTable.tsx.
+  const temFiltrosAtivos = Boolean(filtrosAplicados && listarFiltrosAtivos(filtrosAplicados).length > 0);
+
   // A paginação fica FORA do card com `overflow-hidden` de propósito: esse
   // overflow é só pra cortar os cantos arredondados, mas também vira o
   // "container" de referência do `position: sticky` — como esse card não
@@ -303,6 +314,8 @@ export function DashboardClient() {
         onSelecionarPesquisaRapida={aoSelecionarPesquisaRapida}
         pesquisaRapidaAtiva={pesquisaRapidaAtiva}
       />
+
+      <FiltrosAtivosBar filtros={filtrosAplicados} onLimpar={limparFiltros} />
 
       <div ref={resultadoRef} className="scroll-mt-20 flex flex-col">
         <div
@@ -372,7 +385,7 @@ export function DashboardClient() {
                   />
 
                   <div className={atualizando ? "opacity-60 transition-opacity" : "transition-opacity"}>
-                    <ResultsTable itens={itensDaPagina} />
+                    <ResultsTable itens={itensDaPagina} temFiltrosAtivos={temFiltrosAtivos} />
                     <div className="space-y-3 p-4 sm:hidden">
                       {itensDaPagina.map((item) => (
                         <ResultCard key={item.id} item={item} onVerDetalhes={abrirDetalhes} />

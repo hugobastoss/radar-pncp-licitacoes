@@ -76,28 +76,6 @@ export function chaveMunicipio(item: { codigoMunicipioIbge?: string; municipio?:
   return item.municipio ? normalizarTexto(item.municipio) : undefined;
 }
 
-export interface OpcaoPeriodo {
-  valor: "15" | "30" | "60" | "90" | "personalizado";
-  rotulo: string;
-}
-
-export const PERIODOS: OpcaoPeriodo[] = [
-  { valor: "15", rotulo: "Próximos 15 dias" },
-  { valor: "30", rotulo: "Próximos 30 dias" },
-  { valor: "60", rotulo: "Próximos 60 dias" },
-  { valor: "90", rotulo: "Próximos 90 dias" },
-  { valor: "personalizado", rotulo: "Período personalizado" },
-];
-
-export const PORTAIS_CONHECIDOS = [
-  "LICITANET",
-  "Compras.gov.br",
-  "Portal de Compras Públicas",
-  "BLL Compras",
-  "Compras BR",
-  "Centro de Serviços Compartilhados",
-] as const;
-
 // Valores reais que o PNCP devolve (confirmado ao vivo em `situacao_nome` e
 // `situacaoCompraNome`/`situacaoCompraNomePncp`, nas três fontes) — não são
 // os nomes que se imaginaria à primeira vista (não existe "Recebendo

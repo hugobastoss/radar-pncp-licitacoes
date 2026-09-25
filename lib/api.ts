@@ -35,7 +35,6 @@ function construirQueryString(filtros: FiltrosLicitacao): string {
   set("q", filtros.q);
   set("uf", filtros.uf);
   set("municipio", filtros.municipio);
-  set("periodo", filtros.periodo);
   set("dataInicial", filtros.dataInicial);
   set("dataFinal", filtros.dataFinal);
   set("valorMinimo", filtros.valorMinimo);
@@ -46,9 +45,6 @@ function construirQueryString(filtros: FiltrosLicitacao): string {
 
   for (const modalidade of filtros.modalidades ?? []) {
     if (modalidade) params.append("modalidade", modalidade);
-  }
-  for (const portal of filtros.portais ?? []) {
-    if (portal) params.append("portal", portal);
   }
 
   return params.toString();

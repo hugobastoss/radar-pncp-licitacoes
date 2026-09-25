@@ -105,6 +105,8 @@ export function SearchPanel({
         />
       </div>
 
+      <div className="mt-4 h-px bg-ink-200 dark:bg-ink-700" />
+
       <Collapsible.Root open={avancadoAberto} onOpenChange={onToggleAvancado}>
         <div className="mt-3">
           <Collapsible.Trigger asChild>
@@ -121,7 +123,7 @@ export function SearchPanel({
                 )
               }
             >
-              Pesquisa avançada
+              Filtros avançados
             </Button>
           </Collapsible.Trigger>
         </div>

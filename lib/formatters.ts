@@ -74,6 +74,24 @@ export function mascararCep(valor: string): string {
   return `${digitos.slice(0, 5)}-${digitos.slice(5)}`;
 }
 
+/** Formata um valor em reais no padrão da máscara de valor (sem "R$"), ex.: 1500.5 → "1.500,50". */
+export function formatarValorMascara(valor: number | undefined): string {
+  if (valor === undefined) return "";
+  return valor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/**
+ * Máscara de valor em reais aplicada enquanto o usuário digita: cada dígito
+ * novo entra como centavo (ex.: digitar "150000" mostra "1.500,00"), igual
+ * a um campo de valor monetário de caixa eletrônico. O campo em si é
+ * controlado pelo número resultante (ver formatarValorMascara para exibir).
+ */
+export function valorDigitadoParaNumero(valorDigitado: string): number | undefined {
+  const digitos = valorDigitado.replace(/\D/g, "");
+  if (!digitos) return undefined;
+  return Number(digitos) / 100;
+}
+
 export function formatarMoeda(valor: number | undefined, sigiloso?: boolean): string {
   if (sigiloso) return "Valor sigiloso";
   if (valor === undefined || valor === null || Number.isNaN(valor)) return "Valor não informado";

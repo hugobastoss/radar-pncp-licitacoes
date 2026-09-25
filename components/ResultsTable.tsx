@@ -13,6 +13,8 @@ import type { Licitacao } from "@/types/licitacao";
 
 interface ResultsTableProps {
   itens: Licitacao[];
+  /** Empilha o cabeçalho congelado abaixo da FiltrosAtivosBar (h-12) em vez de direto sob o Header. */
+  temFiltrosAtivos?: boolean;
 }
 
 const TONE_POR_GRUPO = {
@@ -74,7 +76,7 @@ function PainelExpandido({ item }: { item: Licitacao }) {
   );
 }
 
-export function ResultsTable({ itens }: ResultsTableProps) {
+export function ResultsTable({ itens, temFiltrosAtivos }: ResultsTableProps) {
   const [expandidos, setExpandidos] = useState<Set<string>>(new Set());
 
   function alternarExpandido(id: string) {
@@ -117,7 +119,10 @@ export function ResultsTable({ itens }: ResultsTableProps) {
       <div
         ref={cabecalhoRef}
         onScroll={sincronizarDoCabecalho}
-        className="sticky top-16 z-20 overflow-x-auto scrollbar-fina border-b border-ink-200 bg-white px-4 dark:border-ink-700 dark:bg-ink-900"
+        className={cn(
+          "sticky z-20 overflow-x-auto scrollbar-fina border-b border-ink-200 bg-white px-4 dark:border-ink-700 dark:bg-ink-900",
+          temFiltrosAtivos ? "top-28" : "top-16",
+        )}
       >
         <div
           className={cn(

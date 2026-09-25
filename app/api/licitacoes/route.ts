@@ -65,29 +65,23 @@ function finalDoDiaBrasiliaMaisDias(referencia: Date, dias: number): Date {
   return new Date(emBrasilia.getTime() + OFFSET_BRASILIA_MS);
 }
 
-function calcularJanelaPeriodo(
-  periodo: string | null,
-  dataInicial: string | null,
-  dataFinal: string | null,
-): { inicio?: Date; fim?: Date } {
-  if (periodo === "personalizado") {
-    return {
-      inicio: dataInicial ? limiteDoDiaBrasilia(dataInicial, false) : undefined,
-      fim: dataFinal ? limiteDoDiaBrasilia(dataFinal, true) : undefined,
-    };
-  }
+// Sem "Data final" explícita, a API oficial do PNCP ainda assim exige o
+// parâmetro — usamos uma janela ampla o bastante pra não ser, na prática,
+// nenhuma limitação real (bem maior que o horizonte comum de uma proposta).
+const DIAS_JANELA_MAXIMA = 730;
 
-  const dias = periodo ? Number.parseInt(periodo, 10) : NaN;
-  if (!Number.isFinite(dias) || dias <= 0) return {};
-
+/**
+ * Monta a janela de busca a partir de "Data inicial"/"Data final" — sem
+ * nenhum preset de período: sem "Data inicial", busca sempre a partir de
+ * agora (nunca pra trás); sem "Data final", usa a janela máxima acima.
+ */
+function calcularJanelaBusca(dataInicial: string | null, dataFinal: string | null): { inicio: Date; fim: Date } {
   const agora = new Date();
-  return { inicio: agora, fim: finalDoDiaBrasiliaMaisDias(agora, dias) };
+  return {
+    inicio: (dataInicial ? limiteDoDiaBrasilia(dataInicial, false) : undefined) ?? agora,
+    fim: (dataFinal ? limiteDoDiaBrasilia(dataFinal, true) : undefined) ?? finalDoDiaBrasiliaMaisDias(agora, DIAS_JANELA_MAXIMA),
+  };
 }
-
-// Quando nenhum período é escolhido, a API do PNCP ainda assim exige uma
-// data final — usamos uma janela ampla o bastante para não perder
-// oportunidades relevantes sem tornar a consulta absurdamente longa.
-const DIAS_JANELA_PADRAO = 180;
 
 
 function respostaErroServidor() {
@@ -104,31 +98,27 @@ export async function GET(request: NextRequest) {
   const q = params.get("q") ?? "";
   const uf = params.get("uf") ?? "";
   const municipio = params.get("municipio") ?? "";
-  const periodo = params.get("periodo");
   const dataInicial = params.get("dataInicial");
   const dataFinal = params.get("dataFinal");
   const modalidades = params.getAll("modalidade").filter(Boolean);
-  const portais = params.getAll("portal").filter(Boolean);
   const valorMinimo = params.has("valorMinimo") ? Number(params.get("valorMinimo")) : undefined;
   const valorMaximo = params.has("valorMaximo") ? Number(params.get("valorMaximo")) : undefined;
   const orgao = params.get("orgao") ?? "";
   const numeroLicitacao = params.get("numeroLicitacao") ?? "";
   const situacao = params.get("situacao") ?? "";
 
-  const { inicio, fim } = calcularJanelaPeriodo(periodo, dataInicial, dataFinal);
+  const { inicio, fim } = calcularJanelaBusca(dataInicial, dataFinal);
 
-  // Sem período explícito, o padrão passa a ser "oportunidades em aberto,
-  // próximos 180 dias" — mesma janela que a API oficial já aplica (seu
-  // endpoint só lista propostas em aberto, e recebe esse limite via
-  // `dataFinal`). Sem isso, a fonte primária (que não filtra data nenhuma)
-  // podia devolver licitações encerradas há meses misturadas com as abertas.
-  // Exceção: se o usuário filtrou por "Situação" (ex.: "Encerrada"), nunca
-  // forçamos o limite inferior — mesmo com um período pré-selecionado tipo
-  // "Próximos 15 dias", que é sempre para frente e tornaria esse filtro
+  // Sem "Data inicial", a busca é sempre a partir de agora, pra frente —
+  // nunca pra trás — e sem "Data final", usa a janela máxima (acima), que
+  // na prática não limita nada. Sem isso, a fonte primária (que não filtra
+  // data nenhuma) podia devolver licitações encerradas há meses misturadas
+  // com as abertas. Exceção: se o usuário filtrou por "Situação" (ex.:
+  // "Encerrada"), nunca forçamos o limite inferior — mesmo a "Data inicial"
+  // sendo sempre pra frente por padrão, o que tornaria esse filtro
   // impossível de satisfazer.
-  const agora = new Date();
-  const fimEfetivo = fim ?? finalDoDiaBrasiliaMaisDias(agora, DIAS_JANELA_PADRAO);
-  const inicioEfetivo = situacao.trim() ? undefined : (inicio ?? agora);
+  const fimEfetivo = fim;
+  const inicioEfetivo = situacao.trim() ? undefined : inicio;
 
   let resultadoPrincipal: Licitacao[];
   let parcial = false;
@@ -138,13 +128,6 @@ export async function GET(request: NextRequest) {
 
   let itensBrutos: Licitacao[];
   try {
-    // A fonte primária nunca preenche o portal de origem — se o usuário
-    // filtrou por um portal específico, só a API oficial pode satisfazer
-    // esse filtro corretamente, então vamos direto para ela.
-    if (portais.length > 0) {
-      throw new Error("Filtro de portal exige a API oficial");
-    }
-
     const resultadoBusca = await buscarViaApiInterna({
       q: q.trim() || undefined,
       ufs: ufFiltro ? [ufFiltro] : undefined,
@@ -153,9 +136,8 @@ export async function GET(request: NextRequest) {
     itensBrutos = resultadoBusca.itens;
     parcial = resultadoBusca.parcial;
   } catch {
-    // API de busca interna indisponível (ou filtro de portal, acima) — cai
-    // para a API oficial, que exige modalidade e data final explícitos (ver
-    // pncp-client.ts).
+    // API de busca interna indisponível — cai para a API oficial, que exige
+    // modalidade e data final explícitos (ver pncp-client.ts).
     usouFallbackOficial = true;
 
     const codigosModalidade = modalidades.length
@@ -281,12 +263,6 @@ export async function GET(request: NextRequest) {
   }
   if (situacao.trim()) {
     resultadoPrincipal = resultadoPrincipal.filter((item) => contemTexto(item.situacao, situacao));
-  }
-  if (portais.length > 0) {
-    const normalizados = portais.map(normalizarTexto);
-    resultadoPrincipal = resultadoPrincipal.filter(
-      (item) => item.portal && normalizados.includes(normalizarTexto(item.portal)),
-    );
   }
 
   // Facetas: refletem a pesquisa aplicada (acima), nunca os refinamentos

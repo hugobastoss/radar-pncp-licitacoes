@@ -75,7 +75,7 @@ export function ChipsSelecaoUnica({
 }: ChipsSelecaoUnicaProps) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-sm font-medium text-ink-700 dark:text-ink-200">{label}</span>
+      <span className="text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">{label}</span>
       <div className="flex flex-wrap gap-2">
         {permitirLimpar && (
           <Chip ativo={!value} onClick={() => onChange(undefined)}>
@@ -122,7 +122,7 @@ export function ChipsSelecaoMultipla({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-sm font-medium text-ink-700 dark:text-ink-200">{label}</span>
+      <span className="text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">{label}</span>
       <div className="flex flex-wrap gap-2">
         <Chip ativo={selected.length === 0} onClick={() => onChange([])}>
           {allLabel}
