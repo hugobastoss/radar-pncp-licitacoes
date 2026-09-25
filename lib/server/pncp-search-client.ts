@@ -32,6 +32,7 @@ export interface ResultadoBuscaInterna {
 }
 
 interface ItemBuscaInterna {
+  title?: string;
   numero_controle_pncp?: string;
   numero_sequencial?: string;
   ano?: string | number;
@@ -98,11 +99,24 @@ function extrairPortalDoObjeto(description: string | undefined): { objeto?: stri
   return { objeto, linkSistemaOrigem: dominio ? `https://${dominio}` : undefined };
 }
 
+// `numero_sequencial` é só a posição interna do PNCP na fila de publicações
+// desse órgão (usada pra montar a URL) — não é o número do edital de
+// verdade. O número real (o que o órgão usa, ex.: "Edital nº 008/2026")
+// só existe embutido em texto no `title` ("{Tipo} nº {número}/{ano}"),
+// confirmado comparando com a página pública do PNCP (numero_sequencial=66
+// vs. o edital nº 008/2026 de verdade). Extraído daqui em vez de confiar
+// no campo `numero`, que vem sempre `null` nesta API.
+const PADRAO_NUMERO_NO_TITULO = /n[ºo°]\.?\s*([^/\s]+)\/(\d{4})/i;
+
+function extrairNumeroDoTitulo(title: string | undefined): string | undefined {
+  const match = title ? PADRAO_NUMERO_NO_TITULO.exec(title) : null;
+  return match ? `${match[1]}/${match[2]}` : undefined;
+}
+
 function mapearParaLicitacao(raw: ItemBuscaInterna): Licitacao | undefined {
   if (!raw.numero_controle_pncp) return undefined;
 
-  const numeroLicitacao =
-    raw.numero_sequencial && raw.ano ? `${raw.numero_sequencial}/${raw.ano}` : undefined;
+  const numeroLicitacao = extrairNumeroDoTitulo(raw.title);
 
   const { objeto, linkSistemaOrigem } = extrairPortalDoObjeto(raw.description);
 
