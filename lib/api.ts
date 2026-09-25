@@ -43,12 +43,6 @@ function construirQueryString(filtros: FiltrosLicitacao): string {
   set("orgao", filtros.orgao);
   set("numeroLicitacao", filtros.numeroLicitacao);
   set("situacao", filtros.situacao);
-  set("ordenarPor", filtros.ordenarPor);
-  set("pagina", filtros.pagina);
-  set("tamanhoPagina", filtros.tamanhoPagina);
-  set("modalidadeRapida", filtros.modalidadeRapida);
-  set("localRapido", filtros.localRapido);
-  set("portalRapido", filtros.portalRapido);
 
   for (const modalidade of filtros.modalidades ?? []) {
     if (modalidade) params.append("modalidade", modalidade);

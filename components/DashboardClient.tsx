@@ -17,6 +17,8 @@ import { Drawer } from "@/components/ui/Drawer";
 import { LicitacaoDetails } from "@/components/LicitacaoDetails";
 import { buscarLicitacoes } from "@/lib/api";
 import { ESTADO_TODOS } from "@/lib/data/estados";
+import { chaveMunicipio, grupoDaModalidade, normalizarTexto, ordenar } from "@/lib/data/dominio";
+import { cn } from "@/lib/cn";
 import type { PesquisaRapida } from "@/lib/data/dominio";
 import type { FiltrosLicitacao, Licitacao, LicitacoesResponse, OrdenacaoOpcao } from "@/types/licitacao";
 
@@ -132,27 +134,34 @@ export function DashboardClient() {
     }
   }, []);
 
-  // Dispara a busca sempre que os filtros aplicados, os refinamentos rápidos
-  // da tabela, a ordenação ou a página mudarem — nunca ao digitar no
-  // formulário (filtrosRascunho).
+  // Dispara a busca sempre que os filtros aplicados mudarem — nunca ao
+  // digitar no formulário (filtrosRascunho), nunca só por causa da página,
+  // nunca só por causa dos refinamentos rápidos da tabela (Modalidade/
+  // Local/Portal) e nunca só por causa da ordenação (ver os cálculos locais
+  // mais abaixo): a API já devolve todos os itens que casam com a pesquisa
+  // de uma vez, e página, refinamentos rápidos e ordenação são só recortes
+  // locais sobre esse resultado — nenhuma das três fontes do PNCP aceita um
+  // parâmetro de ordenação, então reconsultar a cada troca só bateria de
+  // novo na cascata de fontes à toa. Reconsultar o servidor a cada clique
+  // batia de novo nessa cascata — instável por natureza — e podia trazer um
+  // resultado de uma fonte diferente da que gerou as opções que o usuário
+  // via na tela.
   useEffect(() => {
     if (!filtrosAplicados) return;
-
-    const filtrosCompletos: FiltrosLicitacao = {
-      ...filtrosAplicados,
-      modalidadeRapida: modalidadeRapida || undefined,
-      localRapido: localRapido || undefined,
-      portalRapido: portalRapido || undefined,
-      ordenarPor,
-      pagina,
-      tamanhoPagina,
-    };
 
     // executarBusca só chama os setters de estado depois de um `await` (a
     // resposta da consulta), nunca de forma síncrona durante este efeito —
     // é o padrão padrão de "buscar dados quando uma dependência muda".
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    executarBusca(filtrosCompletos);
+    executarBusca(filtrosAplicados);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtrosAplicados]);
+
+  // Mantém a URL compartilhável em sincronia com todos os campos, incluindo
+  // página e itens-por-página — mas sem disparar uma nova busca (efeito
+  // acima), só reescreve a query string.
+  useEffect(() => {
+    if (!filtrosAplicados) return;
 
     const query = new URLSearchParams();
     const set = (chave: string, valor: string | number | undefined) => {
@@ -231,15 +240,7 @@ export function DashboardClient() {
 
   function tentarNovamente() {
     if (!filtrosAplicados) return;
-    executarBusca({
-      ...filtrosAplicados,
-      modalidadeRapida: modalidadeRapida || undefined,
-      localRapido: localRapido || undefined,
-      portalRapido: portalRapido || undefined,
-      ordenarPor,
-      pagina,
-      tamanhoPagina,
-    });
+    executarBusca(filtrosAplicados);
   }
 
   const temResultadoAnterior = resultado !== null;
@@ -247,6 +248,48 @@ export function DashboardClient() {
   const carregandoInicial = status === "carregando" && !temResultadoAnterior;
   const atualizando = status === "carregando" && temResultadoAnterior;
   const tipoErro = status === "erro_timeout" ? "timeout" : status === "erro_conexao" ? "conexao" : "servidor";
+
+  // Refinamentos rápidos da tabela (Modalidade/Local/Portal): aplicados aqui,
+  // no cliente, sobre o resultado já buscado — nunca reconsultando o
+  // servidor (ver comentário no efeito de busca acima). `resultado.facets` e
+  // `resultado.summary` continuam refletindo a pesquisa aplicada inteira
+  // (sem esses refinamentos), então os dropdowns nunca colapsam para uma
+  // única opção depois de usados — só o resumo abaixo é recalculado com o
+  // recorte atual, reproduzindo o que o servidor fazia antes.
+  const itensRefinados = (resultado?.items ?? []).filter((item) => {
+    if (modalidadeRapida && normalizarTexto(item.modalidade ?? "") !== normalizarTexto(modalidadeRapida)) {
+      return false;
+    }
+    if (localRapido && chaveMunicipio(item) !== localRapido) return false;
+    if (portalRapido && normalizarTexto(item.portal ?? "") !== normalizarTexto(portalRapido)) return false;
+    return true;
+  });
+
+  const summaryRefinado = {
+    total: itensRefinados.length,
+    pregoes: itensRefinados.filter((i) => grupoDaModalidade(i.modalidade) === "pregao").length,
+    dispensas: itensRefinados.filter((i) => grupoDaModalidade(i.modalidade) === "dispensa").length,
+    outras: itensRefinados.filter((i) => grupoDaModalidade(i.modalidade) === "outra").length,
+  };
+
+  // Ordenação ("Ordenar por"): também local, pelo mesmo motivo dos
+  // refinamentos rápidos — nenhuma fonte aceita esse parâmetro, então é só
+  // reordenar em memória o que já foi buscado (ver lib/data/dominio.ts).
+  const itensOrdenados = ordenar(itensRefinados, ordenarPor);
+
+  // Paginação local: trocar de página é só fatiar esse array (já filtrado e
+  // ordenado) em memória — nunca uma nova consulta ao PNCP.
+  const totalPaginasCliente = Math.max(1, Math.ceil(itensOrdenados.length / tamanhoPagina));
+  const paginaValida = Math.min(pagina, totalPaginasCliente);
+  const itensDaPagina = itensOrdenados.slice((paginaValida - 1) * tamanhoPagina, paginaValida * tamanhoPagina);
+
+  // A paginação fica FORA do card com `overflow-hidden` de propósito: esse
+  // overflow é só pra cortar os cantos arredondados, mas também vira o
+  // "container" de referência do `position: sticky` — como esse card não
+  // tem altura fixa nem rolagem própria (quem rola é a página), a paginação
+  // nunca tinha espaço de verdade pra flutuar. Como um elemento irmão, ela
+  // flutua em relação à janela de verdade.
+  const mostrandoPaginacao = Boolean(filtrosAplicados && !emErro && resultado && itensRefinados.length > 0);
 
   return (
     <div className="flex flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
@@ -261,78 +304,101 @@ export function DashboardClient() {
         pesquisaRapidaAtiva={pesquisaRapidaAtiva}
       />
 
-      <div
-        ref={resultadoRef}
-        className="scroll-mt-20 overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card dark:border-ink-700 dark:bg-ink-900"
-      >
-        {!filtrosAplicados && <EstadoInicial />}
+      <div ref={resultadoRef} className="scroll-mt-20 flex flex-col">
+        <div
+          className={cn(
+            // Sem `overflow-hidden` de propósito (mesmo motivo da paginação
+            // em components/Pagination.tsx): esse overflow vira o container
+            // de referência do `position: sticky` do cabeçalho da tabela
+            // (components/ResultsTable.tsx) e, como este card não tem altura
+            // fixa nem rolagem própria, ele nunca teria espaço de verdade
+            // pra "grudar" no topo. Cantos possivelmente pontudos em algum
+            // filho ficam sob responsabilidade do próprio filho (ver
+            // LoadingState, o único caso real aqui).
+            "border border-ink-200 bg-white shadow-card dark:border-ink-700 dark:bg-ink-900",
+            mostrandoPaginacao ? "rounded-t-2xl border-b-0" : "rounded-2xl",
+          )}
+        >
+          {!filtrosAplicados && <EstadoInicial />}
 
-        {filtrosAplicados && emErro && (
-          <ErrorState tipo={tipoErro} mensagem={mensagemErro} onTentarNovamente={tentarNovamente} />
-        )}
+          {filtrosAplicados && emErro && (
+            <ErrorState tipo={tipoErro} mensagem={mensagemErro} onTentarNovamente={tentarNovamente} />
+          )}
 
-        {filtrosAplicados && carregandoInicial && <LoadingState />}
+          {filtrosAplicados && carregandoInicial && <LoadingState />}
 
-        {filtrosAplicados && !emErro && resultado && (
-          <>
-            <ResultsHeader
-              consultadoEm={resultado.meta.consultadoEm}
-              atualizando={atualizando}
-              parcial={resultado.meta.parcial}
-            />
+          {filtrosAplicados && !emErro && resultado && (
+            <>
+              <ResultsHeader
+                consultadoEm={resultado.meta.consultadoEm}
+                atualizando={atualizando}
+                // `meta.parcial` reflete o total bruto que a fonte devolveu,
+                // antes dos filtros aplicados aqui (data, modalidade,
+                // município, valor, órgão, situação, portal) — sem isso, dava
+                // pra mostrar "Resultado parcial" junto com uma lista vazia
+                // (a busca original tinha mais itens, mas nenhum sobreviveu
+                // aos filtros), o que não faz sentido pro usuário.
+                parcial={resultado.meta.parcial && resultado.total > 0}
+              />
 
-            <div className="px-4 py-4 sm:px-6">
-              <SummaryCards resumo={resultado.summary} />
-            </div>
+              <div className="px-4 py-4 sm:px-6">
+                <SummaryCards resumo={summaryRefinado} />
+              </div>
 
-            {resultado.total > 0 ? (
-              <>
-                <TableFilters
-                  facets={resultado.facets}
-                  modalidadeRapida={modalidadeRapida}
-                  localRapido={localRapido}
-                  portalRapido={portalRapido}
-                  ordenarPor={ordenarPor}
-                  onChangeModalidade={(v) => {
-                    setModalidadeRapida(v);
-                    setPagina(1);
-                  }}
-                  onChangeLocal={(v) => {
-                    setLocalRapido(v);
-                    setPagina(1);
-                  }}
-                  onChangePortal={(v) => {
-                    setPortalRapido(v);
-                    setPagina(1);
-                  }}
-                  onChangeOrdenacao={setOrdenarPor}
-                />
+              {itensRefinados.length > 0 ? (
+                <>
+                  <TableFilters
+                    facets={resultado.facets}
+                    modalidadeRapida={modalidadeRapida}
+                    localRapido={localRapido}
+                    portalRapido={portalRapido}
+                    ordenarPor={ordenarPor}
+                    onChangeModalidade={(v) => {
+                      setModalidadeRapida(v);
+                      setPagina(1);
+                    }}
+                    onChangeLocal={(v) => {
+                      setLocalRapido(v);
+                      setPagina(1);
+                    }}
+                    onChangePortal={(v) => {
+                      setPortalRapido(v);
+                      setPagina(1);
+                    }}
+                    onChangeOrdenacao={(v) => {
+                      setOrdenarPor(v);
+                      setPagina(1);
+                    }}
+                  />
 
-                <div className={atualizando ? "opacity-60 transition-opacity" : "transition-opacity"}>
-                  <ResultsTable itens={resultado.items} />
-                  <div className="space-y-3 p-4 sm:hidden">
-                    {resultado.items.map((item) => (
-                      <ResultCard key={item.id} item={item} onVerDetalhes={abrirDetalhes} />
-                    ))}
+                  <div className={atualizando ? "opacity-60 transition-opacity" : "transition-opacity"}>
+                    <ResultsTable itens={itensDaPagina} />
+                    <div className="space-y-3 p-4 sm:hidden">
+                      {itensDaPagina.map((item) => (
+                        <ResultCard key={item.id} item={item} onVerDetalhes={abrirDetalhes} />
+                      ))}
+                    </div>
                   </div>
-                </div>
+                </>
+              ) : (
+                <EmptyState onLimparFiltros={limparFiltros} />
+              )}
+            </>
+          )}
+        </div>
 
-                <Pagination
-                  page={resultado.page}
-                  pageSize={resultado.pageSize}
-                  total={resultado.total}
-                  totalPages={resultado.totalPages}
-                  onChangePage={setPagina}
-                  onChangePageSize={(size) => {
-                    setTamanhoPagina(size);
-                    setPagina(1);
-                  }}
-                />
-              </>
-            ) : (
-              <EmptyState onLimparFiltros={limparFiltros} />
-            )}
-          </>
+        {mostrandoPaginacao && (
+          <Pagination
+            page={paginaValida}
+            pageSize={tamanhoPagina}
+            total={itensRefinados.length}
+            totalPages={totalPaginasCliente}
+            onChangePage={setPagina}
+            onChangePageSize={(size) => {
+              setTamanhoPagina(size);
+              setPagina(1);
+            }}
+          />
         )}
       </div>
 

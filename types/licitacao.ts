@@ -45,6 +45,15 @@ export interface Licitacao {
   linkPNCP?: string;
 }
 
+/** Um documento (edital, anexo) anexado à licitação no PNCP — ver lib/server/pncp-documentos-client.ts. */
+export interface DocumentoLicitacao {
+  titulo: string;
+  /** Ex.: "Edital", "Anexo", "Ata de Registro de Preços". */
+  tipo?: string;
+  url: string;
+  dataPublicacao?: string; // ISO 8601
+}
+
 export type PeriodoPreset = "15" | "30" | "60" | "90" | "personalizado";
 
 export type OrdenacaoOpcao =
@@ -70,17 +79,18 @@ export interface FiltrosLicitacao {
   orgao?: string;
   numeroLicitacao?: string;
   situacao?: string;
-  ordenarPor?: OrdenacaoOpcao;
-  pagina?: number;
-  tamanhoPagina?: number;
+}
 
-  /**
-   * Refinamentos rápidos da própria tabela (seção 11 do briefing): não abrem
-   * uma nova consulta "cheia" ao PNCP, apenas restringem ainda mais o
-   * resultado da pesquisa já aplicada. Mantidos separados dos filtros acima
-   * para que as opções desses três seletores continuem mostrando tudo que
-   * a pesquisa aplicada trouxe, mesmo depois de um deles ser usado.
-   */
+/**
+ * Refinamentos rápidos da própria tabela (seção 11 do briefing): não abrem
+ * uma nova consulta ao PNCP, só restringem localmente (no cliente) o
+ * resultado da pesquisa já buscada — reconsultar o servidor a cada troca
+ * batia de novo na cascata de fontes (instáveis por natureza) e podia trazer
+ * um resultado de uma fonte diferente da que gerou as opções na tela. Por
+ * isso ficam fora de `FiltrosLicitacao` (que descreve só o que vai pro
+ * servidor) e são estado local de components/DashboardClient.tsx.
+ */
+export interface RefinamentosRapidos {
   modalidadeRapida?: string;
   localRapido?: string;
   portalRapido?: string;
@@ -110,11 +120,15 @@ export interface MetaConsulta {
 }
 
 export interface LicitacoesResponse {
+  /**
+   * Todos os itens que casam com a pesquisa (não paginado pelo servidor) —
+   * a paginação é só um recorte local, feito no cliente, sobre esta lista já
+   * buscada. Evita reconsultar o PNCP (fontes instáveis) a cada clique de
+   * página, o que já causou o mesmo total/página trazer resultados
+   * diferentes de uma chamada pra outra.
+   */
   items: Licitacao[];
-  page: number;
-  pageSize: number;
   total: number;
-  totalPages: number;
   summary: ResumoLicitacoes;
   facets: FacetasDisponiveis;
   meta: MetaConsulta;

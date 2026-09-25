@@ -9,8 +9,9 @@ descobrimos integrando com elas. Todas as chamadas acontecem no **backend**
 
 Três fontes em cascata — a segunda e a terceira só são chamadas quando a
 anterior falha. Ver `app/api/licitacoes/route.ts` para a lógica de cascata e
-`lib/server/pncp-status.ts` para o health check que alimenta o indicador de
-status no cabeçalho.
+`lib/server/status-servicos.ts` para o health check (de todas as APIs
+externas do app, não só o PNCP) que alimenta o indicador de status no
+cabeçalho.
 
 ### 1. PNCP — Busca interna (fonte primária)
 

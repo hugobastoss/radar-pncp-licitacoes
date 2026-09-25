@@ -29,9 +29,25 @@ export interface CredenciaisAnvisa {
   clientSecret: string;
 }
 
+/** Erro de uma consulta à ANVISA — carrega a mensagem que ela devolveu (quando houver). */
+export class ErroConsultaAnvisa extends Error {
+  constructor(
+    message: string,
+    public readonly mensagemAnvisa?: string,
+  ) {
+    super(message);
+    this.name = "ErroConsultaAnvisa";
+  }
+}
+
 interface RespostaPaginadaAnvisa<T> {
   content?: T[];
   totalElements?: number;
+}
+
+interface CorpoErroAnvisa {
+  mensagem?: string;
+  mensagem_detalhada?: string;
 }
 
 async function obterToken(credenciais: CredenciaisAnvisa, signal?: AbortSignal): Promise<string> {
@@ -82,7 +98,11 @@ async function consultarPaginado<TBruto>(
     body: JSON.stringify(corpo),
   });
 
-  if (!resposta.ok) throw new Error(`ANVISA (${caminho}) respondeu ${resposta.status}`);
+  if (!resposta.ok) {
+    const corpoErro = (await resposta.json().catch(() => undefined)) as CorpoErroAnvisa | undefined;
+    const mensagemAnvisa = corpoErro?.mensagem_detalhada || corpoErro?.mensagem;
+    throw new ErroConsultaAnvisa(`ANVISA (${caminho}) respondeu ${resposta.status}`, mensagemAnvisa);
+  }
   return (await resposta.json()) as RespostaPaginadaAnvisa<TBruto>;
 }
 

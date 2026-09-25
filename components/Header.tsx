@@ -5,7 +5,7 @@ import Image from "next/image";
 import { ChevronDown, ChevronUp, CircleHelp, Clock, Menu, X } from "lucide-react";
 import { useClickOutside } from "@/lib/hooks/useClickOutside";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
-import { StatusPncp } from "@/components/ui/StatusPncp";
+import { StatusServicos } from "@/components/ui/StatusServicos";
 import { formatarDataHoraCurta } from "@/lib/formatters";
 
 const DICAS_AJUDA = [
@@ -99,7 +99,7 @@ export function Header() {
         </div>
 
         <div className="hidden items-center gap-2 sm:flex">
-          <StatusPncp />
+          <StatusServicos />
           <RelogioBrasilia />
           <PopoverAjuda />
           <ThemeToggle />
@@ -118,7 +118,7 @@ export function Header() {
 
       {menuMobileAberto && (
         <div className="border-t border-ink-200 bg-white px-4 py-3 dark:border-ink-700 dark:bg-ink-900 sm:hidden">
-          <StatusPncp variante="linha" />
+          <StatusServicos variante="linha" />
           <div className="mt-3 border-t border-ink-100 pt-3 dark:border-ink-800">
             <button
               type="button"

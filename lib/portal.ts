@@ -71,6 +71,17 @@ export function identificarPortal(linkSistemaOrigem?: string): PortalInfo {
   return dominio ? { ...PORTAL_DESCONHECIDO, dominio } : PORTAL_DESCONHECIDO;
 }
 
+/**
+ * Busca reversa: acha o domínio de um portal já cadastrado a partir do NOME
+ * (comparação normalizada). Usado quando só se conhece o nome do portal, não
+ * o link direto — ver o comentário sobre o prefixo "[Nome] - " embutido no
+ * objeto em lib/server/pncp-search-client.ts.
+ */
+export function dominioDoPortalPorNome(nome: string): string | undefined {
+  const alvo = nome.trim().toLowerCase();
+  return REGISTRO_PORTAIS.find((r) => r.info.nome.toLowerCase() === alvo)?.padrao;
+}
+
 function extrairDominio(url: string): string | undefined {
   try {
     const semProtocolo = url.includes("://") ? url : `https://${url}`;

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Calendar, ChevronDown, ChevronUp, MapPin, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { AcoesLicitacao } from "@/components/AcoesLicitacao";
-import { grupoDaModalidade, tonalidadeDaSituacao } from "@/lib/data/dominio";
+import { grupoDaModalidade, rotuloSituacao, tonalidadeDaSituacao } from "@/lib/data/dominio";
 import { formatarDataHoraCurta, formatarLocal, formatarMoeda, truncarTexto } from "@/lib/formatters";
 import type { Licitacao } from "@/types/licitacao";
 
@@ -32,7 +32,7 @@ export function ResultCard({ item, onVerDetalhes }: ResultCardProps) {
         <p className="text-sm font-semibold text-ink-900 dark:text-ink-50">
           {item.numeroLicitacao ? `Nº ${item.numeroLicitacao}` : "Número não informado"}
         </p>
-        <Badge tone={TONE_POR_GRUPO[grupo]} className="shrink-0">
+        <Badge tone={TONE_POR_GRUPO[grupo]} className="shrink-0 uppercase">
           {item.modalidade ?? "Não informada"}
         </Badge>
       </div>
@@ -42,12 +42,12 @@ export function ResultCard({ item, onVerDetalhes }: ResultCardProps) {
           <MapPin className="h-4 w-4 shrink-0 text-ink-400 dark:text-ink-500" aria-hidden />
           <span className="truncate">{formatarLocal(item.municipio, item.uf)}</span>
         </span>
-        <Badge tone={tonalidadeDaSituacao(item.situacao)} className="shrink-0">
-          {item.situacao ?? "Não informada"}
+        <Badge tone={tonalidadeDaSituacao(item.situacao)} className="shrink-0 uppercase">
+          {rotuloSituacao(item.situacao, item.dataAbertura)}
         </Badge>
       </div>
 
-      <p className="mt-2 flex items-center gap-1.5 text-sm text-ink-500 dark:text-ink-400">
+      <p className="mt-2 flex items-center gap-1.5 text-base text-ink-500 dark:text-ink-400">
         <Calendar className="h-4 w-4 text-ink-400 dark:text-ink-500" aria-hidden />
         {formatarDataHoraCurta(item.dataEncerramento)}
       </p>

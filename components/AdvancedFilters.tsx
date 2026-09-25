@@ -4,7 +4,7 @@ import { Building2, CalendarRange, RotateCcw, Wallet } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { ChipsSelecaoMultipla, ChipsSelecaoUnica } from "@/components/ui/Chip";
 import { Button } from "@/components/ui/Button";
-import { MODALIDADES, PERIODOS, PORTAIS_CONHECIDOS, SITUACOES } from "@/lib/data/dominio";
+import { MODALIDADES, PERIODOS, PORTAIS_CONHECIDOS, rotuloFiltroSituacao, SITUACOES } from "@/lib/data/dominio";
 import type { FiltrosLicitacao } from "@/types/licitacao";
 
 interface AdvancedFiltersProps {
@@ -17,7 +17,7 @@ const OPCOES_PERIODO_CHIP = PERIODOS.map((p) => ({
   label: p.valor === "personalizado" ? "Personalizado" : p.rotulo.replace("Próximos ", ""),
 }));
 
-const OPCOES_SITUACAO_CHIP = SITUACOES.map((s) => ({ value: s, label: s }));
+const OPCOES_SITUACAO_CHIP = SITUACOES.map((s) => ({ value: s, label: rotuloFiltroSituacao(s) }));
 
 function contarFiltrosAtivos(filtros: FiltrosLicitacao): number {
   let total = 0;

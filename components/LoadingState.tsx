@@ -30,7 +30,7 @@ function CartaoSkeleton() {
 export function LoadingState({ linhas = 6 }: { linhas?: number }) {
   return (
     <div>
-      <div className="flex items-center gap-2 border-b border-ink-200 bg-primary-50 px-4 py-3 text-sm text-primary-700 dark:border-ink-700 dark:bg-primary-900 dark:text-primary-300 sm:px-6">
+      <div className="flex items-center gap-2 rounded-t-2xl border-b border-ink-200 bg-primary-50 px-4 py-3 text-sm text-primary-700 dark:border-ink-700 dark:bg-primary-900 dark:text-primary-300 sm:px-6">
         <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
         <span className="font-medium">Consultando o PNCP…</span>
         <span className="hidden text-primary-600 dark:text-primary-400 sm:inline">

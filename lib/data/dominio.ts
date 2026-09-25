@@ -6,6 +6,7 @@
  * deve exibir o valor recebido normalmente (ver lib/portal.ts para o
  * tratamento de portais desconhecidos) em vez de escondê-lo.
  */
+import type { Licitacao, OrdenacaoOpcao } from "@/types/licitacao";
 
 export interface OpcaoModalidade {
   codigo: string;
@@ -55,6 +56,26 @@ export function grupoDaModalidade(nomeModalidade: string | undefined): "pregao" 
   return encontrada?.grupo ?? "outra";
 }
 
+/** Compartilhado entre backend (app/api/licitacoes/route.ts) e os refinamentos rápidos no cliente. */
+export function normalizarTexto(texto: string): string {
+  return texto
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim();
+}
+
+/**
+ * A fonte primária (busca interna) nunca devolve o código IBGE do
+ * município (só a oficial e o Compras.gov.br têm esse campo) — usamos o
+ * nome normalizado como chave alternativa nesse caso. Como cada busca vem
+ * de uma única fonte, a chave é estável dentro de uma mesma resposta.
+ */
+export function chaveMunicipio(item: { codigoMunicipioIbge?: string; municipio?: string }): string | undefined {
+  if (item.codigoMunicipioIbge) return item.codigoMunicipioIbge;
+  return item.municipio ? normalizarTexto(item.municipio) : undefined;
+}
+
 export interface OpcaoPeriodo {
   valor: "15" | "30" | "60" | "90" | "personalizado";
   rotulo: string;
@@ -77,25 +98,21 @@ export const PORTAIS_CONHECIDOS = [
   "Centro de Serviços Compartilhados",
 ] as const;
 
-export const SITUACOES = [
-  "Recebendo propostas",
-  "Em julgamento",
-  "Homologada",
-  "Encerrada",
-  "Suspensa",
-  "Revogada",
-  "Cancelada",
-] as const;
+// Valores reais que o PNCP devolve (confirmado ao vivo em `situacao_nome` e
+// `situacaoCompraNome`/`situacaoCompraNomePncp`, nas três fontes) — não são
+// os nomes que se imaginaria à primeira vista (não existe "Recebendo
+// propostas", "Em julgamento", "Homologada" ou "Encerrada" no domínio da
+// API). "Cancelada" não vem nesse campo: é derivado do flag `cancelado` só
+// na fonte primária.
+export const SITUACOES = ["Divulgada no PNCP", "Revogada", "Anulada", "Suspensa", "Cancelada"] as const;
 
 export type TonalidadeBadge = "neutral" | "primary" | "success" | "warning" | "danger" | "accent";
 
 const TONALIDADE_POR_SITUACAO: Record<string, TonalidadeBadge> = {
-  "recebendo propostas": "success",
-  "em julgamento": "warning",
-  homologada: "primary",
-  encerrada: "neutral",
+  "divulgada no pncp": "success",
   suspensa: "warning",
   revogada: "danger",
+  anulada: "danger",
   cancelada: "danger",
 };
 
@@ -103,6 +120,34 @@ const TONALIDADE_POR_SITUACAO: Record<string, TonalidadeBadge> = {
 export function tonalidadeDaSituacao(situacao: string | undefined): TonalidadeBadge {
   if (!situacao) return "neutral";
   return TONALIDADE_POR_SITUACAO[situacao.toLowerCase()] ?? "neutral";
+}
+
+/**
+ * O PNCP usa o mesmo texto "Divulgada no PNCP" tanto pro intervalo entre a
+ * divulgação e a abertura oficial da disputa quanto pro período em que já
+ * está recebendo propostas — não dá pra distinguir só pelo texto. Como
+ * `dataAbertura` já indica quando a disputa abre, só chamamos de "Recebendo
+ * proposta" quando essa data já chegou (ou é hoje); antes disso, mantemos o
+ * texto original.
+ */
+export function rotuloSituacao(situacao: string | undefined, dataAbertura: string | undefined): string {
+  if (situacao === "Divulgada no PNCP" && dataAbertura) {
+    const abertura = new Date(dataAbertura);
+    if (!Number.isNaN(abertura.getTime()) && abertura.getTime() <= Date.now()) {
+      return "Recebendo proposta";
+    }
+  }
+  return situacao ?? "Não informada";
+}
+
+/**
+ * Rótulo do chip do filtro avançado de Situação — sem uma licitação
+ * específica pra saber a `dataAbertura`, então usa sempre o nome mais
+ * amigável. O `value` do chip continua sendo o texto real ("Divulgada no
+ * PNCP"), então o filtro (que compara com o campo bruto da API) não muda.
+ */
+export function rotuloFiltroSituacao(situacao: string): string {
+  return situacao === "Divulgada no PNCP" ? "Recebendo proposta" : situacao;
 }
 
 export interface OpcaoOrdenacao {
@@ -124,6 +169,54 @@ export const OPCOES_ORDENACAO: OpcaoOrdenacao[] = [
   { valor: "municipio_asc", rotulo: "Município" },
   { valor: "portal_asc", rotulo: "Portal" },
 ];
+
+/**
+ * Sem data de encerramento, o item sempre vai pro final da lista — nas duas
+ * direções. Antes disso era resolvido com `+Infinity` num helper único
+ * usado nos dois sentidos, o que empurrava itens sem data pro TOPO do
+ * "mais distante" (como se a data desconhecida fosse a mais distante no
+ * futuro) — incorreto, mesmo não sendo visível hoje (todo item que chega
+ * até aqui normalmente já tem `dataEncerramento`, exceto quando o filtro de
+ * Situação está em uso, que dispensa essa garantia).
+ */
+function compararPorEncerramento(a: Licitacao, b: Licitacao, ascendente: boolean): number {
+  const tempoA = a.dataEncerramento ? new Date(a.dataEncerramento).getTime() : undefined;
+  const tempoB = b.dataEncerramento ? new Date(b.dataEncerramento).getTime() : undefined;
+  if (tempoA === undefined && tempoB === undefined) return 0;
+  if (tempoA === undefined) return 1;
+  if (tempoB === undefined) return -1;
+  return ascendente ? tempoA - tempoB : tempoB - tempoA;
+}
+
+/**
+ * Ordena a lista já buscada — puramente em memória, sem depender de nenhuma
+ * das fontes (nenhuma delas aceita parâmetro de ordenação). Por isso é
+ * aplicado no CLIENTE (components/DashboardClient.tsx), não reconsultando o
+ * servidor a cada troca de "Ordenar por" — mesmo motivo da paginação e dos
+ * refinamentos rápidos: reconsultar batia de novo na cascata de fontes,
+ * instáveis por natureza, arriscando trocar de fonte no meio do caminho.
+ */
+export function ordenar(itens: Licitacao[], ordenarPor: OrdenacaoOpcao | null): Licitacao[] {
+  const copia = [...itens];
+
+  switch (ordenarPor) {
+    case "encerramento_desc":
+      return copia.sort((a, b) => compararPorEncerramento(a, b, false));
+    case "valor_desc":
+      return copia.sort((a, b) => (b.valorEstimado ?? -1) - (a.valorEstimado ?? -1));
+    case "valor_asc":
+      return copia.sort(
+        (a, b) => (a.valorEstimado ?? Number.POSITIVE_INFINITY) - (b.valorEstimado ?? Number.POSITIVE_INFINITY),
+      );
+    case "municipio_asc":
+      return copia.sort((a, b) => (a.municipio ?? "").localeCompare(b.municipio ?? "", "pt-BR"));
+    case "portal_asc":
+      return copia.sort((a, b) => (a.portal ?? "").localeCompare(b.portal ?? "", "pt-BR"));
+    case "encerramento_asc":
+    default:
+      return copia.sort((a, b) => compararPorEncerramento(a, b, true));
+  }
+}
 
 export interface PesquisaRapida {
   id: string;

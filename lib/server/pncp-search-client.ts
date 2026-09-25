@@ -1,4 +1,5 @@
 import { formatarCnpj } from "@/lib/formatters";
+import { dominioDoPortalPorNome } from "@/lib/portal";
 import type { Licitacao } from "@/types/licitacao";
 
 /**
@@ -75,11 +76,35 @@ function montarLinkPncp(raw: ItemBuscaInterna): string | undefined {
   return `https://pncp.gov.br/app/editais/${cnpjDigitos}/${raw.ano}/${raw.numero_sequencial}`;
 }
 
+// Esta API não tem um campo próprio de portal de origem, mas alguns órgãos
+// embutem o nome do portal que usaram pra submeter a licitação como um
+// prefixo "[Nome do Portal] - " no início do próprio `description` (ex.:
+// "[Portal de Compras Públicas] - Aquisição de..."). Extraímos esse prefixo
+// pra não deixá-lo poluindo o objeto exibido e, quando o nome bate com um
+// portal já cadastrado (lib/portal.ts), sintetizamos um link pra HOME do
+// portal — não é o link direto da licitação (esse não existe aqui), mas já
+// é o suficiente pra identificar e abrir o portal, em vez do botão ficar
+// sempre desativado.
+const PREFIXO_PORTAL_NO_OBJETO = /^\[([^\]]+)\]\s*-\s*/;
+
+function extrairPortalDoObjeto(description: string | undefined): { objeto?: string; linkSistemaOrigem?: string } {
+  if (!description) return { objeto: description };
+
+  const match = description.match(PREFIXO_PORTAL_NO_OBJETO);
+  if (!match) return { objeto: description };
+
+  const objeto = description.slice(match[0].length).trim() || undefined;
+  const dominio = dominioDoPortalPorNome(match[1]);
+  return { objeto, linkSistemaOrigem: dominio ? `https://${dominio}` : undefined };
+}
+
 function mapearParaLicitacao(raw: ItemBuscaInterna): Licitacao | undefined {
   if (!raw.numero_controle_pncp) return undefined;
 
   const numeroLicitacao =
     raw.numero_sequencial && raw.ano ? `${raw.numero_sequencial}/${raw.ano}` : undefined;
+
+  const { objeto, linkSistemaOrigem } = extrairPortalDoObjeto(raw.description);
 
   return {
     id: raw.numero_controle_pncp,
@@ -87,7 +112,7 @@ function mapearParaLicitacao(raw: ItemBuscaInterna): Licitacao | undefined {
     numeroControlePNCP: raw.numero_controle_pncp,
     orgao: raw.orgao_nome,
     cnpjOrgao: formatarCnpj(raw.orgao_cnpj),
-    objeto: raw.description,
+    objeto,
     modalidade: raw.modalidade_licitacao_nome,
     municipio: raw.municipio_nome,
     uf: raw.uf,
@@ -99,8 +124,10 @@ function mapearParaLicitacao(raw: ItemBuscaInterna): Licitacao | undefined {
     dataEncerramento: horarioBrasiliaParaIso(raw.data_fim_vigencia),
     situacao: raw.cancelado ? "Cancelada" : raw.situacao_nome,
     linkPNCP: montarLinkPncp(raw),
-    // `linkSistemaOrigem` não existe nesta API — fica undefined (o portal
-    // aparece como "não informado" na tela, sem quebrar nada).
+    // Só preenchido quando o objeto trazia o prefixo "[Nome do Portal]" E o
+    // nome bate com um portal cadastrado — nos demais casos fica undefined
+    // (o portal aparece como "não informado" na tela, sem quebrar nada).
+    linkSistemaOrigem,
   };
 }
 
@@ -108,12 +135,20 @@ export async function buscarViaApiInterna(
   parametros: ParametrosBuscaInterna,
 ): Promise<ResultadoBuscaInterna> {
   const query = new URLSearchParams({
-    q: parametros.q ?? "",
     tipos_documento: "edital",
     pagina: "1",
     tam_pagina: String(TAMANHO_PAGINA),
     ordenacao: "-data_publicacao_pncp",
   });
+  if (parametros.q) {
+    query.set("q", parametros.q);
+  } else {
+    // Sem palavra-chave, o PNCP passou a exigir um filtro de status (senão
+    // devolve 400 "O filtro status é obrigatório") — verificado ao vivo em
+    // 2026-09-25. "recebendo_proposta" traz só licitações em aberto, o que já
+    // é o recorte predominante de uma busca sem texto.
+    query.set("status", "recebendo_proposta");
+  }
   if (parametros.ufs?.length) query.set("ufs", parametros.ufs.join(","));
 
   const sinaisAbortar = [AbortSignal.timeout(TIMEOUT_MS)];

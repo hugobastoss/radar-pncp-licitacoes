@@ -3,9 +3,16 @@ import { buscarContratacoesPncp } from "@/lib/server/pncp-client";
 import { buscarViaApiInterna } from "@/lib/server/pncp-search-client";
 import { buscarContratacoesCompras } from "@/lib/server/compras-client";
 import { identificarPortal } from "@/lib/portal";
-import { grupoDaModalidade, modalidadesCorrespondem, MODALIDADES } from "@/lib/data/dominio";
+import {
+  chaveMunicipio,
+  grupoDaModalidade,
+  modalidadesCorrespondem,
+  normalizarTexto,
+  ordenar,
+  MODALIDADES,
+} from "@/lib/data/dominio";
 import { MUNICIPIOS_POR_UF } from "@/lib/data/municipios";
-import type { Licitacao, LicitacoesResponse, OrdenacaoOpcao } from "@/types/licitacao";
+import type { Licitacao, LicitacoesResponse } from "@/types/licitacao";
 
 /**
  * /api/licitacoes — camada de BACKEND do Next.js. Busca real no PNCP, com
@@ -26,14 +33,6 @@ import type { Licitacao, LicitacoesResponse, OrdenacaoOpcao } from "@/types/lici
  */
 
 export const dynamic = "force-dynamic";
-
-function normalizarTexto(texto: string): string {
-  return texto
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase()
-    .trim();
-}
 
 function contemTexto(alvo: string | undefined, termo: string): boolean {
   if (!alvo) return false;
@@ -90,26 +89,6 @@ function calcularJanelaPeriodo(
 // oportunidades relevantes sem tornar a consulta absurdamente longa.
 const DIAS_JANELA_PADRAO = 180;
 
-function ordenar(itens: Licitacao[], ordenarPor: OrdenacaoOpcao | null): Licitacao[] {
-  const copia = [...itens];
-  const tempo = (data?: string) => (data ? new Date(data).getTime() : Number.POSITIVE_INFINITY);
-
-  switch (ordenarPor) {
-    case "encerramento_desc":
-      return copia.sort((a, b) => tempo(b.dataEncerramento) - tempo(a.dataEncerramento));
-    case "valor_desc":
-      return copia.sort((a, b) => (b.valorEstimado ?? -1) - (a.valorEstimado ?? -1));
-    case "valor_asc":
-      return copia.sort((a, b) => (a.valorEstimado ?? Number.POSITIVE_INFINITY) - (b.valorEstimado ?? Number.POSITIVE_INFINITY));
-    case "municipio_asc":
-      return copia.sort((a, b) => (a.municipio ?? "").localeCompare(b.municipio ?? "", "pt-BR"));
-    case "portal_asc":
-      return copia.sort((a, b) => (a.portal ?? "").localeCompare(b.portal ?? "", "pt-BR"));
-    case "encerramento_asc":
-    default:
-      return copia.sort((a, b) => tempo(a.dataEncerramento) - tempo(b.dataEncerramento));
-  }
-}
 
 function respostaErroServidor() {
   return NextResponse.json(
@@ -135,17 +114,6 @@ export async function GET(request: NextRequest) {
   const orgao = params.get("orgao") ?? "";
   const numeroLicitacao = params.get("numeroLicitacao") ?? "";
   const situacao = params.get("situacao") ?? "";
-  const ordenarPor = params.get("ordenarPor") as OrdenacaoOpcao | null;
-  const pagina = Math.max(1, Number.parseInt(params.get("pagina") ?? "1", 10) || 1);
-  const tamanhoPagina = Math.min(100, Math.max(5, Number.parseInt(params.get("tamanhoPagina") ?? "25", 10) || 25));
-
-  // Refinamentos rápidos da tabela (seção 11): aplicados DEPOIS do cálculo
-  // das facetas, para que os três dropdowns da tabela continuem oferecendo
-  // todas as opções presentes na pesquisa aplicada, mesmo quando um deles
-  // já está em uso.
-  const modalidadeRapida = params.get("modalidadeRapida") ?? "";
-  const localRapido = params.get("localRapido") ?? "";
-  const portalRapido = params.get("portalRapido") ?? "";
 
   const { inicio, fim } = calcularJanelaPeriodo(periodo, dataInicial, dataFinal);
 
@@ -334,52 +302,37 @@ export async function GET(request: NextRequest) {
     municipios: Array.from(
       new Map(
         resultadoPrincipal
-          .filter((i) => i.codigoMunicipioIbge && i.municipio)
-          .map((i) => [
-            i.codigoMunicipioIbge as string,
-            { codigoIbge: i.codigoMunicipioIbge as string, nome: i.municipio as string },
-          ]),
+          .filter((i) => i.municipio)
+          .map((i) => [chaveMunicipio(i) as string, { codigoIbge: chaveMunicipio(i) as string, nome: i.municipio as string }]),
       ).values(),
     ).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")),
   };
 
-  // Refinamentos rápidos aplicados por cima do resultado principal.
-  let resultadoFinal = resultadoPrincipal;
-  if (modalidadeRapida) {
-    resultadoFinal = resultadoFinal.filter(
-      (item) => normalizarTexto(item.modalidade ?? "") === normalizarTexto(modalidadeRapida),
-    );
-  }
-  if (localRapido) {
-    resultadoFinal = resultadoFinal.filter((item) => item.codigoMunicipioIbge === localRapido);
-  }
-  if (portalRapido) {
-    resultadoFinal = resultadoFinal.filter(
-      (item) => normalizarTexto(item.portal ?? "") === normalizarTexto(portalRapido),
-    );
-  }
-
-  const totalFiltrado = resultadoFinal.length;
-  const ordenados = ordenar(resultadoFinal, ordenarPor);
-
-  const totalPages = Math.max(1, Math.ceil(totalFiltrado / tamanhoPagina));
-  const paginaValida = Math.min(pagina, totalPages);
-  const inicioPagina = (paginaValida - 1) * tamanhoPagina;
-  const itensPagina = ordenados.slice(inicioPagina, inicioPagina + tamanhoPagina);
+  const totalFiltrado = resultadoPrincipal.length;
+  // Ordenação de verdade (o que o usuário escolhe em "Ordenar por") acontece
+  // no cliente (ver lib/data/dominio.ts e components/DashboardClient.tsx) —
+  // nenhuma das três fontes aceita esse parâmetro, então reordenar aqui a
+  // cada troca só reconsultaria a cascata à toa. Aplicamos só uma ordem
+  // padrão sensata pra quem consumir esta API diretamente.
+  const ordenados = ordenar(resultadoPrincipal, "encerramento_asc");
 
   const summary = {
     total: totalFiltrado,
-    pregoes: resultadoFinal.filter((i) => grupoDaModalidade(i.modalidade) === "pregao").length,
-    dispensas: resultadoFinal.filter((i) => grupoDaModalidade(i.modalidade) === "dispensa").length,
-    outras: resultadoFinal.filter((i) => grupoDaModalidade(i.modalidade) === "outra").length,
+    pregoes: resultadoPrincipal.filter((i) => grupoDaModalidade(i.modalidade) === "pregao").length,
+    dispensas: resultadoPrincipal.filter((i) => grupoDaModalidade(i.modalidade) === "dispensa").length,
+    outras: resultadoPrincipal.filter((i) => grupoDaModalidade(i.modalidade) === "outra").length,
   };
 
+  // Sem paginação nem refinamentos rápidos (Modalidade/Local/Portal da
+  // tabela) aqui de propósito: o servidor devolve todos os itens que casam
+  // com a pesquisa aplicada, e o cliente é quem recorta em páginas e aplica
+  // os refinamentos rápidos (ver components/DashboardClient.tsx). Reconsultar
+  // a cada clique de página ou de refinamento batia de novo na cascata de
+  // fontes — instáveis por natureza — e podia trazer um resultado de uma
+  // fonte diferente da que gerou as opções que o usuário via na tela.
   const resposta: LicitacoesResponse = {
-    items: itensPagina,
-    page: paginaValida,
-    pageSize: tamanhoPagina,
+    items: ordenados,
     total: totalFiltrado,
-    totalPages,
     summary,
     facets,
     meta: {

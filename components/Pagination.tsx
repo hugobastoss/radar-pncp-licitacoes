@@ -40,7 +40,7 @@ export function Pagination({ page, pageSize, total, totalPages, onChangePage, on
   const paginas = construirPaginas(page, totalPages);
 
   return (
-    <div className="flex flex-col gap-3 border-t border-ink-200 px-4 py-4 dark:border-ink-700 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+    <div className="sticky bottom-0 z-10 flex flex-col gap-3 rounded-b-2xl border border-ink-200 bg-white px-4 py-4 shadow-[0_-4px_12px_-4px_rgba(0,0,0,0.12)] dark:border-ink-700 dark:bg-ink-900 sm:flex-row sm:items-center sm:justify-between sm:px-6">
       <p className="text-sm text-ink-500 dark:text-ink-400">
         Exibindo <span className="font-medium text-ink-700 dark:text-ink-200">{formatarQuantidade(inicio)}</span>–
         <span className="font-medium text-ink-700 dark:text-ink-200">{formatarQuantidade(fim)}</span> de{" "}

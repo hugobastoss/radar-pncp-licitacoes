@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { buscarNomesTecnicos } from "@/lib/server/anvisa-client";
+import { buscarNomesTecnicos, ErroConsultaAnvisa } from "@/lib/server/anvisa-client";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +22,11 @@ export async function GET(request: NextRequest) {
   try {
     const resultado = await buscarNomesTecnicos(termo, { clientId, clientSecret }, request.signal);
     return NextResponse.json(resultado);
-  } catch {
-    return NextResponse.json({ erro: "Não foi possível consultar a ANVISA neste momento." }, { status: 502 });
+  } catch (erro) {
+    const mensagem = erro instanceof ErroConsultaAnvisa ? erro.mensagemAnvisa : undefined;
+    return NextResponse.json(
+      { erro: mensagem ?? "Não foi possível consultar a ANVISA neste momento." },
+      { status: 502 },
+    );
   }
 }
