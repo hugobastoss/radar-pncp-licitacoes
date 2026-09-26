@@ -192,8 +192,10 @@ Um único gateway autenticado, usado por duas telas:
 - **`/produtos-saude`** — dispositivos médicos e materiais hospitalares
   registrados. Busca por nome do produto, número de registro (11 dígitos),
   número de processo (17 dígitos) ou CNPJ da detentora — o tipo é detectado
-  pelo formato em [`lib/produtos-saude.ts`](../lib/produtos-saude.ts). O
-  painel de detalhe junta quatro endpoints:
+  pelo formato em [`lib/produtos-saude.ts`](../lib/produtos-saude.ts). Um
+  campo opcional de CNPJ da empresa combina com qualquer um desses (ex.: nome
+  + CNPJ traz só os produtos daquela empresa). O painel de detalhe junta
+  quatro endpoints:
   - `POST saude` — a busca paginada;
   - `POST saude/{processo}` — detalhe: nome técnico, classe de risco,
     fabricantes, modelos, AFE da empresa, anexos, medida cautelar;
@@ -204,7 +206,14 @@ Um único gateway autenticado, usado por duas telas:
   - `POST certificado/` (filtros `cnpjCertificada` + `contexto: "certificado"`)
     — certificados de boas práticas (CBPF, CBPDA…) da empresa detentora.
 - **`/nome-tecnico`** — nomenclatura técnica oficial de produtos para saúde
-  (categoria, classe de risco). Endpoint `nomeTecnico`.
+  (definição, categoria, classe de risco). Endpoint `nomeTecnico`. A base
+  inteira é pequena (~2,7 mil nomes, ~860 KB): o servidor carrega tudo (10
+  páginas em paralelo, ~0,7 s), guarda em memória por 24 h e **busca
+  localmente** — palavras em qualquer ordem, sem acento, plural e singular
+  equivalentes, também na definição e no código, com filtro por categoria e
+  por classe de risco (que a API não filtra). Quando nenhum nome tem todas as
+  palavras, a busca vira parcial e avisa na tela. Ver "Nomenclatura técnica"
+  em `anvisa-client.ts`.
 
 **Particularidades:**
 - É um fluxo de dois passos: primeiro gera um token (`grant_type=client_credentials`,
@@ -223,7 +232,10 @@ Um único gateway autenticado, usado por duas telas:
   mostrarem "não foi possível consultar" pra qualquer busca sem resultado.
 - Filtros de `saude` conferidos ao vivo: `nomeProduto`, `numeroRegistro`,
   `numeroProcesso`, `cnpj` e `situacaoNotificacaoRegistro` (`"1"` = válidos,
-  `"2"` = inválidos). **`registro` (sem o "numero"), `nomeTecnico`,
+  `"2"` = inválidos) — e **se combinam (E)** numa consulta só. Já `nomeProduto`
+  procura o texto como **frase exata** dentro do nome: "cateter balão" traz
+  674, "balão cateter" traz 1, e vários termos separados por vírgula não
+  funcionam. **`registro` (sem o "numero"), `nomeTecnico`,
   `razaoSocial` e a ordenação (`sorting`, `column`) são ignorados em
   silêncio** — devolvem a base inteira (~192 mil registros) em vez de filtrar.
 - "Inválido" costuma ser registro vencido (`vencimento.vencido: true`, com a
@@ -237,6 +249,15 @@ Um único gateway autenticado, usado por duas telas:
   modelos.
 - A base de UDI ainda é parcial (o cadastro é obrigatório aos poucos) — a
   maioria dos registros ainda não tem código.
+- `nomeTecnico`: a página vai **no máximo até 300** — pedir `size: 3000`
+  devolve 300 sem avisar. A busca da própria API também é por **frase
+  exata** ("balão cateter" traz 0), por isso a busca é feita localmente. A
+  API filtra por `categoriaProduto` (`8` = Equipamento ou Material, `12` =
+  Diagnóstico in vitro; lista em `GET nomeTecnico/categorias`) e por
+  `codigo` (aceita trecho), mas não por classe de risco — e a classe vem
+  vazia em ~55% dos nomes; a definição (`descricao`), em ~74%.
+- `nomeTecnico/download` gera um `.xls` de verdade (código, nome técnico,
+  descrição, classe de risco vinculada) — não usado no app.
 - Datas (`dataVencimento` etc.) vêm como **epoch milissegundos**, não string
   ISO — convertidas com `new Date(ms).toISOString()`.
 - O Swagger e a especificação ficam atrás do Cloudflare e só respondem com

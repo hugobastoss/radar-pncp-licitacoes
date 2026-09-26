@@ -27,6 +27,8 @@ export interface ResultadoProdutosSaude {
   pagina: number;
   totalPaginas: number;
   tipoBusca: TipoBuscaProdutoSaude;
+  /** CNPJ da empresa aplicado junto com o termo (nome, registro ou processo), quando houver. */
+  cnpjEmpresa?: string;
 }
 
 export interface FabricanteProdutoSaude {

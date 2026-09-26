@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { HeartPulse, Loader2, Search } from "lucide-react";
+import { Building2, HeartPulse, Loader2, Search } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Drawer } from "@/components/ui/Drawer";
@@ -11,7 +11,7 @@ import { LinkCnpj } from "@/components/LinkCnpj";
 import { ClasseRisco, DetalheProdutoSaude, SituacaoRegistro } from "@/components/DetalheProdutoSaude";
 import { buscarProdutosSaude } from "@/lib/api-produtos-saude";
 import { buscaAceitaFiltroValidos } from "@/lib/produtos-saude";
-import { formatarCnpj, formatarData, formatarQuantidade } from "@/lib/formatters";
+import { formatarCnpj, formatarData, formatarQuantidade, mascararCnpj } from "@/lib/formatters";
 import type { ProdutoSaude, ResultadoProdutosSaude, TipoBuscaProdutoSaude } from "@/types/produto-saude";
 
 type Status = "idle" | "carregando" | "sucesso" | "invalido" | "nao_configurado" | "erro";
@@ -22,6 +22,17 @@ const DESCRICAO_BUSCA: Record<TipoBuscaProdutoSaude, string> = {
   processo: "número de processo",
   cnpj: "CNPJ da empresa detentora",
 };
+
+/** Ex.: "nome do produto na empresa 16.671.467/0001-01". */
+function descreverBusca(resultado: ResultadoProdutosSaude): string {
+  const empresa = resultado.cnpjEmpresa ? ` na empresa ${formatarCnpj(resultado.cnpjEmpresa)}` : "";
+  return `${DESCRICAO_BUSCA[resultado.tipoBusca]}${empresa}`;
+}
+
+interface BuscaAplicada {
+  termo: string;
+  cnpjEmpresa: string;
+}
 
 function ProdutoItem({ item, onDetalhes }: { item: ProdutoSaude; onDetalhes: (item: ProdutoSaude) => void }) {
   return (
@@ -62,10 +73,11 @@ function ProdutoItem({ item, onDetalhes }: { item: ProdutoSaude; onDetalhes: (it
 
 export function ProdutosSaudeClient() {
   const [valor, setValor] = useState("");
+  const [cnpjEmpresa, setCnpjEmpresa] = useState("");
   const [apenasValidos, setApenasValidos] = useState(true);
-  // Termo da última busca enviada: paginação, tamanho da página e o filtro
-  // de válidos reconsultam com ele, não com o que estiver no campo agora.
-  const [termoBuscado, setTermoBuscado] = useState<string | null>(null);
+  // Última busca enviada: paginação, tamanho da página e o filtro de
+  // válidos reconsultam com ela, não com o que estiver nos campos agora.
+  const [buscaAplicada, setBuscaAplicada] = useState<BuscaAplicada | null>(null);
   const [pagina, setPagina] = useState(1);
   const [tamanhoPagina, setTamanhoPagina] = useState(25);
   const [status, setStatus] = useState<Status>("idle");
@@ -81,7 +93,10 @@ export function ProdutosSaudeClient() {
     };
   }, []);
 
-  async function executar(termo: string, opcoes: { pagina: number; tamanhoPagina: number; apenasValidos: boolean }) {
+  async function executar(
+    busca: BuscaAplicada,
+    opcoes: { pagina: number; tamanhoPagina: number; apenasValidos: boolean },
+  ) {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -89,12 +104,23 @@ export function ProdutosSaudeClient() {
     setStatus("carregando");
     setMensagemErro(undefined);
 
-    const r = await buscarProdutosSaude(termo, { ...opcoes, signal: controller.signal });
+    const r = await buscarProdutosSaude(busca.termo, {
+      ...opcoes,
+      cnpjEmpresa: busca.cnpjEmpresa,
+      signal: controller.signal,
+    });
 
     if (controller.signal.aborted) return;
 
     if (r.status === "sucesso") {
-      setResultado({ itens: r.itens, total: r.total, pagina: r.pagina, totalPaginas: r.totalPaginas, tipoBusca: r.tipoBusca });
+      setResultado({
+        itens: r.itens,
+        total: r.total,
+        pagina: r.pagina,
+        totalPaginas: r.totalPaginas,
+        tipoBusca: r.tipoBusca,
+        cnpjEmpresa: r.cnpjEmpresa,
+      });
       setStatus("sucesso");
     } else if (r.status === "invalido") {
       setStatus("invalido");
@@ -109,33 +135,35 @@ export function ProdutosSaudeClient() {
 
   function pesquisar(evento: FormEvent) {
     evento.preventDefault();
-    if (!valor.trim()) return;
+    // Só o CNPJ, sem termo, também vale: traz todos os produtos da empresa.
+    if (!valor.trim() && !cnpjEmpresa.trim()) return;
 
-    setTermoBuscado(valor);
+    const busca = { termo: valor, cnpjEmpresa };
+    setBuscaAplicada(busca);
     setResultado(null);
     setPagina(1);
-    void executar(valor, { pagina: 1, tamanhoPagina, apenasValidos });
+    void executar(busca, { pagina: 1, tamanhoPagina, apenasValidos });
   }
 
   function mudarPagina(novaPagina: number) {
-    if (!termoBuscado) return;
+    if (!buscaAplicada) return;
     setPagina(novaPagina);
-    void executar(termoBuscado, { pagina: novaPagina, tamanhoPagina, apenasValidos });
+    void executar(buscaAplicada, { pagina: novaPagina, tamanhoPagina, apenasValidos });
     resultadoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function mudarTamanhoPagina(novoTamanho: number) {
     setTamanhoPagina(novoTamanho);
     setPagina(1);
-    if (termoBuscado) void executar(termoBuscado, { pagina: 1, tamanhoPagina: novoTamanho, apenasValidos });
+    if (buscaAplicada) void executar(buscaAplicada, { pagina: 1, tamanhoPagina: novoTamanho, apenasValidos });
   }
 
   function alternarApenasValidos(marcado: boolean) {
     setApenasValidos(marcado);
     // Busca por registro ou processo ignora o filtro — não precisa reconsultar.
-    if (termoBuscado && resultado && buscaAceitaFiltroValidos(resultado.tipoBusca)) {
+    if (buscaAplicada && resultado && buscaAceitaFiltroValidos(resultado.tipoBusca)) {
       setPagina(1);
-      void executar(termoBuscado, { pagina: 1, tamanhoPagina, apenasValidos: marcado });
+      void executar(buscaAplicada, { pagina: 1, tamanhoPagina, apenasValidos: marcado });
     }
   }
 
@@ -160,11 +188,11 @@ export function ProdutosSaudeClient() {
         onSubmit={pesquisar}
         className="rounded-2xl border border-ink-200 bg-white p-5 shadow-card dark:border-ink-700 dark:bg-ink-900 sm:p-6"
       >
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
           <div className="flex-1">
             <Input
-              label="Produto, registro, processo ou CNPJ"
-              placeholder="Ex.: cateter, 81467349001 ou o CNPJ da empresa"
+              label="Produto, registro ou processo"
+              placeholder="Ex.: cateter ou 81467349001"
               hint="Registro tem 11 dígitos e processo, 17 — com ou sem pontuação."
               leftIcon={<HeartPulse className="h-4 w-4" aria-hidden />}
               value={valor}
@@ -172,9 +200,21 @@ export function ProdutosSaudeClient() {
               onClear={() => setValor("")}
             />
           </div>
+          <div className="lg:w-72">
+            <Input
+              label="CNPJ da empresa (opcional)"
+              placeholder="00.000.000/0000-00"
+              hint="Só produtos desta empresa detentora."
+              leftIcon={<Building2 className="h-4 w-4" aria-hidden />}
+              value={cnpjEmpresa}
+              maxLength={18}
+              onChange={(e) => setCnpjEmpresa(mascararCnpj(e.target.value))}
+              onClear={() => setCnpjEmpresa("")}
+            />
+          </div>
           <Button
             type="submit"
-            className="sm:mt-7"
+            className="lg:mt-7"
             leftIcon={status === "carregando" ? undefined : <Search className="h-4 w-4" aria-hidden />}
             loading={status === "carregando"}
           >
@@ -217,7 +257,7 @@ export function ProdutosSaudeClient() {
 
       {status === "sucesso" && resultado?.itens.length === 0 && (
         <p className="text-sm text-ink-600 dark:text-ink-300">
-          Nenhum registro encontrado por {DESCRICAO_BUSCA[resultado.tipoBusca]}
+          Nenhum registro encontrado por {descreverBusca(resultado)}
           {apenasValidos && buscaAceitaFiltroValidos(resultado.tipoBusca) && " entre os registros válidos"}.
         </p>
       )}
@@ -227,7 +267,7 @@ export function ProdutosSaudeClient() {
           <div className="rounded-t-2xl border border-b-0 border-ink-200 bg-white p-4 dark:border-ink-700 dark:bg-ink-900 sm:p-5">
             <p className="text-xs text-ink-500 dark:text-ink-400">
               {formatarQuantidade(resultado.total)} {resultado.total === 1 ? "registro encontrado" : "registros encontrados"}{" "}
-              por {DESCRICAO_BUSCA[resultado.tipoBusca]}
+              por {descreverBusca(resultado)}
               {buscaAceitaFiltroValidos(resultado.tipoBusca)
                 ? apenasValidos && " (só válidos)"
                 : " — aparece mesmo se estiver vencido ou cancelado"}

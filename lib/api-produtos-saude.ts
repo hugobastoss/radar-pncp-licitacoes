@@ -1,3 +1,4 @@
+import { validarCnpj } from "@/lib/cnpj";
 import type {
   CaracteristicasUdi,
   DetalheCompletoProdutoSaude,
@@ -52,7 +53,14 @@ export type ResultadoBuscaProdutosSaude =
 
 export async function buscarProdutosSaude(
   termo: string,
-  options: { pagina: number; tamanhoPagina: number; apenasValidos: boolean; signal?: AbortSignal },
+  options: {
+    /** Opcional; combinado com o termo, restringe à empresa detentora. */
+    cnpjEmpresa?: string;
+    pagina: number;
+    tamanhoPagina: number;
+    apenasValidos: boolean;
+    signal?: AbortSignal;
+  },
 ): Promise<ResultadoBuscaProdutosSaude> {
   const query = new URLSearchParams({
     q: termo,
@@ -60,6 +68,13 @@ export async function buscarProdutosSaude(
     tamanho: String(options.tamanhoPagina),
     validos: options.apenasValidos ? "1" : "0",
   });
+
+  if (options.cnpjEmpresa?.trim()) {
+    // Mesma validação da rota — responde na hora, sem ida ao servidor.
+    const validacao = validarCnpj(options.cnpjEmpresa);
+    if (!validacao.valido) return { status: "invalido", mensagem: validacao.mensagem };
+    query.set("cnpj", validacao.cnpj);
+  }
   const resposta = await obterJson<ResultadoProdutosSaude>(`/api/produtos-saude?${query}`, options.signal);
 
   if (resposta.status === "ok") return { status: "sucesso", ...resposta.corpo };
