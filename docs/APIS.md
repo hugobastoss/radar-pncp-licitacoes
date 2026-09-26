@@ -185,34 +185,75 @@ Lei Anticorrupção) da CGU.
 | **Autenticação** | OAuth2 `client_credentials` (Keycloak) — registre um app em [api.anvisa.gov.br](https://api.anvisa.gov.br) para obter `client_id`/`client_secret` |
 | **Variáveis de ambiente** | `ANVISA_CLIENT_ID`, `ANVISA_CLIENT_SECRET` |
 | **Arquivo** | [`lib/server/anvisa-client.ts`](../lib/server/anvisa-client.ts) |
+| **Documentação oficial** | Swagger em `api-gateway.prd.apps.anvisa.gov.br/consultas-externas-api/swagger-ui/index.html` (especificação em `.../consultas-externas-api/v3/api-docs`) |
 
-Um único gateway autenticado com duas consultas integradas até agora:
+Um único gateway autenticado, usado por duas telas:
 
 - **`/produtos-saude`** — dispositivos médicos e materiais hospitalares
-  registrados, por nome do produto (fabricante, registro, situação,
-  vencimento). Endpoint `saude`.
+  registrados. Busca por nome do produto, número de registro (11 dígitos),
+  número de processo (17 dígitos) ou CNPJ da detentora — o tipo é detectado
+  pelo formato em [`lib/produtos-saude.ts`](../lib/produtos-saude.ts). O
+  painel de detalhe junta quatro endpoints:
+  - `POST saude` — a busca paginada;
+  - `POST saude/{processo}` — detalhe: nome técnico, classe de risco,
+    fabricantes, modelos, AFE da empresa, anexos, medida cautelar;
+  - `POST udi` (filtro `nuRegistro`) e `GET udi/{id}` — códigos de barras
+    (GTIN) por modelo e as características de cada um (estéril, uso único,
+    látex, uso leigo, ressonância). As características são buscadas sob
+    demanda, uma requisição por código;
+  - `POST certificado/` (filtros `cnpjCertificada` + `contexto: "certificado"`)
+    — certificados de boas práticas (CBPF, CBPDA…) da empresa detentora.
 - **`/nome-tecnico`** — nomenclatura técnica oficial de produtos para saúde
   (categoria, classe de risco). Endpoint `nomeTecnico`.
 
 **Particularidades:**
 - É um fluxo de dois passos: primeiro gera um token (`grant_type=client_credentials`,
-  expira em ~29 min), depois usa esse token como `Bearer` na consulta —
-  geramos um token novo a cada busca, dado o volume baixo esperado (não vale
-  a complexidade de cachear entre invocações serverless). Ver `consultarPaginado`
-  em `anvisa-client.ts`, compartilhado pelas duas consultas.
-- As consultas são `POST` com corpo JSON (`{page, size/count, filter}`), não
-  `GET` com query string — resposta vem paginada no formato padrão do Spring
-  (`content`, `totalElements`, `totalPages`).
-- Datas (`dataVencimento` etc., em `saude`) vêm como **epoch milissegundos**,
-  não string ISO — convertidas com `new Date(ms).toISOString()`.
+  `expires_in` = 1740 s), depois usa esse token como `Bearer` na consulta. O
+  token fica **guardado em memória** enquanto a instância do servidor está
+  viva (economiza ~350 ms por busca); se a ANVISA recusar um token guardado
+  (401), gera outro e tenta de novo, uma vez. Ver `requisitar` em
+  `anvisa-client.ts`, compartilhado por todas as consultas.
+- As consultas são `POST` com corpo JSON (`{page, size, filter}`), não `GET`
+  com query string — resposta vem paginada no formato padrão do Spring
+  (`content`, `totalElements`, `totalPages`). **O tamanho da página é
+  `size`**: o `count` que aparece nos exemplos da documentação é ignorado e a
+  API devolve sempre 10.
+- **404 quer dizer "nenhum resultado"** (busca vazia, página além do fim,
+  processo ou UDI inexistente) — não é erro. Tratar como erro fazia as telas
+  mostrarem "não foi possível consultar" pra qualquer busca sem resultado.
+- Filtros de `saude` conferidos ao vivo: `nomeProduto`, `numeroRegistro`,
+  `numeroProcesso`, `cnpj` e `situacaoNotificacaoRegistro` (`"1"` = válidos,
+  `"2"` = inválidos). **`registro` (sem o "numero"), `nomeTecnico`,
+  `razaoSocial` e a ordenação (`sorting`, `column`) são ignorados em
+  silêncio** — devolvem a base inteira (~192 mil registros) em vez de filtrar.
+- "Inválido" costuma ser registro vencido (`vencimento.vencido: true`, com a
+  data). E o contrário também acontece: 39 de 100 registros válidos numa
+  amostra tinham `dataVencimento` no passado, mas `vencimento.descricao:
+  "VIGENTE"` — nesses casos a data é descartada no mapeamento e a tela mostra
+  "Vigente".
+- No detalhe, os modelos vêm dentro de `apresentacoesPage` (paginado, aceita
+  `size` no corpo — usamos 100). O `totalElements` dessa página conta
+  **apresentações**, não modelos: uma apresentação pode ter dezenas de
+  modelos.
+- A base de UDI ainda é parcial (o cadastro é obrigatório aos poucos) — a
+  maioria dos registros ainda não tem código.
+- Datas (`dataVencimento` etc.) vêm como **epoch milissegundos**, não string
+  ISO — convertidas com `new Date(ms).toISOString()`.
+- O Swagger e a especificação ficam atrás do Cloudflare e só respondem com
+  `User-Agent` de navegador (403 com `RadarLicitacoes/1.0`). O portal
+  `consultas.anvisa.gov.br` bloqueia navegador automatizado — por isso não
+  conferimos o formato do link público de um registro e a tela não o oferece.
 - Sem as variáveis de ambiente configuradas, as rotas devolvem **501**, mesmo
   padrão da consulta de sanções.
-- **Nem todo endpoint documentado no Swagger está de fato roteado**: testamos
-  `certificadoMedicamento` (busca de Certificado de Boas Práticas de
-  Fabricação) e ele devolve **404** mesmo com o payload exato do exemplo da
-  documentação — enquanto os endpoints de apoio dele (`/status`,
-  `/classesCertificacao`) funcionam normalmente com a mesma credencial. Não
-  integrado por não ser possível validar que funciona de verdade.
+- **Nem todo endpoint documentado no Swagger funciona de verdade:**
+  - `certificadoMedicamento` (Certificado de Boas Práticas de Fabricação de
+    medicamentos) devolve **404** mesmo com o payload exato do exemplo da
+    documentação — enquanto os endpoints de apoio dele (`/status`,
+    `/classesCertificacao`) funcionam normalmente com a mesma credencial.
+  - `saude/downloadPDF/{processo}` responde 200 com um PDF, mas com todos os
+    campos "sem dados cadastrados".
+  - Nenhum endpoint baixa os anexos do registro (instruções de uso etc.) — a
+    tela só lista quais documentos existem.
 
 ## IBGE — Localidades (só geração de dados, não roda em produção)
 
