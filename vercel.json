@@ -1,4 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "regions": ["gru1"]
+  "regions": ["iad1"],
+  "functions": {
+    "app/api/sancoes/route.ts": {
+      "regions": ["gru1"]
+    }
+  }
 }

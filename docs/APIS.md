@@ -169,6 +169,16 @@ Lei Anticorrupção) da CGU.
   de navegador, mesmo com uma chave de API válida.
 - Sem a variável de ambiente configurada, `app/api/sancoes/route.ts` devolve
   **501** de propósito, em vez de tentar chamar a API sem chave.
+- **Recusa chamadas vindas dos servidores da Vercel nos EUA** (região
+  `iad1`, a padrão): em produção a rota falhava em todas as chamadas,
+  enquanto localmente funcionava. Por isso só esta rota roda em São Paulo
+  (`gru1`), configurado em [`vercel.json`](../vercel.json). O resto do
+  projeto fica em `iad1` porque o PNCP faz o contrário — falhou em todas as
+  verificações feitas a partir de `gru1` (11 de 11 em 2026-09-28), enquanto
+  de `iad1` e de uma conexão residencial no Brasil respondia.
+- Em caso de falha, a rota devolve no campo `detalhe` o que a CGU respondeu
+  (ex.: "Portal da Transparência (ceis) respondeu 401" = chave inválida) e
+  registra o mesmo no log.
 - Aceita CNPJ alfanumérico em `codigoSancionado` sem erro (testado com o
   exemplo fictício da Receita, que volta vazio). Ainda não deu pra conferir
   com uma empresa alfanumérica sancionada de verdade.
