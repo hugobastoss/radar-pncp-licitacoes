@@ -47,7 +47,7 @@ ser um contrato público, pode mudar sem aviso.
 | **Base URL** | `https://pncp.gov.br/api/consulta/v1/contratacoes/proposta` |
 | **Autenticação** | Nenhuma |
 | **Arquivo** | [`lib/server/pncp-client.ts`](../lib/server/pncp-client.ts) |
-| **Documentação oficial** | [Manual das APIs de Consulta do PNCP](https://www.gov.br/pncp/pt-br/central-de-conteudo/manuais) |
+| **Documentação oficial** | [Swagger da API de Consulta do PNCP](https://pncp.gov.br/api/consulta/swagger-ui/index.html) (a página de manuais em gov.br/pncp passou a exigir login em 2026) |
 
 **Particularidades:**
 - Exige `codigoModalidadeContratacao` e `dataFinal` obrigatórios — sem busca
@@ -121,6 +121,42 @@ necessariamente da origem dos dados.
 - O código do CNAE vem como número (`3514000`), sem o zero à esquerda de
   códigos como `0111-3/01`; o tipo de logradouro ("AVENIDA") vem num campo
   separado (`descricao_tipo_de_logradouro`).
+
+### Complemento: SUFRAMA e e-mail (CNPJá)
+
+| | |
+|---|---|
+| **Base URL** | `https://open.cnpja.com/office/{cnpj}` |
+| **Autenticação** | Nenhuma |
+| **Arquivo** | [`lib/server/cnpja-client.ts`](../lib/server/cnpja-client.ts) (rota `/api/cnpj/complemento`) |
+| **Documentação oficial** | [cnpja.com/api/open](https://cnpja.com/api/open) (a página tem verificação anti-robô; abre em navegador) |
+
+Completa o cadastro da BrasilAPI com o que ela não tem: a **inscrição
+SUFRAMA** (número, situação, data e incentivos fiscais — ex.: isenção de
+ICMS e IPI) e o **e-mail corporativo** (a BrasilAPI muitas vezes vem sem
+e-mail; e-mails marcados como pessoais pela CNPJá ficam de fora).
+
+**Particularidades:**
+- **5 consultas por minuto por IP**, e as funções da Vercel saem por IPs
+  compartilhados com outros clientes. Por isso: rota separada (falha aqui
+  não derruba o cadastro), cache de 24 h, e a tela só consulta quando pode
+  ganhar algo — empresa na área da SUFRAMA (AM, RO, RR, AC, AP) ou sem
+  e-mail na Receita.
+- Dados com **até 45 dias de atraso** (pela própria documentação); a
+  resposta traz a data da última atualização (`updated`), que a tela mostra.
+- Empresa sem inscrição vem com `suframa: []`.
+
+**Fontes de SUFRAMA avaliadas antes (2026-09-28):**
+
+| Fonte | Por que não |
+|---|---|
+| Consulta oficial ([www4.suframa.gov.br/cadsuf](https://www4.suframa.gov.br/cadsuf/#/menu-externo)) | reCAPTCHA conferido no servidor — não automatizável |
+| Dados abertos da SUFRAMA ("Relatório de Cadastro e Credenciamento de Pessoas Jurídicas") | Parou em **31/12/2023**; só inscrição e contato, sem situação nem incentivos |
+| API pública da CNPJws (`POST publica.cnpj.ws/suframa`) | Só confirma uma inscrição que você já sabe (3/min); útil pra conferir situação atual |
+| SintegraWS, Infosimples, Netrin | Tempo real, mas pagas (token) |
+
+A API pública da CNPJws (`GET publica.cnpj.ws/cnpj/{cnpj}`, 3/min) traz
+**inscrições estaduais** (IE, com situação) — não usada ainda.
 
 ## Consulta de CEP (`/cep`)
 
@@ -321,6 +357,116 @@ Um único gateway autenticado, usado por duas telas:
     campos "sem dados cadastrados".
   - Nenhum endpoint baixa os anexos do registro (instruções de uso etc.) — a
     tela só lista quais documentos existem.
+
+## Governo do Amazonas — contratos e empenhos (`/cnpj`, `/empenhos-am`)
+
+Duas fontes da SEFAZ-AM, usadas juntas:
+
+1. **SGC** (contratos): quais contratos o fornecedor tem com o estado e quais
+   notas de empenho pertencem a cada um. Alimenta a seção "Contratos com o
+   Governo do Amazonas" da consulta de CNPJ.
+2. **Portal da Transparência Fiscal** (despesa): quanto de cada nota já foi
+   empenhado, liquidado e pago. Junto com o SGC, alimenta a tela
+   `/empenhos-am` (empenhos a receber).
+
+As duas rotas (`/api/am/contratos` e `/api/am/empenhos`) rodam em São
+Paulo (`gru1`, ver [`vercel.json`](../vercel.json)). A varredura faz cerca de
+1.000 chamadas ao SGC por CNPJ, e cada ida e volta até os EUA soma tempo. Não
+testamos se a SEFAZ-AM recusa IPs dos EUA, como a CGU faz.
+
+### SGC — Sistema de Gestão de Contratos
+
+| | |
+|---|---|
+| **Base URL** | `https://sistemas.sefaz.am.gov.br/sgc-am/api/v1/` |
+| **Autenticação** | Nenhuma |
+| **Arquivo** | [`lib/server/am-sgc-client.ts`](../lib/server/am-sgc-client.ts) (rota `/api/am/contratos`) |
+| **Documentação oficial** | Swagger na página [Dados Abertos do Portal da Transparência do AM](https://www.transparencia.am.gov.br/dados-abertos-2/) |
+
+Todas as chamadas são `POST` com corpo `application/x-www-form-urlencoded`,
+sempre com `method=ApiTransparencia` e um `tipo`:
+
+| Endpoint | Campos | Devolve |
+|---|---|---|
+| `unidadegestora.do` | `nome=` (vazio = todas), `tipo=UNIDADEGESTORA` | As 127 UGs (órgãos). Todas do Executivo |
+| `contrato.do` | `ug`, `ano`, `termo=` (vazio), `situacao` (`Todos` ou `Vigentes`), `tipo=CONTRATO` | Contratos e aditivos da UG no ano, com CNPJ do contratado, objeto, valores, vigência e processo |
+| `empenho.do` | `ug`, `ano` e `termo` (número do contrato), `tipo=EMPENHO` | Notas de empenho do contrato, com número, ano e valor |
+| `responsavel.do` | — | Responsáveis pelos contratos — não usado |
+
+**Particularidades:**
+- **Não filtra por CNPJ.** `ug` e `ano` são obrigatórios. Para achar os
+  contratos de uma empresa, o cliente varre todas as UGs, filtra pelo
+  `cpfCnpjContratado` e guarda cada consulta por 6 h. Com 12 chamadas em
+  paralelo, cada ano varrido leva ~2 s.
+- Varredura: o ano atual e o anterior com `situacao=Todos` (contrato
+  encerrado ainda pode ter resto a pagar) e os 6 anos antes deles só com
+  `Vigentes`.
+- **Aditivo vem como outra linha**, com o mesmo `nrNumeroContrato` e
+  `nrNumeroAditamento` diferente de `"0"`. O cliente agrupa por
+  UG + ano + número.
+- **Contrato antigo vigente só por aditivo:** com `Vigentes`, só vêm as
+  linhas dos aditivos. Nelas, o `desObjetivoContrato` descreve o aditivo ("O
+  presente Termo Aditivo tem por objetivo prorrogar…"), e o `nmTermo` é o do
+  aditivo ("3º TACT 10/2023"). Nesse caso o cliente consulta o ano inteiro
+  daquela UG (`Todos`) para recuperar a linha original.
+- **Nem todo "contrato" é contrato:** compra pequena formalizada só por nota
+  de empenho aparece com termo `NE 367/2025`.
+- Sem resultado vem como **HTTP 204**, sem corpo.
+- Erro de validação vem como `[{"erro": "..."}]`, com status 200 ou 500.
+- Datas vêm como `AAAAMMDD`; o código da UG tem 6 dígitos (`017101`).
+- **O mesmo empenho pode aparecer duas vezes no mesmo contrato** (ex.: CT
+  15/2026 da FESP, `2026NE0000071`). O app soma o valor e conta a nota uma
+  vez só, senão os totais dobram.
+- O número da nota vem sem o ano nem o prefixo. O app monta o formato do
+  portal da SEFAZ: `${anoEmpenho}NE${numero com 7 dígitos}` →
+  `2026NE0001718`.
+
+### Portal da Transparência Fiscal — valores de cada nota
+
+| | |
+|---|---|
+| **Base URL** | `https://sistemas.sefaz.am.gov.br/transpprd/mnt/despesa/` |
+| **Autenticação** | Nenhuma |
+| **Arquivo** | [`lib/server/am-sefaz-despesa-client.ts`](../lib/server/am-sefaz-despesa-client.ts) e [`lib/server/am-empenhos.ts`](../lib/server/am-empenhos.ts) (rota `/api/am/empenhos`) |
+| **Documentação** | Nenhuma — scraping de HTML. Levantamento completo em [SEFAZ-AM-TRANSPARENCIA.md](SEFAZ-AM-TRANSPARENCIA.md) |
+
+Um GET em `execDespAnoPoderUg.do` por UG traz todas as notas do ano, com
+empenhado, liquidado e pago. O app baixa só as UGs onde o fornecedor tem
+contrato (1–5 MB cada, guardadas por 1 h) e cruza com as notas do SGC.
+
+**Particularidades:**
+- **`Accept-Language` muda o formato dos números.** O `fetch` do Node manda
+  `Accept-Language: *`, e aí o portal responde `123,600.00` (formato
+  americano) em vez de `123.600,00`. Tratar como brasileiro dá 123,6. O
+  cliente manda `pt-BR` e ainda lê os dois formatos (o último `.` ou `,` é
+  a vírgula decimal).
+- **Reforço some da lista.** Nota de reforço é somada à nota original no
+  portal. A nota do SGC que não aparece no ano corrente fica como "não
+  encontrada", e a tela explica que provavelmente é um reforço (ex.:
+  `2026NE0003452` do CT 8/2026 da SUSAM).
+- **Resto a pagar** (nota de ano anterior) só tem valores nas colunas "Pago
+  Exercício Anterior" e "A Pagar Exercício Anterior". Nota de ano anterior
+  que não está na lista não tem mais saldo (quitada ou cancelada).
+- A receber = `Empenhado − Pago` nas notas do ano mais `A Pagar Exercício
+  Anterior` nos restos a pagar. Os totais separam o pago no ano do pago de
+  restos a pagar, senão o pago passa do liquidado.
+- Conferido à mão com o CT 8/2026 da SUSAM (X-BRASIL LTDA): as notas
+  `2026NE0001718` (123.600,00 empenhado, 58.400,00 pago) e `2026NE0000349`
+  (153.100,00 empenhado, 58.400,00 pago) somam **159.900,00** a receber,
+  com 52.000,00 já liquidados.
+
+### Avaliada e não usada: e-Compras AM (licitações)
+
+`https://www.e-compras.am.gov.br/publico/api/` (`Consulta_UG.asp`,
+`Licitacao_Consulta.asp`, `Dispensas_Inexigibilidade_Consulta.asp`,
+`Atas_Proprias_Consulta.asp`), da mesma página de dados abertos. Ficou de
+fora porque:
+- é lenta (8–9 s por chamada);
+- usa código de UG com 5 dígitos, diferente do SGC;
+- mistura formatos de número;
+- traz o CNPJ do vencedor dentro do nome da empresa, não num campo próprio.
+
+Pela Lei 14.133, as licitações do estado também devem ser publicadas no PNCP, que o app já consulta.
 
 ## IBGE — Localidades (só geração de dados, não roda em produção)
 

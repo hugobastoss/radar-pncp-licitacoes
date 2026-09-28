@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, HeartPulse, MapPin, Search, ShieldAlert, Tag, Tags } from "lucide-react";
+import { Building2, HeartPulse, MapPin, Receipt, Search, ShieldAlert, Tag, Tags } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 const ITENS_NAV = [
@@ -13,6 +13,7 @@ const ITENS_NAV = [
   { href: "/ncm", label: "NCM", icone: Tag },
   { href: "/produtos-saude", label: "Produtos p/ Saúde", icone: HeartPulse },
   { href: "/nome-tecnico", label: "Nome Técnico", icone: Tags },
+  { href: "/empenhos-am", label: "Empenhos AM", icone: Receipt },
 ] as const;
 
 export function Sidebar() {
@@ -23,7 +24,7 @@ export function Sidebar() {
       aria-label="Navegação principal"
       className="shrink-0 border-b border-ink-200 bg-white dark:border-ink-700 dark:bg-ink-900 sm:border-b-0 sm:bg-transparent sm:dark:bg-transparent"
     >
-      <div className="flex gap-1 overflow-x-auto px-4 py-2 scrollbar-oculta sm:grid sm:grid-cols-3 sm:gap-3 sm:overflow-visible sm:px-4 sm:py-4 md:grid-cols-4 lg:grid-cols-7">
+      <div className="flex gap-1 overflow-x-auto px-4 py-2 scrollbar-oculta sm:grid sm:grid-cols-3 sm:gap-3 sm:overflow-visible sm:px-4 sm:py-4 md:grid-cols-4 lg:grid-cols-8">
         {ITENS_NAV.map(({ href, label, icone: Icone }) => {
           const ativo = pathname === href;
           return (

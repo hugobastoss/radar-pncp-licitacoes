@@ -1,9 +1,14 @@
 # SEFAZ-AM — Portal da Transparência Fiscal (API informal)
 
 Levantamento feito ao vivo (2026-09-25) no portal de transparência da
-SEFAZ-AM, pensando num uso futuro: **consultar empenhos a receber de alguns
-órgãos do Amazonas**. Nada disso está implementado ainda — ver o item
-correspondente em [TODO.md](TODO.md).
+SEFAZ-AM para **consultar empenhos a receber de órgãos do Amazonas**.
+
+**Implementado (2026-09-28)** na tela `/empenhos-am`. A tela cruza este
+portal com o SGC (Sistema de Gestão de Contratos da SEFAZ-AM), que diz
+quais notas pertencem a cada contrato do fornecedor. Assim o CNPJ do
+credor não depende do detalhe de cada nota. Ver
+[APIS.md](APIS.md#governo-do-amazonas--contratos-e-empenhos-cnpj-empenhos-am)
+e a seção [Implementação](#implementação) abaixo.
 
 **Não é uma API.** São páginas HTML geradas no servidor (Java Struts 1 +
 tabelas displaytag), sem JSON e sem contrato. Mas elas se comportam como uma
@@ -242,8 +247,11 @@ aparece em dois lugares:
 
 - **Encoding ISO-8859-1.** `response.text()` assume UTF-8 e estraga os
   acentos. Use `new TextDecoder('latin1').decode(await response.arrayBuffer())`.
-- **Números no formato brasileiro:** `1.234.567,89` → tirar os `.` e trocar
-  a `,` por `.`.
+- **Números no formato brasileiro — só com `Accept-Language: pt-BR`.** O
+  `fetch` do Node manda `Accept-Language: *`, e aí o servidor formata os
+  números no padrão americano (`123,600.00`). Lido como brasileiro, vira
+  123,6. Mande `Accept-Language: pt-BR` e, por garantia, leia os dois
+  formatos: o último `.` ou `,` do texto é a vírgula decimal.
 - **HTML inválido.** O `title` de alguns órgãos tem aspas sem escape —
   `title="FUNDAÇÃO HOSPITAL "ADRIANO JORGE""` — e um parser de DOM corta o
   atributo no lugar errado. Como as linhas têm estrutura fixa, regex sobre o
@@ -256,7 +264,7 @@ aparece em dois lugares:
 - **`;jsessionid=…` nos links internos.** Pode ignorar; nenhuma chamada
   precisa de sessão.
 - **TLS válido.** O `fetch` do Node funciona sem ajustes e sem `User-Agent`
-  especial.
+  especial (mas veja o `Accept-Language` acima).
 - **Sem limite de requisições documentado.** Com listas de até 5 MB, vale
   cachear por órgão e não repetir a chamada à toa.
 
@@ -280,17 +288,26 @@ pro caso de uso, mas ficam anotadas:
 | 12 | Modalidade, Órgão e Credor | `execDespAnoPoderModalidade.do` |
 | 13 | Elemento, Órgão e Credor | `execDespAnoPoderElemento.do` |
 
-## Esboço da implementação futura
+## Implementação
 
-- Novo cliente `lib/server/sefaz-am-client.ts`, no padrão dos outros
-  `*-client.ts`. O nome `transparencia-client.ts` já é do Portal da
-  Transparência da CGU.
-- Configuração: lista dos códigos de órgão a acompanhar (ex.: `018202`,
-  `028101`).
-- Fluxo por órgão:
-  1. Um GET na lista de empenhos (nível 3) do ano corrente com `mes=00`.
-  2. Calcular o saldo a receber de cada NE e manter só as com saldo > 0.
-  3. Opcional: filtrar pelo nome do credor (normalizado).
-  4. Buscar o detalhe (nível 4) só das NEs que sobraram, pra confirmar o
-     CNPJ e trazer processo, objeto e data.
-- Chave de cada empenho: `counidadegestora` + `nune`.
+O esboço inicial previa filtrar pelo nome do credor e confirmar o CNPJ no
+detalhe de cada nota. A implementação partiu do fornecedor:
+
+1. **Contratos** — [`lib/server/am-sgc-client.ts`](../lib/server/am-sgc-client.ts)
+   varre o SGC em todas as UGs e fica com os contratos do CNPJ.
+2. **Notas de cada contrato** — o `empenho.do` do SGC dá o número e o ano de
+   cada nota, no formato deste portal (`2026NE0001718`).
+3. **Valores** — [`lib/server/am-sefaz-despesa-client.ts`](../lib/server/am-sefaz-despesa-client.ts)
+   baixa a lista do nível 3 (ano corrente, `mes=00`) de cada UG onde há
+   contrato e acha cada nota pelo número. O código da UG é o mesmo nos dois
+   sistemas (6 dígitos).
+4. **Saldo** — [`lib/server/am-empenhos.ts`](../lib/server/am-empenhos.ts)
+   aplica a regra de [Calculando o "a receber"](#calculando-o-a-receber).
+
+O que apareceu no cruzamento:
+- **Reforço não tem linha própria.** A nota de reforço que o SGC lista no
+  contrato não aparece aqui — o valor dela já vem somado à nota original.
+  Ex.: `2026NE0003452` do CT 8/2026 da SUSAM.
+- **Nota de ano anterior fora da lista** não tem mais resto a pagar
+  (quitada ou cancelada).
+- A chave continua sendo UG + número da nota.

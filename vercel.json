@@ -7,6 +7,12 @@
     },
     "app/api/governo-federal/route.ts": {
       "regions": ["gru1"]
+    },
+    "app/api/am/contratos/route.ts": {
+      "regions": ["gru1"]
+    },
+    "app/api/am/empenhos/route.ts": {
+      "regions": ["gru1"]
     }
   }
 }

@@ -3,30 +3,40 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Building2, Loader2, Search, ShieldAlert, ShieldCheck, TriangleAlert, Users } from "lucide-react";
+import { BadgePercent, Building2, Loader2, Search, ShieldAlert, ShieldCheck, TriangleAlert, Users } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Campo } from "@/components/LicitacaoDetails";
+import { ContratosAmSecao } from "@/components/ContratosAmSecao";
+import type { EstadoContratosAm } from "@/components/ContratosAmSecao";
 import { GovernoFederalSecao } from "@/components/GovernoFederalSecao";
 import type { EstadoGovernoFederal } from "@/components/GovernoFederalSecao";
 import { descreverResumoSancoes, resumirSancoes, SancaoItem } from "@/components/SancaoItem";
-import { buscarEmpresa } from "@/lib/api-cnpj";
+import { buscarContratosAm } from "@/lib/api-am";
+import { buscarComplementoCnpj, buscarEmpresa } from "@/lib/api-cnpj";
 import { buscarDadosGovernoFederal } from "@/lib/api-governo-federal";
 import { buscarSancoes } from "@/lib/api-sancoes";
 import { validarCnpj } from "@/lib/cnpj";
 import {
   formatarCep,
   formatarCnpj,
+  formatarData,
   formatarDataSimples,
   formatarMoeda,
   formatarTelefone,
   mascararCnpj,
 } from "@/lib/formatters";
 import type { Sancao } from "@/types/transparencia";
-import type { Cnae, Empresa, OpcaoRegime } from "@/types/cnpj";
+import type { Cnae, ComplementoCnpj, Empresa, OpcaoRegime } from "@/types/cnpj";
 
 type Status = "idle" | "carregando" | "sucesso" | "invalido" | "nao_encontrado" | "erro";
+
+type EstadoComplemento =
+  | { status: "nao_consultado" }
+  | { status: "carregando" }
+  | { status: "sucesso"; complemento: ComplementoCnpj }
+  | { status: "indisponivel"; mensagem?: string };
 
 type EstadoSancoes =
   | { status: "carregando" }
@@ -111,18 +121,111 @@ function SecaoSancoes({ sancoes }: { sancoes: EstadoSancoes }) {
   );
 }
 
+// Área de atuação da SUFRAMA: Amazônia Ocidental (AM, RO, RR, AC) e Amapá.
+// É onde ficam praticamente todas as inscrições (30.485 na base aberta de
+// 2023, uma só fora daqui).
+const UFS_AREA_SUFRAMA = new Set(["AM", "RO", "RR", "AC", "AP"]);
+
+/** A CNPJá tem limite apertado — só consulta quando pode acrescentar algo. */
+function precisaComplemento(empresa: Empresa): boolean {
+  return UFS_AREA_SUFRAMA.has(empresa.uf ?? "") || !empresa.email;
+}
+
+function SecaoSuframa({ empresa, complemento }: { empresa: Empresa; complemento: EstadoComplemento }) {
+  const naArea = UFS_AREA_SUFRAMA.has(empresa.uf ?? "");
+  const inscricoes = complemento.status === "sucesso" ? complemento.complemento.suframa : [];
+  // Fora da área, a seção só aparece se a empresa tiver inscrição — "sem SUFRAMA" é o normal lá.
+  if (!naArea && inscricoes.length === 0) return null;
+  if (complemento.status === "nao_consultado") return null;
+
+  return (
+    <div className="mt-5 border-t border-ink-100 pt-5 dark:border-ink-800">
+      <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">
+        <BadgePercent className="h-3.5 w-3.5" aria-hidden />
+        SUFRAMA (Zona Franca de Manaus)
+      </p>
+
+      {complemento.status === "carregando" && (
+        <p className="mt-2 flex items-center gap-1.5 text-sm text-ink-500 dark:text-ink-400">
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          Consultando inscrição SUFRAMA…
+        </p>
+      )}
+      {complemento.status === "indisponivel" && (
+        <p className="mt-2 text-sm text-ink-500 dark:text-ink-400">
+          {complemento.mensagem ?? "Não foi possível consultar a SUFRAMA neste momento."}
+        </p>
+      )}
+      {complemento.status === "sucesso" && inscricoes.length === 0 && (
+        <p className="mt-2 text-sm text-ink-600 dark:text-ink-300">Sem inscrição na SUFRAMA.</p>
+      )}
+      {inscricoes.length > 0 && (
+        <ul className="mt-2 space-y-3">
+          {inscricoes.map((inscricao) => (
+            <li key={inscricao.numero} className="text-sm">
+              <p className="flex flex-wrap items-center gap-2">
+                <span className="font-medium tabular-nums text-ink-900 dark:text-ink-50">
+                  Inscrição {inscricao.numero}
+                </span>
+                {inscricao.situacao && (
+                  <Badge tone={inscricao.situacao.toLowerCase() === "ativa" ? "success" : "danger"}>
+                    {inscricao.situacao}
+                  </Badge>
+                )}
+                {inscricao.desde && (
+                  <span className="text-xs text-ink-500 dark:text-ink-400">
+                    desde {formatarDataSimples(inscricao.desde)}
+                  </span>
+                )}
+              </p>
+              {inscricao.incentivos.length > 0 && (
+                <ul className="mt-1.5 space-y-1 text-xs text-ink-600 dark:text-ink-300">
+                  {inscricao.incentivos.map((i) => (
+                    <li key={`${i.tributo}-${i.fundamento}`}>
+                      <span className="font-medium text-ink-800 dark:text-ink-100">
+                        {i.tributo}
+                        {i.beneficio && ` — ${i.beneficio}`}
+                      </span>
+                      {i.finalidade && ` para ${i.finalidade.toLowerCase()}`}
+                      {i.fundamento && <span className="text-ink-500 dark:text-ink-400"> ({i.fundamento})</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {complemento.status === "sucesso" && (
+        <p className="mt-2 text-xs text-ink-400 dark:text-ink-500">
+          Fonte: CNPJá, a partir dos dados da SUFRAMA
+          {complemento.complemento.atualizadoEm &&
+            ` — atualizados em ${formatarData(complemento.complemento.atualizadoEm)}`}
+          . Pode ter até 45 dias de atraso.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function EmpresaCard({
   empresa,
   sancoes,
   governoFederal,
+  complemento,
+  contratosAm,
 }: {
   empresa: Empresa;
   sancoes: EstadoSancoes;
   governoFederal: EstadoGovernoFederal;
+  complemento: EstadoComplemento;
+  contratosAm: EstadoContratosAm;
 }) {
   const ativa = empresa.situacaoCadastral?.toUpperCase() === "ATIVA";
   const telefones = empresa.telefones.map(formatarTelefone).join(" · ");
   const resumoSancoes = sancoes.status === "sucesso" ? resumirSancoes(sancoes.sancoes) : undefined;
+  // A Receita (BrasilAPI) muitas vezes vem sem e-mail; a CNPJá costuma ter o corporativo.
+  const emailsCnpja = complemento.status === "sucesso" ? complemento.complemento.emails : [];
 
   return (
     <div className="rounded-2xl border border-ink-200 bg-white p-5 shadow-card dark:border-ink-700 dark:bg-ink-900 sm:p-6">
@@ -180,7 +283,22 @@ function EmpresaCard({
           />
         )}
         <Campo rotulo={empresa.telefones.length > 1 ? "Telefones" : "Telefone"} valor={telefones || "Não informado"} />
-        <Campo rotulo="E-mail" valor={empresa.email ?? "Não informado"} />
+        <Campo
+          rotulo="E-mail"
+          valor={
+            empresa.email ??
+            (emailsCnpja.length > 0 ? (
+              <>
+                {emailsCnpja.join(" · ")}
+                <span className="text-xs text-ink-500 dark:text-ink-400"> (via CNPJá)</span>
+              </>
+            ) : complemento.status === "carregando" ? (
+              "Consultando…"
+            ) : (
+              "Não informado"
+            ))
+          }
+        />
       </dl>
 
       <div className="mt-5">
@@ -221,6 +339,8 @@ function EmpresaCard({
         />
       </div>
 
+      <SecaoSuframa empresa={empresa} complemento={complemento} />
+
       {empresa.socios.length > 0 && (
         <div className="mt-5 border-t border-ink-100 pt-5 dark:border-ink-800">
           <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">
@@ -241,6 +361,8 @@ function EmpresaCard({
       <SecaoSancoes sancoes={sancoes} />
 
       <GovernoFederalSecao estado={governoFederal} />
+
+      <ContratosAmSecao estado={contratosAm} cnpj={empresa.cnpj} />
     </div>
   );
 }
@@ -263,6 +385,8 @@ export function CnpjClient() {
   const [empresa, setEmpresa] = useState<Empresa | null>(null);
   const [sancoes, setSancoes] = useState<EstadoSancoes>({ status: "carregando" });
   const [governoFederal, setGovernoFederal] = useState<EstadoGovernoFederal>({ status: "carregando" });
+  const [complemento, setComplemento] = useState<EstadoComplemento>({ status: "nao_consultado" });
+  const [contratosAm, setContratosAm] = useState<EstadoContratosAm>({ status: "carregando" });
   const [mensagemErro, setMensagemErro] = useState<string | undefined>();
   const abortRef = useRef<AbortController | null>(null);
 
@@ -275,6 +399,15 @@ export function CnpjClient() {
     setMensagemErro(undefined);
     setSancoes({ status: "carregando" });
     setGovernoFederal({ status: "carregando" });
+    setComplemento({ status: "nao_consultado" });
+    setContratosAm({ status: "carregando" });
+
+    // A varredura de contratos do AM é a consulta mais lenta — começa junto com o cadastro.
+    void buscarContratosAm(cnpj, { signal: controller.signal }).then((r) => {
+      if (controller.signal.aborted) return;
+      if (r.status === "sucesso") setContratosAm(r);
+      else if (r.status === "erro_servidor") setContratosAm({ status: "erro", mensagem: r.mensagem });
+    });
 
     // Sanções e governo federal em paralelo com o cadastro: só aparecem
     // dentro do card da empresa, mas não precisam esperar o cadastro responder.
@@ -303,6 +436,21 @@ export function CnpjClient() {
     if (resultado.status === "sucesso") {
       setEmpresa(resultado.empresa);
       setStatus("sucesso");
+
+      // Depois do cadastro, não em paralelo: é o cadastro (UF e e-mail) que
+      // diz se vale gastar uma consulta do limite apertado da CNPJá.
+      if (precisaComplemento(resultado.empresa)) {
+        setComplemento({ status: "carregando" });
+        void buscarComplementoCnpj(cnpj, { signal: controller.signal }).then((r) => {
+          if (controller.signal.aborted) return;
+          if (r.status === "sucesso") setComplemento({ status: "sucesso", complemento: r.complemento });
+          else if (r.status === "nao_encontrado") {
+            setComplemento({ status: "sucesso", complemento: { suframa: [], emails: [] } });
+          } else if (r.status === "limite" || r.status === "erro_servidor") {
+            setComplemento({ status: "indisponivel", mensagem: r.mensagem });
+          }
+        });
+      }
     } else if (resultado.status === "invalido") {
       setStatus("invalido");
       setMensagemErro(resultado.mensagem);
@@ -398,7 +546,13 @@ export function CnpjClient() {
       )}
 
       {status === "sucesso" && empresa && (
-        <EmpresaCard empresa={empresa} sancoes={sancoes} governoFederal={governoFederal} />
+        <EmpresaCard
+          empresa={empresa}
+          sancoes={sancoes}
+          governoFederal={governoFederal}
+          complemento={complemento}
+          contratosAm={contratosAm}
+        />
       )}
     </div>
   );

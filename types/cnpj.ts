@@ -18,6 +18,38 @@ export interface OpcaoRegime {
   dataExclusao?: string;
 }
 
+export interface IncentivoSuframa {
+  /** Ex.: "ICMS", "IPI". */
+  tributo: string;
+  /** Ex.: "Isenção". */
+  beneficio?: string;
+  /** Ex.: "Industrialização e Comercialização". */
+  finalidade?: string;
+  /** Ex.: "Convênio ICMS n° 65 de 1988". */
+  fundamento?: string;
+}
+
+export interface InscricaoSuframa {
+  numero: string;
+  /** Ex.: "Ativa". */
+  situacao?: string;
+  /** Datas em AAAA-MM-DD. */
+  desde?: string;
+  incentivos: IncentivoSuframa[];
+}
+
+/**
+ * O que a CNPJá acrescenta ao cadastro da BrasilAPI (ver
+ * lib/server/cnpja-client.ts): inscrição SUFRAMA e e-mail corporativo.
+ */
+export interface ComplementoCnpj {
+  suframa: InscricaoSuframa[];
+  /** Só e-mails corporativos — os pessoais (ex.: do dono de um MEI) ficam de fora. */
+  emails: string[];
+  /** Quando a CNPJá atualizou esses dados pela última vez (ISO 8601) — pode ter até 45 dias. */
+  atualizadoEm?: string;
+}
+
 export interface Empresa {
   cnpj: string;
   razaoSocial: string;
