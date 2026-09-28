@@ -88,6 +88,15 @@ export function mascararCnpj(valor: string): string {
   return `${c.slice(0, 2)}.${c.slice(2, 5)}.${c.slice(5, 8)}/${c.slice(8, 12)}-${c.slice(12)}`;
 }
 
+/** Máscara de CPF aplicada enquanto o usuário digita (aceita colar com ou sem pontuação). */
+export function mascararCpf(valor: string): string {
+  const c = valor.replace(/\D/g, "").slice(0, 11);
+  if (c.length <= 3) return c;
+  if (c.length <= 6) return `${c.slice(0, 3)}.${c.slice(3)}`;
+  if (c.length <= 9) return `${c.slice(0, 3)}.${c.slice(3, 6)}.${c.slice(6)}`;
+  return `${c.slice(0, 3)}.${c.slice(3, 6)}.${c.slice(6, 9)}-${c.slice(9)}`;
+}
+
 /** "9221269182" → "(92) 2126-9182"; "92991234567" → "(92) 99123-4567". Outros formatos voltam como vieram. */
 export function formatarTelefone(telefone: string | undefined): string | undefined {
   if (!telefone) return undefined;

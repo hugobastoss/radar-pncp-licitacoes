@@ -27,7 +27,7 @@ function capitalizar(texto: string): string {
   return minusculo.charAt(0).toUpperCase() + minusculo.slice(1);
 }
 
-function Linha({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
+export function Linha({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
   return (
     <p className="text-xs text-ink-600 dark:text-ink-300">
       <span className="font-medium text-ink-700 dark:text-ink-200">{rotulo}: </span>

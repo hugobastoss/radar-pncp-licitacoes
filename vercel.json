@@ -13,6 +13,9 @@
     },
     "app/api/am/empenhos/route.ts": {
       "regions": ["gru1"]
+    },
+    "app/api/cpf/route.ts": {
+      "regions": ["gru1"]
     }
   }
 }

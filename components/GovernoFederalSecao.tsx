@@ -97,7 +97,8 @@ function Pagamentos({ dados }: { dados: NonNullable<DadosGovernoFederal["pagamen
   );
 }
 
-function ItemContrato({ contrato: c }: { contrato: ContratoFederal }) {
+/** Também usado na consulta de CPF (CpfClient). */
+export function ItemContrato({ contrato: c }: { contrato: ContratoFederal }) {
   const valor = c.valorFinal ?? c.valorInicial;
   return (
     <li className="rounded-lg border border-ink-200 p-3 dark:border-ink-700">

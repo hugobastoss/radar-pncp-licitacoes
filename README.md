@@ -13,6 +13,7 @@ Pesquisa rápida de licitações e contratações públicas brasileiras, com dad
 - Pesquisas rápidas pré-configuradas para categorias comuns (medicamentos, hospitalar, EPI, vacinas, etc.)
 - Consulta de CNPJ com cadastro da Receita Federal, sanções (CEIS/CNEP), relação com o governo federal (contratos e pagamentos), contratos com o Governo do Amazonas e inscrição SUFRAMA
 - Empenhos a receber do Governo do Amazonas: contratos do fornecedor e quanto de cada nota de empenho já foi liquidado e pago
+- Consulta de CPF: nome, sanções (CEIS, CNEP e CEAF), pessoa politicamente exposta (PEP), vínculo de servidor federal e contratos federais
 - Consulta de sanções (CEIS/CNEP) com abrangência, fundamentação legal e se a sanção impede contratar
 - Consulta de produtos para saúde na ANVISA (registro, fabricante, modelos, códigos de barras UDI e certificados de boas práticas) e da nomenclatura técnica
 - Consulta de CEP e NCM
@@ -32,7 +33,7 @@ Todas as chamadas acontecem no servidor (rotas em `app/api/*`) — o navegador n
 | [BrasilAPI](https://brasilapi.com.br) — CNPJ | Cadastro da empresa (Receita Federal) | Nenhuma |
 | [Minha Receita](https://minhareceita.org) | Reserva da BrasilAPI no CNPJ (mesmo formato de resposta) | Nenhuma |
 | [CNPJá](https://cnpja.com/api/open) — API aberta | Inscrição SUFRAMA (situação e incentivos fiscais) e e-mail corporativo | Nenhuma (5 consultas/min por IP) |
-| [Portal da Transparência (CGU)](https://portaldatransparencia.gov.br/api-de-dados) | Sanções CEIS/CNEP; resumo, contratos e pagamentos federais da empresa | Chave gratuita |
+| [Portal da Transparência (CGU)](https://portaldatransparencia.gov.br/api-de-dados) | Sanções CEIS/CNEP; resumo, contratos e pagamentos federais da empresa; consulta de CPF (nome, sanções, CEAF, PEP, servidor, contratos) | Chave gratuita |
 | [SGC — Sistema de Gestão de Contratos (SEFAZ-AM)](https://www.transparencia.am.gov.br/dados-abertos-2/) | Contratos da empresa com o Governo do Amazonas e as notas de empenho de cada contrato | Nenhuma |
 | [Portal da Transparência Fiscal (SEFAZ-AM)](https://sistemas.sefaz.am.gov.br/transpprd/mnt/despesa/execDespAno.do?method=Pesquisar&filter=&anoexercicio=2026&grupo=1&consulta=1&mes=00&detNatureza=N) — sem API, lido do HTML | Empenhado, liquidado e pago de cada nota de empenho (empenhos a receber) | Nenhuma |
 | [BrasilAPI](https://brasilapi.com.br) — CEP | Consulta de CEP | Nenhuma |
@@ -78,7 +79,7 @@ Só as consultas à CGU e à ANVISA precisam delas — o resto funciona sem nenh
 
 | Variável | Obrigatória? | Descrição |
 | --- | --- | --- |
-| `PORTAL_TRANSPARENCIA_API_KEY` | Não (sem ela, `/sancoes` e as seções de sanções e governo federal do `/cnpj` mostram "não configurado") | Chave gratuita, cadastro em [portaldatransparencia.gov.br/api-de-dados](https://portaldatransparencia.gov.br/api-de-dados) |
+| `PORTAL_TRANSPARENCIA_API_KEY` | Não (sem ela, `/sancoes`, `/cpf` e as seções de sanções e governo federal do `/cnpj` mostram "não configurado") | Chave gratuita, cadastro em [portaldatransparencia.gov.br/api-de-dados](https://portaldatransparencia.gov.br/api-de-dados) |
 | `ANVISA_CLIENT_ID` / `ANVISA_CLIENT_SECRET` | Não (sem elas, `/produtos-saude` e `/nome-tecnico` mostram "não configurado") | Registre um app em [api.anvisa.gov.br](https://api.anvisa.gov.br) |
 
 Crie um `.env.local` na raiz do projeto (já está no `.gitignore`) com:
@@ -102,7 +103,7 @@ ANVISA_CLIENT_SECRET=seu-client-secret
 
 O projeto está hospedado na [Vercel](https://vercel.com) e faz deploy automático a partir da branch `main`.
 
-As funções rodam em Washington (`iad1`, o padrão da Vercel), exceto as rotas que consultam o Portal da Transparência (`/api/sancoes` e `/api/governo-federal`) e a SEFAZ-AM (`/api/am/contratos` e `/api/am/empenhos`), que rodam em São Paulo (`gru1`). A CGU recusa chamadas vindas dos servidores da Vercel nos EUA. As consultas à SEFAZ-AM fazem cerca de mil chamadas por CNPJ, e ficam mais rápidas perto do Brasil. A configuração fica em [`vercel.json`](vercel.json).
+As funções rodam em Washington (`iad1`, o padrão da Vercel), exceto as rotas que consultam o Portal da Transparência (`/api/sancoes`, `/api/governo-federal` e `/api/cpf`) e a SEFAZ-AM (`/api/am/contratos` e `/api/am/empenhos`), que rodam em São Paulo (`gru1`). A CGU recusa chamadas vindas dos servidores da Vercel nos EUA. As consultas à SEFAZ-AM fazem cerca de mil chamadas por CNPJ, e ficam mais rápidas perto do Brasil. A configuração fica em [`vercel.json`](vercel.json).
 
 ## Licença
 

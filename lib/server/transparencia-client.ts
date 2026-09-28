@@ -2,10 +2,15 @@ import { descreverFalha } from "@/lib/server/erros";
 import type {
   ContratoFederal,
   DadosGovernoFederal,
+  DadosPessoaFisica,
   PagamentosFederais,
+  PessoaExposta,
+  PunicaoCeaf,
   ResultadoSancoes,
+  ResumoPessoaFisica,
   ResumoPessoaJuridica,
   Sancao,
+  VinculoServidor,
 } from "@/types/transparencia";
 
 /**
@@ -187,15 +192,21 @@ function mapearSancao(raw: SancaoBruta, tipo: "CEIS" | "CNEP"): Sancao {
   };
 }
 
-async function buscarLista(caminho: "ceis" | "cnep", cnpj: string, chave: string, signal?: AbortSignal): Promise<Sancao[]> {
-  const corpo = await requisitar<SancaoBruta[]>(`${caminho}?codigoSancionado=${cnpj}&pagina=1`, chave, signal);
+/** `documento` é o CNPJ ou o CPF do sancionado — o CEIS e o CNEP aceitam os dois no mesmo parâmetro. */
+async function buscarLista(
+  caminho: "ceis" | "cnep",
+  documento: string,
+  chave: string,
+  signal?: AbortSignal,
+): Promise<Sancao[]> {
+  const corpo = await requisitar<SancaoBruta[]>(`${caminho}?codigoSancionado=${documento}&pagina=1`, chave, signal);
   return Array.isArray(corpo) ? corpo.map((item) => mapearSancao(item, caminho.toUpperCase() as "CEIS" | "CNEP")) : [];
 }
 
-export async function buscarSancoes(cnpj: string, chave: string, signal?: AbortSignal): Promise<ResultadoSancoes> {
+export async function buscarSancoes(documento: string, chave: string, signal?: AbortSignal): Promise<ResultadoSancoes> {
   const [ceis, cnep] = await Promise.all([
-    buscarLista("ceis", cnpj, chave, signal),
-    buscarLista("cnep", cnpj, chave, signal),
+    buscarLista("ceis", documento, chave, signal),
+    buscarLista("cnep", documento, chave, signal),
   ]);
   return { ceis, cnep };
 }
@@ -279,15 +290,16 @@ function hojeBrasilia(): string {
 }
 
 async function buscarContratos(
-  cnpj: string,
+  documento: string,
   chave: string,
   signal?: AbortSignal,
+  cacheSegundos = CACHE_GOVERNO_FEDERAL_SEGUNDOS,
 ): Promise<{ itens: ContratoFederal[]; completo: boolean }> {
   const { itens, completo } = await buscarPaginas<ContratoBruto>(
-    (pagina) => `contratos/cpf-cnpj?cpfCnpj=${cnpj}&pagina=${pagina}`,
+    (pagina) => `contratos/cpf-cnpj?cpfCnpj=${documento}&pagina=${pagina}`,
     chave,
     signal,
-    CACHE_GOVERNO_FEDERAL_SEGUNDOS,
+    cacheSegundos,
   );
   const hoje = hojeBrasilia();
   const contratos = itens
@@ -363,4 +375,177 @@ export async function buscarDadosGovernoFederal(
   ]);
 
   return { resumo, contratos, pagamentos };
+}
+
+// ---------------------------------------------------------------------------
+// Pessoa física (consulta de CPF)
+// ---------------------------------------------------------------------------
+//
+// Nada daqui usa o cache do Next: ele guarda a resposta com a URL (que tem o
+// CPF) como chave, fora da memória da função. Cada consulta de CPF vai direto
+// na CGU e não fica gravada em lugar nenhum.
+
+type PessoaFisicaBruta = { cpf?: string; nome?: string } & Record<string, unknown>;
+
+function mapearResumoPessoaFisica(raw: PessoaFisicaBruta | undefined): ResumoPessoaFisica {
+  const sim = (...campos: string[]) => campos.some((c) => raw?.[c] === true);
+  return {
+    semRegistro: !raw,
+    servidor: sim("servidor"),
+    servidorInativo: sim("servidorInativo"),
+    pensionista: sim("pensionistaOuRepresentanteLegal"),
+    instituidorPensao: sim("instituidorPensao"),
+    contratado: sim("contratado"),
+    participanteLicitacao: sim("participanteLicitacao"),
+    // `favorecidoCPGF`/`CPDC`/`CPCC` = recebeu pagamento feito com cartão do governo — também é pagamento recebido.
+    favorecidoDespesas: sim("favorecidoDespesas", "favorecidoCPGF", "favorecidoCPDC", "favorecidoCPCC"),
+    beneficiarioDiarias: sim("beneficiarioDiarias"),
+    permissionario: sim("permissionario"),
+    portadorCartao: sim("portadorCPGF", "portadorCPDC"),
+    sancionadoCEIS: sim("sancionadoCEIS"),
+    sancionadoCNEP: sim("sancionadoCNEP"),
+    sancionadoCEAF: sim("sancionadoCEAF"),
+  };
+}
+
+interface CeafBruto {
+  id: number;
+  dataPublicacao?: string;
+  tipoPunicao?: { descricao?: string };
+  punicao?: { portaria?: string; processo?: string };
+  orgaoLotacao?: { sigla?: string; nome?: string };
+  ufLotacaoPessoa?: { uf?: { sigla?: string } };
+  cargoEfetivo?: string;
+  cargoComissao?: string;
+  fundamentacao?: { codigo?: string; descricao?: string }[];
+}
+
+async function buscarCeaf(cpf: string, chave: string, signal?: AbortSignal): Promise<PunicaoCeaf[]> {
+  const corpo = await requisitar<CeafBruto[]>(`ceaf?cpfSancionado=${cpf}&pagina=1`, chave, signal);
+  return (Array.isArray(corpo) ? corpo : []).map((raw) => ({
+    id: raw.id,
+    tipo: valor(raw.tipoPunicao?.descricao) ?? "Punição não informada",
+    dataPublicacao: valor(raw.dataPublicacao),
+    orgao: [valor(raw.orgaoLotacao?.sigla), valor(raw.orgaoLotacao?.nome)].filter(Boolean).join(" — ") || undefined,
+    uf: valor(raw.ufLotacaoPessoa?.uf?.sigla),
+    cargoEfetivo: valor(raw.cargoEfetivo),
+    cargoComissao: valor(raw.cargoComissao),
+    portaria: valor(raw.punicao?.portaria),
+    processo: valor(raw.punicao?.processo),
+    fundamentacao: [
+      ...new Set(
+        (raw.fundamentacao ?? [])
+          .map((f) => valor(f.descricao) ?? valor(f.codigo))
+          .filter((f): f is string => Boolean(f)),
+      ),
+    ],
+  }));
+}
+
+// Campos em snake_case, diferente do resto da API.
+interface PepBruto {
+  descricao_funcao?: string;
+  sigla_funcao?: string;
+  nivel_funcao?: string;
+  nome_orgao?: string;
+  dt_inicio_exercicio?: string;
+  dt_fim_exercicio?: string;
+  dt_fim_carencia?: string;
+}
+
+async function buscarPeps(cpf: string, chave: string, signal?: AbortSignal): Promise<PessoaExposta[]> {
+  const corpo = await requisitar<PepBruto[]>(`peps?cpf=${cpf}&pagina=1`, chave, signal);
+  return (Array.isArray(corpo) ? corpo : []).map((raw) => ({
+    funcao: valor(raw.descricao_funcao) ?? valor(raw.sigla_funcao) ?? "Função não informada",
+    nivel: valor(raw.nivel_funcao),
+    orgao: valor(raw.nome_orgao),
+    inicioExercicio: valor(raw.dt_inicio_exercicio),
+    fimExercicio: valor(raw.dt_fim_exercicio),
+    fimCarencia: valor(raw.dt_fim_carencia),
+  }));
+}
+
+interface OrgaoServidorBruto {
+  sigla?: string;
+  nome?: string;
+}
+
+interface ServidorBruto {
+  servidor?: {
+    tipoServidor?: string;
+    situacao?: string;
+    orgaoServidorLotacao?: OrgaoServidorBruto;
+    orgaoServidorExercicio?: OrgaoServidorBruto;
+    estadoExercicio?: { sigla?: string };
+    funcao?: { descricaoFuncaoCargo?: string };
+  };
+  fichasCargoEfetivo?: { cargo?: string }[];
+  fichasMilitar?: { cargo?: string }[];
+  fichasAposentadoria?: { cargo?: string }[];
+}
+
+function nomeOrgao(orgao: OrgaoServidorBruto | undefined): string | undefined {
+  return [valor(orgao?.sigla), valor(orgao?.nome)].filter(Boolean).join(" — ") || undefined;
+}
+
+async function buscarVinculos(cpf: string, chave: string, signal?: AbortSignal): Promise<VinculoServidor[]> {
+  const corpo = await requisitar<ServidorBruto[]>(`servidores?cpf=${cpf}&pagina=1`, chave, signal);
+  return (Array.isArray(corpo) ? corpo : []).map((raw) => {
+    const lotacao = nomeOrgao(raw.servidor?.orgaoServidorLotacao);
+    const exercicio = nomeOrgao(raw.servidor?.orgaoServidorExercicio);
+    return {
+      tipo: valor(raw.servidor?.tipoServidor),
+      situacao: valor(raw.servidor?.situacao),
+      cargo: [raw.fichasCargoEfetivo, raw.fichasMilitar, raw.fichasAposentadoria]
+        .flatMap((fichas) => fichas ?? [])
+        .map((f) => valor(f.cargo))
+        .find(Boolean),
+      funcao: valor(raw.servidor?.funcao?.descricaoFuncaoCargo),
+      orgaoLotacao: lotacao,
+      orgaoExercicio: exercicio !== lotacao ? exercicio : undefined,
+      uf: valor(raw.servidor?.estadoExercicio?.sigla),
+    };
+  });
+}
+
+/**
+ * Nome e relação de um CPF com o governo federal. O resumo (`pessoa-fisica`)
+ * é a base: se ele falha, a consulta toda falha. Sanções, CEAF e PEP são
+ * consultados sempre (a lista de PEPs não tem indicador no resumo, e sanção
+ * é o que mais importa numa contratação); vínculos de servidor e contratos,
+ * só quando o resumo diz que existem.
+ */
+export async function buscarPessoaFisica(cpf: string, chave: string, signal?: AbortSignal): Promise<DadosPessoaFisica> {
+  const registrarFalha = (parte: string) => (erro: unknown) => {
+    console.error(`[cpf] ${parte}: ${descreverFalha(erro)}`);
+    return null;
+  };
+
+  const [bruto, sancoes, ceaf, peps] = await Promise.all([
+    requisitar<PessoaFisicaBruta>(`pessoa-fisica?cpf=${cpf}`, chave, signal),
+    buscarSancoes(cpf, chave, signal).catch(registrarFalha("sancoes")),
+    buscarCeaf(cpf, chave, signal).catch(registrarFalha("ceaf")),
+    buscarPeps(cpf, chave, signal).catch(registrarFalha("peps")),
+  ]);
+  const resumo = mapearResumoPessoaFisica(bruto);
+
+  const [vinculos, contratos] = await Promise.all([
+    resumo.servidor || resumo.servidorInativo || resumo.pensionista || resumo.instituidorPensao
+      ? buscarVinculos(cpf, chave, signal).catch(registrarFalha("servidores"))
+      : [],
+    resumo.contratado
+      ? buscarContratos(cpf, chave, signal, 0).catch(registrarFalha("contratos"))
+      : { itens: [], completo: true },
+  ]);
+
+  return {
+    nome: typeof bruto?.nome === "string" ? valor(bruto.nome) : undefined,
+    cpfMascarado: typeof bruto?.cpf === "string" ? valor(bruto.cpf) : undefined,
+    resumo,
+    sancoes,
+    ceaf,
+    peps,
+    vinculos,
+    contratos,
+  };
 }

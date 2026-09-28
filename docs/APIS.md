@@ -184,7 +184,7 @@ com o código — buscar `search=3004.90.99` devolve vazio. Por isso a rota
 detecta se o termo parece um código (`/v1/{codigo}`, busca exata) ou uma
 palavra-chave (`/v1?search=`, busca por texto) e usa o endpoint certo.
 
-## Portal da Transparência — sanções e governo federal (`/sancoes`, `/cnpj`)
+## Portal da Transparência — sanções, governo federal e CPF (`/sancoes`, `/cnpj`, `/cpf`)
 
 | | |
 |---|---|
@@ -194,7 +194,7 @@ palavra-chave (`/v1?search=`, busca por texto) e usa o endpoint certo.
 | **Arquivo** | [`lib/server/transparencia-client.ts`](../lib/server/transparencia-client.ts) |
 | **Documentação oficial** | Especificação em `api.portaldatransparencia.gov.br/v3/api-docs` (só abre com `User-Agent` de navegador) |
 
-Duas rotas, as duas em São Paulo (ver abaixo):
+Três rotas, todas em São Paulo (ver abaixo):
 
 - **`/api/sancoes`** — CEIS (empresas inidôneas/suspensas) e CNEP (empresas
   punidas, Lei Anticorrupção), com todos os campos úteis: abrangência ("onde
@@ -211,6 +211,54 @@ Duas rotas, as duas em São Paulo (ver abaixo):
   Contratos e pagamentos só são consultados quando o resumo diz que existem,
   e ficam 6 h no cache do Next. Só Poder Executivo federal — não inclui
   estados e municípios.
+- **`/api/cpf`** (POST) — consulta de pessoa física, detalhada abaixo.
+
+### Consulta de CPF (`/api/cpf`)
+
+Não existe API gratuita com o cadastro de um CPF na Receita (situação,
+nascimento, endereço) — a consulta oficial exige data de nascimento e
+captcha, e as APIs que trazem isso são pagas (Serpro e revendedores). O que
+a CGU publica de graça, com a mesma chave:
+
+| Endpoint | Parâmetro | Para quê |
+|---|---|---|
+| `pessoa-fisica` | `cpf` | Nome e ~30 indicadores de sim/não da relação da pessoa com o governo federal |
+| `ceis`, `cnep` | `codigoSancionado` | Sanções — os mesmos endpoints da consulta de CNPJ aceitam CPF |
+| `ceaf` | `cpfSancionado` | Expulsos da administração federal (demissão, destituição, cassação de aposentadoria) |
+| `peps` | `cpf` | Pessoas politicamente expostas — campos em `snake_case`, diferente do resto da API |
+| `servidores` | `cpf` | Vínculo de servidor, militar, aposentado ou pensionista (só quando o resumo indica) |
+| `contratos/cpf-cnpj` | `cpfCnpj` | Contratos federais (só quando o resumo indica) |
+
+**Particularidades (testado em 2026-09-28):**
+- `pessoa-fisica` aceita o CPF com ou sem pontuação. CPF sem registro ou
+  inválido volta **200 com corpo vazio**, igual ao `pessoa-juridica`.
+- A resposta traz o **CPF já mascarado** (`***.444.777-**`) e o **nome
+  completo**, em maiúsculas.
+- A lista de PEPs **não tem indicador** no `pessoa-fisica` — por isso é
+  consultada sempre, junto com CEIS, CNEP e CEAF (4 chamadas em paralelo
+  com o resumo, ~0,8 s no total).
+- O resumo também diz se a pessoa recebeu **benefícios sociais** (Bolsa
+  Família, BPC, auxílio emergencial, seguro-defeso…). O app **descarta**
+  esses campos: não têm a ver com contratações e são o dado mais sensível
+  da resposta.
+- `favorecidoCPGF`/`CPDC`/`CPCC` quer dizer que a pessoa **recebeu**
+  pagamento feito com cartão do governo (entra como "recebeu pagamentos");
+  `portadorCPGF`/`CPDC`, que ela **tem** o cartão.
+- Os mapeamentos de CEAF, PEP e servidor foram feitos pela especificação:
+  nos testes, nenhum CPF usado tinha esses registros.
+
+**Cuidados de LGPD na rota:**
+- É **POST com o CPF no corpo** — num GET o CPF ficaria na URL, e a URL vai
+  pros logs da Vercel e pro histórico do navegador. A tela também não põe o
+  CPF no endereço.
+- **Nada é guardado:** as chamadas não usam o cache do Next (que grava a
+  resposta usando a URL, com o CPF, como chave), a resposta sai com
+  `Cache-Control: no-store`, e os logs de erro só têm o endpoint e o status.
+- **Limite de 10 consultas por minuto por IP**, na memória da função. Sem
+  isso, a rota viraria um jeito de descobrir nomes de CPFs em massa com a
+  cota da nossa chave (400 chamadas/min, e cada CPF gasta de 5 a 16). Como
+  cada instância da função tem o seu contador, o limite segura uso
+  automatizado, não um ataque distribuído.
 
 **Particularidades descobertas testando com uma chave real:**
 - A API **migrou de domínio**: `portaldatransparencia.gov.br` só devolve um
@@ -226,7 +274,8 @@ Duas rotas, as duas em São Paulo (ver abaixo):
 - **Recusa chamadas vindas dos servidores da Vercel nos EUA** (região
   `iad1`, a padrão): em produção a rota falhava em todas as chamadas,
   enquanto localmente funcionava. Por isso só esta rota roda em São Paulo
-  (`gru1`), configurado em [`vercel.json`](../vercel.json). O resto do
+  (`gru1`), configurado em [`vercel.json`](../vercel.json) — vale pras três
+  rotas da CGU (`/api/sancoes`, `/api/governo-federal` e `/api/cpf`). O resto do
   projeto continua na região padrão (`iad1`): mudar tudo pra `gru1` não
   ajudou o PNCP, que em 2026-09-28 falhou a partir da Vercel nas duas regiões
   (`gru1` 11 de 11, `iad1` 5 de 5 logo depois) enquanto respondia normalmente

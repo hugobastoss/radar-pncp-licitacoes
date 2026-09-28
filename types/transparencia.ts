@@ -101,6 +101,89 @@ export interface PagamentosFederais {
   completo: boolean;
 }
 
+/**
+ * O que a pessoa tem de relação com o governo federal, pelo `pessoa-fisica`
+ * da CGU. Benefícios sociais (Bolsa Família, BPC, auxílios…), que a CGU
+ * também informa, ficam de fora de propósito — não têm a ver com
+ * contratações e são o dado mais sensível da resposta.
+ */
+export interface ResumoPessoaFisica {
+  /** A CGU não tem registro do CPF — todos os campos abaixo vêm `false`. */
+  semRegistro: boolean;
+  servidor: boolean;
+  servidorInativo: boolean;
+  /** Recebe pensão ou representa um pensionista. */
+  pensionista: boolean;
+  instituidorPensao: boolean;
+  contratado: boolean;
+  participanteLicitacao: boolean;
+  favorecidoDespesas: boolean;
+  beneficiarioDiarias: boolean;
+  /** Ocupa imóvel funcional da União. */
+  permissionario: boolean;
+  /** Portador de cartão de pagamento do governo federal (CPGF ou CPDC). */
+  portadorCartao: boolean;
+  sancionadoCEIS: boolean;
+  sancionadoCNEP: boolean;
+  sancionadoCEAF: boolean;
+}
+
+/** Expulsão da administração federal (CEAF): demissão, destituição, cassação de aposentadoria. */
+export interface PunicaoCeaf {
+  id: number;
+  /** Ex.: "Demissão". */
+  tipo: string;
+  /** Como vem da API, DD/MM/AAAA. */
+  dataPublicacao?: string;
+  orgao?: string;
+  uf?: string;
+  cargoEfetivo?: string;
+  cargoComissao?: string;
+  portaria?: string;
+  processo?: string;
+  fundamentacao: string[];
+}
+
+/** Registro na lista de pessoas politicamente expostas (PEP) da CGU. */
+export interface PessoaExposta {
+  funcao: string;
+  nivel?: string;
+  orgao?: string;
+  /** Como vêm da API. */
+  inicioExercicio?: string;
+  fimExercicio?: string;
+  /** Fim dos 5 anos em que a pessoa segue PEP depois de deixar a função. */
+  fimCarencia?: string;
+}
+
+/** Vínculo com o Poder Executivo federal — servidor, militar, aposentado ou pensionista. */
+export interface VinculoServidor {
+  /** Ex.: "Civil", "Militar". */
+  tipo?: string;
+  /** Ex.: "Ativo permanente", "Aposentado". */
+  situacao?: string;
+  cargo?: string;
+  funcao?: string;
+  orgaoLotacao?: string;
+  orgaoExercicio?: string;
+  uf?: string;
+}
+
+/** Consulta de CPF: cada parte é `null` quando a consulta dela falhou, e as outras continuam valendo. */
+export interface DadosPessoaFisica {
+  nome?: string;
+  /** Como a CGU devolve, já mascarado: "***.444.777-**". */
+  cpfMascarado?: string;
+  resumo: ResumoPessoaFisica;
+  sancoes: ResultadoSancoes | null;
+  ceaf: PunicaoCeaf[] | null;
+  peps: PessoaExposta[] | null;
+  /** Vem vazio sem consultar quando o resumo diz que a pessoa não é nem foi servidor. */
+  vinculos: VinculoServidor[] | null;
+  /** Vem vazio sem consultar quando o resumo diz que não há contrato. */
+  contratos: { itens: ContratoFederal[]; completo: boolean } | null;
+}
+
 export interface DadosGovernoFederal {
   /** `null` quando a consulta falhou. */
   resumo: ResumoPessoaJuridica | null;
