@@ -8,8 +8,11 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Campo } from "@/components/LicitacaoDetails";
-import { SancaoItem } from "@/components/SancoesClient";
+import { GovernoFederalSecao } from "@/components/GovernoFederalSecao";
+import type { EstadoGovernoFederal } from "@/components/GovernoFederalSecao";
+import { descreverResumoSancoes, resumirSancoes, SancaoItem } from "@/components/SancaoItem";
 import { buscarEmpresa } from "@/lib/api-cnpj";
+import { buscarDadosGovernoFederal } from "@/lib/api-governo-federal";
 import { buscarSancoes } from "@/lib/api-sancoes";
 import { validarCnpj } from "@/lib/cnpj";
 import {
@@ -20,7 +23,7 @@ import {
   formatarTelefone,
   mascararCnpj,
 } from "@/lib/formatters";
-import type { Sancao } from "@/lib/server/transparencia-client";
+import type { Sancao } from "@/types/transparencia";
 import type { Cnae, Empresa, OpcaoRegime } from "@/types/cnpj";
 
 type Status = "idle" | "carregando" | "sucesso" | "invalido" | "nao_encontrado" | "erro";
@@ -92,11 +95,14 @@ function SecaoSancoes({ sancoes }: { sancoes: EstadoSancoes }) {
               Nenhuma sanção encontrada no CEIS ou no CNEP.
             </p>
           ) : (
-            <ul className="mt-3 space-y-2">
-              {sancoes.sancoes.map((sancao) => (
-                <SancaoItem key={`${sancao.tipo}-${sancao.id}`} sancao={sancao} />
-              ))}
-            </ul>
+            <>
+              <p className="mt-2 text-sm text-ink-700 dark:text-ink-200">{descreverResumoSancoes(sancoes.sancoes)}</p>
+              <ul className="mt-3 space-y-2">
+                {sancoes.sancoes.map((sancao) => (
+                  <SancaoItem key={`${sancao.tipo}-${sancao.id}`} sancao={sancao} />
+                ))}
+              </ul>
+            </>
           )}
           <p className="mt-3 text-xs text-ink-400 dark:text-ink-500">Fonte: Portal da Transparência (CGU).</p>
         </>
@@ -105,9 +111,18 @@ function SecaoSancoes({ sancoes }: { sancoes: EstadoSancoes }) {
   );
 }
 
-function EmpresaCard({ empresa, sancoes }: { empresa: Empresa; sancoes: EstadoSancoes }) {
+function EmpresaCard({
+  empresa,
+  sancoes,
+  governoFederal,
+}: {
+  empresa: Empresa;
+  sancoes: EstadoSancoes;
+  governoFederal: EstadoGovernoFederal;
+}) {
   const ativa = empresa.situacaoCadastral?.toUpperCase() === "ATIVA";
   const telefones = empresa.telefones.map(formatarTelefone).join(" · ");
+  const resumoSancoes = sancoes.status === "sucesso" ? resumirSancoes(sancoes.sancoes) : undefined;
 
   return (
     <div className="rounded-2xl border border-ink-200 bg-white p-5 shadow-card dark:border-ink-700 dark:bg-ink-900 sm:p-6">
@@ -124,14 +139,19 @@ function EmpresaCard({ empresa, sancoes }: { empresa: Empresa; sancoes: EstadoSa
           {empresa.situacaoCadastral && (
             <Badge tone={ativa ? "success" : "danger"}>{empresa.situacaoCadastral}</Badge>
           )}
-          {sancoes.status === "sucesso" &&
-            (sancoes.sancoes.length === 0 ? (
+          {resumoSancoes &&
+            (resumoSancoes.total === 0 ? (
               <Badge tone="success" icon={<ShieldCheck className="h-3.5 w-3.5" aria-hidden />}>
                 Sem sanções
               </Badge>
-            ) : (
+            ) : resumoSancoes.impeditivas > 0 ? (
+              // "Impede contratar" sem dizer onde: a abrangência (só num órgão, numa esfera, em todas) fica em cada sanção.
               <Badge tone="danger" icon={<ShieldAlert className="h-3.5 w-3.5" aria-hidden />}>
-                {sancoes.sancoes.length === 1 ? "1 sanção" : `${sancoes.sancoes.length} sanções`}
+                Sanção que impede contratar
+              </Badge>
+            ) : (
+              <Badge tone="warning" icon={<ShieldAlert className="h-3.5 w-3.5" aria-hidden />}>
+                Sanção sem impedimento
               </Badge>
             ))}
         </div>
@@ -219,6 +239,8 @@ function EmpresaCard({ empresa, sancoes }: { empresa: Empresa; sancoes: EstadoSa
       )}
 
       <SecaoSancoes sancoes={sancoes} />
+
+      <GovernoFederalSecao estado={governoFederal} />
     </div>
   );
 }
@@ -240,6 +262,7 @@ export function CnpjClient() {
   const [status, setStatus] = useState<Status>("idle");
   const [empresa, setEmpresa] = useState<Empresa | null>(null);
   const [sancoes, setSancoes] = useState<EstadoSancoes>({ status: "carregando" });
+  const [governoFederal, setGovernoFederal] = useState<EstadoGovernoFederal>({ status: "carregando" });
   const [mensagemErro, setMensagemErro] = useState<string | undefined>();
   const abortRef = useRef<AbortController | null>(null);
 
@@ -251,9 +274,16 @@ export function CnpjClient() {
     setStatus("carregando");
     setMensagemErro(undefined);
     setSancoes({ status: "carregando" });
+    setGovernoFederal({ status: "carregando" });
 
-    // Sanções em paralelo com o cadastro: só aparecem dentro do card da
-    // empresa, mas não precisam esperar o cadastro responder.
+    // Sanções e governo federal em paralelo com o cadastro: só aparecem
+    // dentro do card da empresa, mas não precisam esperar o cadastro responder.
+    void buscarDadosGovernoFederal(cnpj, { signal: controller.signal }).then((resultado) => {
+      if (controller.signal.aborted) return;
+      if (resultado.status === "sucesso") setGovernoFederal(resultado);
+      else if (resultado.status === "nao_configurado") setGovernoFederal({ status: "nao_configurado" });
+      else if (resultado.status === "erro_servidor") setGovernoFederal({ status: "erro", mensagem: resultado.mensagem });
+    });
     void buscarSancoes(cnpj, { signal: controller.signal }).then((resultado) => {
       if (controller.signal.aborted) return;
       if (resultado.status === "sucesso") {
@@ -315,8 +345,8 @@ export function CnpjClient() {
       <div className="border-b border-ink-200 pb-4 dark:border-ink-700">
         <h1 className="text-base font-semibold text-ink-900 dark:text-ink-50">Consultar CNPJ</h1>
         <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">
-          Consulte dados cadastrais de empresas na base da Receita Federal, junto com as sanções do CEIS e do
-          CNEP.
+          Consulte dados cadastrais de empresas na base da Receita Federal, com as sanções (CEIS/CNEP) e a relação
+          com o governo federal — contratos e pagamentos.
         </p>
       </div>
 
@@ -367,7 +397,9 @@ export function CnpjClient() {
         </p>
       )}
 
-      {status === "sucesso" && empresa && <EmpresaCard empresa={empresa} sancoes={sancoes} />}
+      {status === "sucesso" && empresa && (
+        <EmpresaCard empresa={empresa} sancoes={sancoes} governoFederal={governoFederal} />
+      )}
     </div>
   );
 }

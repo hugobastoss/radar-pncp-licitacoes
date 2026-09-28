@@ -1,25 +1,25 @@
 import { validarCnpj } from "@/lib/cnpj";
-import type { Sancao } from "@/types/transparencia";
+import type { DadosGovernoFederal } from "@/types/transparencia";
 
 /**
- * Camada de serviço pra consulta de sanções (CEIS/CNEP) — mesmo padrão de
- * lib/api.ts e lib/api-cnpj.ts.
+ * Camada de serviço pra relação da empresa com o governo federal (Portal da
+ * Transparência) — mesmo padrão de lib/api-sancoes.ts.
  */
 
-const TIMEOUT_MS = 10000;
+// Fornecedor grande pode precisar de até 20 páginas da CGU (contratos + pagamentos).
+const TIMEOUT_MS = 20000;
 
-export type ResultadoBuscaSancoes =
-  | { status: "sucesso"; ceis: Sancao[]; cnep: Sancao[] }
+export type ResultadoGovernoFederal =
+  | ({ status: "sucesso" } & DadosGovernoFederal)
   | { status: "invalido"; mensagem: string }
   | { status: "nao_configurado" }
   | { status: "erro_servidor"; mensagem?: string }
   | { status: "cancelado" };
 
-export async function buscarSancoes(
+export async function buscarDadosGovernoFederal(
   cnpj: string,
   options?: { signal?: AbortSignal },
-): Promise<ResultadoBuscaSancoes> {
-  // Mesma validação da rota — responde na hora, sem ida ao servidor.
+): Promise<ResultadoGovernoFederal> {
   const validacao = validarCnpj(cnpj);
   if (!validacao.valido) return { status: "invalido", mensagem: validacao.mensagem };
 
@@ -29,7 +29,7 @@ export async function buscarSancoes(
   options?.signal?.addEventListener("abort", onAbortExterno);
 
   try {
-    const resposta = await fetch(`/api/sancoes?cnpj=${validacao.cnpj}`, {
+    const resposta = await fetch(`/api/governo-federal?cnpj=${validacao.cnpj}`, {
       signal: controller.signal,
       headers: { Accept: "application/json" },
     });
@@ -40,16 +40,14 @@ export async function buscarSancoes(
       const corpo = (await resposta.json().catch(() => ({}))) as { erro?: string };
       return { status: "invalido", mensagem: corpo.erro ?? "CNPJ inválido." };
     }
-    if (resposta.status === 501) {
-      return { status: "nao_configurado" };
-    }
+    if (resposta.status === 501) return { status: "nao_configurado" };
     if (!resposta.ok) {
       const corpo = (await resposta.json().catch(() => ({}))) as { erro?: string };
       return { status: "erro_servidor", mensagem: corpo.erro };
     }
 
-    const corpo = (await resposta.json()) as { ceis: Sancao[]; cnep: Sancao[] };
-    return { status: "sucesso", ceis: corpo.ceis, cnep: corpo.cnep };
+    const corpo = (await resposta.json()) as DadosGovernoFederal;
+    return { status: "sucesso", ...corpo };
   } catch {
     if (options?.signal?.aborted) return { status: "cancelado" };
     return { status: "erro_servidor" };

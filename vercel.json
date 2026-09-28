@@ -4,6 +4,9 @@
   "functions": {
     "app/api/sancoes/route.ts": {
       "regions": ["gru1"]
+    },
+    "app/api/governo-federal/route.ts": {
+      "regions": ["gru1"]
     }
   }
 }

@@ -5,29 +5,12 @@ import type { FormEvent } from "react";
 import { Building2, Loader2, Search, ShieldAlert, ShieldCheck } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
+import { descreverResumoSancoes, SancaoItem } from "@/components/SancaoItem";
 import { buscarSancoes } from "@/lib/api-sancoes";
 import { mascararCnpj } from "@/lib/formatters";
-import type { Sancao } from "@/lib/server/transparencia-client";
+import type { Sancao } from "@/types/transparencia";
 
 type Status = "idle" | "carregando" | "sucesso" | "invalido" | "nao_configurado" | "erro";
-
-/** Também usado no resultado da consulta de CNPJ (components/CnpjClient.tsx). */
-export function SancaoItem({ sancao }: { sancao: Sancao }) {
-  return (
-    <li className="rounded-lg border border-danger-200 bg-danger-50 p-3 dark:border-danger-900 dark:bg-danger-900/30">
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge tone="danger">{sancao.tipo}</Badge>
-        <span className="text-sm font-medium text-ink-900 dark:text-ink-50">{sancao.tipoSancao}</span>
-      </div>
-      <p className="mt-1.5 text-xs text-ink-600 dark:text-ink-300">
-        {sancao.orgaoSancionador && <>Órgão: {sancao.orgaoSancionador}. </>}
-        {sancao.dataInicioSancao && <>Início: {sancao.dataInicioSancao}</>}
-        {sancao.dataFimSancao && <> · Fim: {sancao.dataFimSancao}</>}
-      </p>
-    </li>
-  );
-}
 
 export function SancoesClient() {
   const [valor, setValor] = useState("");
@@ -137,11 +120,16 @@ export function SancoesClient() {
               Nenhuma sanção encontrada no CEIS ou no CNEP.
             </p>
           ) : (
-            <ul className="mt-3 space-y-2">
-              {todas.map((sancao) => (
-                <SancaoItem key={`${sancao.tipo}-${sancao.id}`} sancao={sancao} />
-              ))}
-            </ul>
+            <>
+              <p className="mt-2 text-sm text-ink-700 dark:text-ink-200">
+                {descreverResumoSancoes(todas)}
+              </p>
+              <ul className="mt-3 space-y-2">
+                {todas.map((sancao) => (
+                  <SancaoItem key={`${sancao.tipo}-${sancao.id}`} sancao={sancao} />
+                ))}
+              </ul>
+            </>
           )}
 
           <p className="mt-3 text-xs text-ink-400 dark:text-ink-500">Fonte: Portal da Transparência (CGU).</p>

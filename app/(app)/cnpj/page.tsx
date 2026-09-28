@@ -4,7 +4,8 @@ import { CnpjClient } from "@/components/CnpjClient";
 
 export const metadata: Metadata = {
   title: "Consultar CNPJ | Radar Licitações",
-  description: "Consulte dados cadastrais de empresas na base da Receita Federal, junto com as sanções do CEIS e do CNEP.",
+  description:
+    "Consulte dados cadastrais de empresas na base da Receita Federal, com as sanções (CEIS/CNEP) e a relação com o governo federal.",
 };
 
 export default function CnpjPage() {

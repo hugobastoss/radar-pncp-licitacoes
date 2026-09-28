@@ -148,7 +148,7 @@ com o código — buscar `search=3004.90.99` devolve vazio. Por isso a rota
 detecta se o termo parece um código (`/v1/{codigo}`, busca exata) ou uma
 palavra-chave (`/v1?search=`, busca por texto) e usa o endpoint certo.
 
-## Consulta de sanções — CEIS/CNEP (`/sancoes`)
+## Portal da Transparência — sanções e governo federal (`/sancoes`, `/cnpj`)
 
 | | |
 |---|---|
@@ -156,9 +156,25 @@ palavra-chave (`/v1?search=`, busca por texto) e usa o endpoint certo.
 | **Autenticação** | Chave gratuita (cadastro em [portaldatransparencia.gov.br/api-de-dados](https://portaldatransparencia.gov.br/api-de-dados)), enviada no header `chave-api-dados` |
 | **Variável de ambiente** | `PORTAL_TRANSPARENCIA_API_KEY` |
 | **Arquivo** | [`lib/server/transparencia-client.ts`](../lib/server/transparencia-client.ts) |
+| **Documentação oficial** | Especificação em `api.portaldatransparencia.gov.br/v3/api-docs` (só abre com `User-Agent` de navegador) |
 
-Consulta o CEIS (empresas inidôneas/suspensas) e o CNEP (empresas punidas,
-Lei Anticorrupção) da CGU.
+Duas rotas, as duas em São Paulo (ver abaixo):
+
+- **`/api/sancoes`** — CEIS (empresas inidôneas/suspensas) e CNEP (empresas
+  punidas, Lei Anticorrupção), com todos os campos úteis: abrangência ("onde
+  vale" o impedimento — 5 valores, de "No órgão sancionador" a "Todas as
+  Esferas em todos os Poderes"), fundamentação legal, UF/esfera/poder e
+  contato do órgão, multa, processo, publicação e trânsito em julgado.
+  "Multa" e "Publicação extraordinária da decisão condenatória" são marcadas
+  como **não impeditivas**; qualquer outro tipo (inclusive um novo) conta
+  como impeditivo.
+- **`/api/governo-federal`** — relação da empresa com o governo federal:
+  `pessoa-juridica` (resumo de sim/não: contratos, licitações, pagamentos,
+  NF-e, convênios, CEPIM…), `contratos/cpf-cnpj` e
+  `despesas/recursos-recebidos` (últimos 12 meses, somados por órgão).
+  Contratos e pagamentos só são consultados quando o resumo diz que existem,
+  e ficam 6 h no cache do Next. Só Poder Executivo federal — não inclui
+  estados e municípios.
 
 **Particularidades descobertas testando com uma chave real:**
 - A API **migrou de domínio**: `portaldatransparencia.gov.br` só devolve um
@@ -191,6 +207,20 @@ Lei Anticorrupção) da CGU.
 - Pode demorar: chegou a ~4,5 s nos testes (outras chamadas levaram
   ~0,5 s). Por isso, na tela de CNPJ, as sanções aparecem depois do
   cadastro, com indicador de carregamento próprio.
+- **Listas vêm em páginas de 15, sem ordem por data e sem informar o
+  total** — só dá pra saber que acabou quando uma página vem com menos de
+  15. Contratos e pagamentos buscam até 10 páginas (150 itens) em lotes
+  paralelos; fornecedores grandes (ex.: Dell) passam disso e a tela avisa
+  que a lista está incompleta. As sanções leem só a primeira página.
+- Campo não preenchido vem como `"Sem informação"` (com ou sem maiúscula)
+  ou string vazia; `dataFimSancao` sem data = sem prazo determinado (37%
+  numa amostra de 75). Nenhuma sanção já encerrada apareceu na amostra — o
+  cadastro parece manter só as vigentes.
+- `pessoa-juridica` de um CNPJ sem registro volta **200 com corpo vazio**.
+- `contratos/cpf-cnpj` exige o CNPJ **sem pontuação** (com pontuação, 400).
+  Em 130 de 150 contratos da Dell, `compra.numeroProcesso` veio com lixo
+  (ex.: `"-3"`) — só exibimos números com 5 dígitos ou mais.
+- Limite de 400 chamadas/minuto no horário comercial (700 de madrugada).
 
 ## ANVISA — Consultas Externas (`/produtos-saude`, `/nome-tecnico`)
 
