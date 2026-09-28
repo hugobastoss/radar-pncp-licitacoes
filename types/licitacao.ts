@@ -119,6 +119,12 @@ export interface MetaConsulta {
    * antes de cobrir 100% do período — o total exibido pode estar subestimado.
    */
   parcial: boolean;
+  /**
+   * Fontes que falharam antes da que respondeu, com o motivo (ex.: "Busca
+   * interna do PNCP: fetch failed (ECONNRESET)"). Só diagnóstico — a tela não
+   * usa. Ausente quando a fonte primária respondeu.
+   */
+  falhas?: string[];
 }
 
 export interface LicitacoesResponse {

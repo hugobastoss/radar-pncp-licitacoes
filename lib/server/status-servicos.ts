@@ -95,14 +95,18 @@ async function statusBrasilApi(): Promise<NivelServico> {
   return ok ? "operacional" : "indisponivel";
 }
 
-async function statusPortalTransparencia(): Promise<NivelServico> {
-  const chave = process.env.PORTAL_TRANSPARENCIA_API_KEY;
-  if (!chave) return "nao_configurado";
+/**
+ * A CGU recusa chamadas vindas dos servidores da Vercel nos EUA, onde esta
+ * verificação roda — por isso a rota de sanções roda em São Paulo (ver
+ * vercel.json). Chamar a CGU daqui dava "indisponível" com a consulta
+ * funcionando; em vez disso, testamos a própria rota de sanções, que é o
+ * caminho que o usuário usa de verdade. `origem` é o endereço deste app
+ * (ex.: https://radar-pncp-licitacoes.vercel.app).
+ */
+async function statusPortalTransparencia(origem: string): Promise<NivelServico> {
+  if (!process.env.PORTAL_TRANSPARENCIA_API_KEY) return "nao_configurado";
 
-  const ok = await respondeOk(
-    "https://api.portaldatransparencia.gov.br/api-de-dados/ceis?codigoSancionado=00000000000191&pagina=1",
-    { "chave-api-dados": chave, "User-Agent": "Mozilla/5.0 (compatible; RadarLicitacoes/1.0)" },
-  );
+  const ok = await respondeOk(`${origem}/api/sancoes?cnpj=00000000000191`);
   return ok ? "operacional" : "indisponivel";
 }
 
@@ -134,12 +138,12 @@ async function statusAnvisa(): Promise<NivelServico> {
   }
 }
 
-export async function verificarStatusServicos(): Promise<StatusServicos> {
+export async function verificarStatusServicos(origem: string): Promise<StatusServicos> {
   const [pncp, comprasGovBr, brasilApi, portalTransparencia, anvisa] = await Promise.all([
     statusPncp(),
     statusComprasGovBr(),
     statusBrasilApi(),
-    statusPortalTransparencia(),
+    statusPortalTransparencia(origem),
     statusAnvisa(),
   ]);
   return { pncp, comprasGovBr, brasilApi, portalTransparencia, anvisa };

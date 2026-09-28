@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { buscarContratacoesPncp } from "@/lib/server/pncp-client";
 import { buscarViaApiInterna } from "@/lib/server/pncp-search-client";
 import { buscarContratacoesCompras } from "@/lib/server/compras-client";
+import { descreverFalha } from "@/lib/server/erros";
 import { identificarPortal } from "@/lib/portal";
 import {
   chaveMunicipio,
@@ -84,9 +85,10 @@ function calcularJanelaBusca(dataInicial: string | null, dataFinal: string | nul
 }
 
 
-function respostaErroServidor() {
+function respostaErroServidor(falhas: string[]) {
+  console.error(`[licitacoes] todas as fontes falharam: ${falhas.join(" | ")}`);
   return NextResponse.json(
-    { erro: "Não foi possível concluir a consulta neste momento." },
+    { erro: "Não foi possível concluir a consulta neste momento.", detalhe: falhas },
     { status: 502 },
   );
 }
@@ -125,6 +127,10 @@ export async function GET(request: NextRequest) {
 
   const ufFiltro = uf && uf !== "TODOS" ? uf : undefined;
   let usouFallbackOficial = false;
+  // Motivo de cada fonte que falhou antes da que respondeu — vai pro log e
+  // pra `meta.falhas`. Sem isso, "PNCP fora do ar" e "PNCP recusando nossos
+  // servidores" apareciam iguais: só como uma busca lenta e parcial.
+  const falhas: string[] = [];
 
   let itensBrutos: Licitacao[];
   try {
@@ -135,7 +141,8 @@ export async function GET(request: NextRequest) {
     });
     itensBrutos = resultadoBusca.itens;
     parcial = resultadoBusca.parcial;
-  } catch {
+  } catch (erro) {
+    falhas.push(`Busca interna do PNCP: ${descreverFalha(erro)}`);
     // API de busca interna indisponível — cai para a API oficial, que exige
     // modalidade e data final explícitos (ver pncp-client.ts).
     usouFallbackOficial = true;
@@ -157,8 +164,10 @@ export async function GET(request: NextRequest) {
         signal: request.signal,
       });
       if (!resposta.todasFalharam) resultadoOficial = resposta;
-    } catch {
+      else falhas.push(`Consulta oficial do PNCP: todas as modalidades falharam (${resposta.motivoFalha})`);
+    } catch (erro) {
       // segue para a terceira fonte, abaixo
+      falhas.push(`Consulta oficial do PNCP: ${descreverFalha(erro)}`);
     }
 
     if (resultadoOficial) {
@@ -181,12 +190,14 @@ export async function GET(request: NextRequest) {
           codigoMunicipioIbge: codigoMunicipioFiltro,
           signal: request.signal,
         });
-      } catch {
-        return respostaErroServidor();
+      } catch (erro) {
+        falhas.push(`Compras.gov.br: ${descreverFalha(erro)}`);
+        return respostaErroServidor(falhas);
       }
 
       if (resultadoCompras.todasFalharam) {
-        return respostaErroServidor();
+        falhas.push(`Compras.gov.br: todas as modalidades falharam (${resultadoCompras.motivoFalha})`);
+        return respostaErroServidor(falhas);
       }
 
       itensBrutos = resultadoCompras.itens;
@@ -315,8 +326,10 @@ export async function GET(request: NextRequest) {
       consultadoEm: new Date().toISOString(),
       tempoRespostaMs: Date.now() - inicioRequisicao,
       parcial,
+      ...(falhas.length > 0 && { falhas }),
     },
   };
 
+  if (falhas.length > 0) console.error(`[licitacoes] fontes que falharam antes da resposta: ${falhas.join(" | ")}`);
   return NextResponse.json(resposta);
 }

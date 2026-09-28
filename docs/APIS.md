@@ -8,7 +8,9 @@ descobrimos integrando com elas. Todas as chamadas acontecem no **backend**
 ## Licitações (busca principal)
 
 Três fontes em cascata — a segunda e a terceira só são chamadas quando a
-anterior falha. Ver `app/api/licitacoes/route.ts` para a lógica de cascata e
+anterior falha. Quando alguma falha, o motivo vai pro log e pra
+`meta.falhas` da resposta (ex.: "Busca interna do PNCP: fetch failed
+(ECONNRESET)") — é o que dá pra olhar quando a busca fica lenta e parcial. Ver `app/api/licitacoes/route.ts` para a lógica de cascata e
 `lib/server/status-servicos.ts` para o health check (de todas as APIs
 externas do app, não só o PNCP) que alimenta o indicador de status no
 cabeçalho.
@@ -173,12 +175,16 @@ Lei Anticorrupção) da CGU.
   `iad1`, a padrão): em produção a rota falhava em todas as chamadas,
   enquanto localmente funcionava. Por isso só esta rota roda em São Paulo
   (`gru1`), configurado em [`vercel.json`](../vercel.json). O resto do
-  projeto fica em `iad1` porque o PNCP faz o contrário — falhou em todas as
-  verificações feitas a partir de `gru1` (11 de 11 em 2026-09-28), enquanto
-  de `iad1` e de uma conexão residencial no Brasil respondia.
+  projeto continua na região padrão (`iad1`): mudar tudo pra `gru1` não
+  ajudou o PNCP, que em 2026-09-28 falhou a partir da Vercel nas duas regiões
+  (`gru1` 11 de 11, `iad1` 5 de 5 logo depois) enquanto respondia normalmente
+  de uma conexão residencial no Brasil.
 - Em caso de falha, a rota devolve no campo `detalhe` o que a CGU respondeu
   (ex.: "Portal da Transparência (ceis) respondeu 401" = chave inválida) e
   registra o mesmo no log.
+- Pelo mesmo motivo, o indicador de status não chama a CGU direto (a
+  verificação roda nos EUA e sempre daria "indisponível"): ele testa a
+  própria rota `/api/sancoes`, que é o caminho real do usuário.
 - Aceita CNPJ alfanumérico em `codigoSancionado` sem erro (testado com o
   exemplo fictício da Receita, que volta vazio). Ainda não deu pra conferir
   com uma empresa alfanumérica sancionada de verdade.

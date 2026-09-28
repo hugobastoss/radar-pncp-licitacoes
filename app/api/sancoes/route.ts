@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validarCnpj } from "@/lib/cnpj";
+import { descreverFalha } from "@/lib/server/erros";
 import { buscarSancoes } from "@/lib/server/transparencia-client";
 
 /**
@@ -38,11 +39,4 @@ export async function GET(request: NextRequest) {
       { status: 502 },
     );
   }
-}
-
-function descreverFalha(erro: unknown): string {
-  if (!(erro instanceof Error)) return String(erro);
-  // `fetch` falha com "fetch failed" e deixa o motivo de rede (ECONNRESET, timeout…) em `cause`.
-  const causa = erro.cause instanceof Error ? (erro.cause as Error & { code?: string }) : undefined;
-  return causa ? `${erro.message} (${causa.code ?? causa.message})` : erro.message;
 }

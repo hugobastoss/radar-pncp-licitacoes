@@ -1,5 +1,6 @@
 import { normalizarCnpj } from "@/lib/cnpj";
 import { MODALIDADES } from "@/lib/data/dominio";
+import { descreverFalha } from "@/lib/server/erros";
 import { formatarCnpj, montarNumeroLicitacao } from "@/lib/formatters";
 import type { Licitacao } from "@/types/licitacao";
 
@@ -41,6 +42,8 @@ export interface ResultadoBuscaPncp {
   parcial: boolean;
   /** true quando TODAS as chamadas falharam — sinal de indisponibilidade, não de busca vazia. */
   todasFalharam: boolean;
+  /** Motivo da primeira modalidade que falhou, pra diagnóstico (ver lib/server/erros.ts). */
+  motivoFalha?: string;
 }
 
 // --- Formato bruto devolvido pela API (campos usados; o restante é ignorado) --
@@ -194,6 +197,12 @@ export async function buscarContratacoesPncp(parametros: ParametrosBuscaPncp): P
   }
 
   const todasFalharam = resultados.length > 0 && resultados.every((r) => r.status === "rejected");
+  const primeiraFalha = resultados.find((r): r is PromiseRejectedResult => r.status === "rejected");
 
-  return { itens, parcial, todasFalharam };
+  return {
+    itens,
+    parcial,
+    todasFalharam,
+    motivoFalha: primeiraFalha ? descreverFalha(primeiraFalha.reason) : undefined,
+  };
 }

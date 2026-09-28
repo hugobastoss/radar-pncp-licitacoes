@@ -1,5 +1,6 @@
 import { MODALIDADES } from "@/lib/data/dominio";
 import { formatarCnpj, montarNumeroLicitacao } from "@/lib/formatters";
+import { descreverFalha } from "@/lib/server/erros";
 import type { Licitacao } from "@/types/licitacao";
 
 /**
@@ -34,6 +35,8 @@ export interface ResultadoBuscaCompras {
   itens: Licitacao[];
   parcial: boolean;
   todasFalharam: boolean;
+  /** Motivo da primeira modalidade que falhou, pra diagnóstico (ver lib/server/erros.ts). */
+  motivoFalha?: string;
 }
 
 interface ContratacaoCompras {
@@ -165,6 +168,12 @@ export async function buscarContratacoesCompras(parametros: ParametrosBuscaCompr
   }
 
   const todasFalharam = resultados.length > 0 && resultados.every((r) => r.status === "rejected");
+  const primeiraFalha = resultados.find((r): r is PromiseRejectedResult => r.status === "rejected");
 
-  return { itens, parcial, todasFalharam };
+  return {
+    itens,
+    parcial,
+    todasFalharam,
+    motivoFalha: primeiraFalha ? descreverFalha(primeiraFalha.reason) : undefined,
+  };
 }
