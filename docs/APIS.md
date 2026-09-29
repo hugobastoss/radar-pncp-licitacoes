@@ -40,8 +40,12 @@ ser um contrato público, pode mudar sem aviso.
 - Instável: falha por reset de conexão (`ECONNRESET`) com frequência,
   independente de enviar `User-Agent` ou não (testado). Em 2026-09-29, de
   casa: 1 de 10 chamadas passou de primeira, 9 de 10 com até 3 tentativas —
-  e não é a palavra buscada (o mesmo termo falha e passa em seguida). A busca
-  de atas tenta até 4 vezes; esta de licitações ainda não tenta de novo.
+  e não é a palavra buscada (o mesmo termo falha e passa em seguida). Por
+  isso as duas buscas (licitações e atas) tentam até 4 vezes
+  ([`lib/server/retentativa.ts`](../lib/server/retentativa.ts)). Nas
+  licitações só a queda de conexão é retentada (vem em ~0,3 s); timeout cai
+  direto na fonte reserva. Com isso, a busca interna passou a responder 7 de
+  8 buscas de teste, contra ~1 de 10 antes.
 
 ### PNCP — atas de registro de preço (`/atas`)
 

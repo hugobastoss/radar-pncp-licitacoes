@@ -1,5 +1,6 @@
 import { normalizarCnpj } from "@/lib/cnpj";
 import { formatarCnpj } from "@/lib/formatters";
+import { buscarComRetentativa } from "@/lib/server/retentativa";
 import type { AtaRegistroPreco, ResultadoAtas } from "@/types/ata";
 
 /**
@@ -71,32 +72,6 @@ function mapearAta(raw: AtaBruta): AtaRegistroPreco {
   };
 }
 
-const esperar = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-/** Erro de rede (ECONNRESET, timeout de conexão) — vale tentar de novo. Resposta HTTP de erro, não. */
-function ehFalhaDeRede(erro: unknown): boolean {
-  return erro instanceof TypeError || (erro instanceof Error && erro.name === "TimeoutError");
-}
-
-async function buscarComRetentativa(url: string, signal?: AbortSignal): Promise<Response> {
-  let ultimoErro: unknown;
-  for (let tentativa = 1; tentativa <= TENTATIVAS; tentativa++) {
-    try {
-      const sinais = [AbortSignal.timeout(TIMEOUT_MS)];
-      if (signal) sinais.push(signal);
-      return await fetch(url, {
-        signal: AbortSignal.any(sinais),
-        headers: { Accept: "application/json", "User-Agent": USER_AGENT },
-      });
-    } catch (erro) {
-      ultimoErro = erro;
-      if (signal?.aborted || !ehFalhaDeRede(erro)) throw erro;
-      if (tentativa < TENTATIVAS) await esperar(250 * tentativa);
-    }
-  }
-  throw ultimoErro;
-}
-
 export interface FiltrosAtas {
   q?: string;
   uf?: string;
@@ -117,7 +92,12 @@ export async function buscarAtas(filtros: FiltrosAtas, signal?: AbortSignal): Pr
   if (!filtros.q) query.set("ordenacao", "-data_publicacao_pncp");
   if (filtros.uf) query.set("ufs", filtros.uf);
 
-  const resposta = await buscarComRetentativa(`${BASE_URL}?${query}`, signal);
+  // Aqui não há fonte reserva, então vale insistir também quando estoura o tempo.
+  const resposta = await buscarComRetentativa(
+    `${BASE_URL}?${query}`,
+    { headers: { Accept: "application/json", "User-Agent": USER_AGENT } },
+    { tentativas: TENTATIVAS, timeoutMs: TIMEOUT_MS, retentarTimeout: true, signal },
+  );
   if (!resposta.ok) throw new Error(`API de busca do PNCP (atas) respondeu ${resposta.status}`);
   const corpo = (await resposta.json()) as { items?: AtaBruta[]; total?: number };
 

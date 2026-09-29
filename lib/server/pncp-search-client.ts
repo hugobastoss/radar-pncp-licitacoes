@@ -1,6 +1,7 @@
 import { normalizarCnpj } from "@/lib/cnpj";
 import { formatarCnpj } from "@/lib/formatters";
 import { dominioDoPortalPorNome } from "@/lib/portal";
+import { buscarComRetentativa } from "@/lib/server/retentativa";
 import type { Licitacao } from "@/types/licitacao";
 
 /**
@@ -18,6 +19,9 @@ import type { Licitacao } from "@/types/licitacao";
 const BASE_URL = "https://pncp.gov.br/api/search/";
 const TIMEOUT_MS = 8000;
 const TAMANHO_PAGINA = 100;
+// A queda de conexão (ECONNRESET) vem em ~0,3 s, então 4 tentativas custam ~2 s
+// no pior caso. Timeout não é retentado: cai direto na fonte reserva.
+const TENTATIVAS = 4;
 
 export interface ParametrosBuscaInterna {
   q?: string;
@@ -162,13 +166,11 @@ export async function buscarViaApiInterna(
   }
   if (parametros.ufs?.length) query.set("ufs", parametros.ufs.join(","));
 
-  const sinaisAbortar = [AbortSignal.timeout(TIMEOUT_MS)];
-  if (parametros.signal) sinaisAbortar.push(parametros.signal);
-
-  const resposta = await fetch(`${BASE_URL}?${query.toString()}`, {
-    signal: AbortSignal.any(sinaisAbortar),
-    headers: { Accept: "application/json" },
-  });
+  const resposta = await buscarComRetentativa(
+    `${BASE_URL}?${query.toString()}`,
+    { headers: { Accept: "application/json" } },
+    { tentativas: TENTATIVAS, timeoutMs: TIMEOUT_MS, signal: parametros.signal },
+  );
 
   if (!resposta.ok) {
     throw new Error(`API de busca do PNCP respondeu ${resposta.status}`);
