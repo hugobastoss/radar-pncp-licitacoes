@@ -33,7 +33,13 @@ interface SocioBrasilApi {
   nome_socio?: string;
   qualificacao_socio?: string;
   data_entrada_sociedade?: string;
+  /** CNPJ completo (sócio empresa) ou CPF mascarado ("***455835**"). */
+  cnpj_cpf_do_socio?: string;
+  /** 1 = pessoa jurídica, 2 = pessoa física, 3 = estrangeiro. */
+  identificador_de_socio?: number;
 }
+
+const TIPO_SOCIO: Record<number, "pj" | "pf" | "estrangeiro"> = { 1: "pj", 2: "pf", 3: "estrangeiro" };
 
 interface CnaeSecundarioBrasilApi {
   codigo?: number;
@@ -153,6 +159,8 @@ function mapearParaEmpresa(raw: EmpresaBrasilApi, cnpj: string): Empresa {
         nome: s.nome_socio,
         qualificacao: s.qualificacao_socio ?? "Não informada",
         dataEntrada: s.data_entrada_sociedade,
+        tipo: s.identificador_de_socio ? TIPO_SOCIO[s.identificador_de_socio] : undefined,
+        documento: s.cnpj_cpf_do_socio?.trim() || undefined,
       })),
   };
 }

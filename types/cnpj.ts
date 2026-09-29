@@ -2,6 +2,10 @@ export interface Socio {
   nome: string;
   qualificacao: string;
   dataEntrada?: string;
+  /** "pj" = outra empresa (o `documento` é o CNPJ inteiro), "pf" = pessoa (CPF mascarado), "estrangeiro". */
+  tipo?: "pj" | "pf" | "estrangeiro";
+  /** Como a Receita publica: CNPJ completo do sócio empresa, ou CPF mascarado ("***455835**"). */
+  documento?: string;
 }
 
 export interface Cnae {

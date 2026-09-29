@@ -19,6 +19,7 @@ Pesquisa rápida de licitações e contratações públicas brasileiras, com dad
 - Convênios federais com estados, municípios e entidades: objeto, valor, quanto foi liberado e vigência
 - Consulta de sanções (CEIS/CNEP) com abrangência, fundamentação legal e se a sanção impede contratar, junto com a certidão consolidada do TCU
 - Consulta de produtos para saúde na ANVISA (registro, fabricante, modelos, códigos de barras UDI e certificados de boas práticas) e da nomenclatura técnica
+- Sinapse (beta): mapa de relações entre empresas, sócios, órgãos que contratam e sanções, com os cruzamentos entre elas (sócio, órgão, endereço ou telefone em comum; empresa sancionada com contratos)
 - Consulta de CEP e NCM
 - Indicador de status das fontes de dados no cabeçalho
 - Modo claro/escuro com preferência salva no navegador
@@ -63,6 +64,7 @@ Veja [`docs/APIS.md`](docs/APIS.md) para o detalhamento de cada API — parâmet
 - [Tailwind CSS v4](https://tailwindcss.com)
 - [Radix UI](https://www.radix-ui.com) para componentes acessíveis (ex.: painéis animados)
 - [lucide-react](https://lucide.dev) para ícones
+- [Cytoscape.js](https://js.cytoscape.org) para o mapa de relações (Sinapse)
 
 Sem banco de dados — os dados vêm direto das APIs externas a cada consulta (ver [`docs/APIS.md`](docs/APIS.md)).
 

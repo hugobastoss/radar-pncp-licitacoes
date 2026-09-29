@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { BadgePercent, Building2, Loader2, Search, ShieldAlert, ShieldCheck, TriangleAlert, Users } from "lucide-react";
+import { BadgePercent, Building2, Loader2, Network, Search, ShieldAlert, ShieldCheck, TriangleAlert, Users } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -241,6 +242,13 @@ function EmpresaCard({
             <p className="mt-0.5 text-sm text-ink-600 dark:text-ink-300">{empresa.nomeFantasia}</p>
           )}
           <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">{formatarCnpj(empresa.cnpj)}</p>
+          <Link
+            href={`/sinapse?cnpj=${empresa.cnpj}`}
+            className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:underline dark:text-primary-400"
+          >
+            <Network className="h-3.5 w-3.5" aria-hidden />
+            Ver no mapa Sinapse (beta)
+          </Link>
         </div>
         <div className="flex flex-wrap gap-2">
           {empresa.matrizOuFilial && <Badge>{empresa.matrizOuFilial}</Badge>}
