@@ -184,7 +184,7 @@ com o código — buscar `search=3004.90.99` devolve vazio. Por isso a rota
 detecta se o termo parece um código (`/v1/{codigo}`, busca exata) ou uma
 palavra-chave (`/v1?search=`, busca por texto) e usa o endpoint certo.
 
-## Portal da Transparência — sanções, governo federal e CPF (`/sancoes`, `/cnpj`, `/cpf`)
+## Portal da Transparência — sanções, governo federal, CPF e emendas (`/sancoes`, `/cnpj`, `/cpf`, `/emendas`)
 
 | | |
 |---|---|
@@ -194,7 +194,7 @@ palavra-chave (`/v1?search=`, busca por texto) e usa o endpoint certo.
 | **Arquivo** | [`lib/server/transparencia-client.ts`](../lib/server/transparencia-client.ts) |
 | **Documentação oficial** | Especificação em `api.portaldatransparencia.gov.br/v3/api-docs` (só abre com `User-Agent` de navegador) |
 
-Três rotas, todas em São Paulo (ver abaixo):
+Cinco rotas, todas em São Paulo (ver abaixo):
 
 - **`/api/sancoes`** — CEIS (empresas inidôneas/suspensas) e CNEP (empresas
   punidas, Lei Anticorrupção), com todos os campos úteis: abrangência ("onde
@@ -212,6 +212,8 @@ Três rotas, todas em São Paulo (ver abaixo):
   e ficam 6 h no cache do Next. Só Poder Executivo federal — não inclui
   estados e municípios.
 - **`/api/cpf`** (POST) — consulta de pessoa física, detalhada abaixo.
+- **`/api/emendas`** e **`/api/emendas/documentos`** — emendas parlamentares e
+  seus documentos, detalhados abaixo.
 
 ### Consulta de CPF (`/api/cpf`)
 
@@ -260,6 +262,46 @@ a CGU publica de graça, com a mesma chave:
   cada instância da função tem o seu contador, o limite segura uso
   automatizado, não um ataque distribuído.
 
+### Emendas parlamentares (`/api/emendas`, `/api/emendas/documentos`)
+
+| Endpoint | Parâmetros | Para quê |
+|---|---|---|
+| `emendas` | `nomeAutor`, `ano`, `tipoEmenda`, `numeroEmenda`, `codigoEmenda`, `pagina` | Emendas com autor, tipo, localidade, função e os valores empenhado, liquidado, pago e de restos a pagar |
+| `emendas/documentos/{codigo}` | `pagina` | Empenhos, liquidações e pagamentos da emenda — **sem valor nem favorecido** |
+| `despesas/documentos/{codigo}` | — | Detalhe de um documento: valor, favorecido (CNPJ, nome, UF), órgão e observação |
+
+A tela mostra, pra cada emenda, **quem recebeu o dinheiro**: a soma dos
+pagamentos por favorecido. Conferido na `202541840004` (LUIS CARLOS
+HEINZE, 2025): os três favorecidos somam 223.998,00, exatamente o pago no
+ano (12.599,10) mais os restos a pagar pagos (211.398,90).
+
+**Particularidades (testado em 2026-09-29):**
+- **`nomeAutor` só casa com maiúsculas e sem acento** ("heinze" e
+  "GUIMARÃES" voltam vazio), mas aceita parte do nome ("HEINZE", "BANCADA
+  DO AMAZONAS", "COM. DA SAUDE"). A rota converte antes de chamar.
+- `tipoEmenda` precisa do texto exato: "Emenda Individual - Transferências
+  com Finalidade Definida", "Emenda Individual - Transferências Especiais"
+  (a "emenda Pix"), "Emenda de Bancada", "Emenda de Comissão" ou "Emenda de
+  Relator" (vazio em 2025). "Emenda Individual" sozinho traz os dois
+  individuais. A lista fica em [`lib/emendas.ts`](../lib/emendas.ts).
+- `numeroEmenda` aceita com ou sem zeros à esquerda ("4" = "0004"). Sem
+  filtro nenhum, a API devolve todos os anos misturados; há dados de 2014 em
+  diante.
+- Valores vêm como texto no formato brasileiro, e **negativo com espaço**
+  depois do sinal (`"- 35.865,08"`) — o empenhado de uma emenda pode ser
+  negativo quando as anulações passam dos empenhos do ano. No detalhe do
+  documento, a liquidação vem com valor `"-"` (a CGU não informa) e o estorno
+  de pagamento, negativo.
+- A lista de documentos também vem de 15 em 15 e sem ordem. Pra cada
+  emenda, a rota busca até 10 páginas e o detalhe de até 40 documentos (5 de
+  cada vez), pagamentos primeiro e depois empenhos. Liquidação não vale a
+  chamada, porque vem sem valor. Tudo fica 6 h no cache do Next (dados
+  públicos, atualizados uma vez por dia).
+- Links pro Portal: `portaldatransparencia.gov.br/emendas/detalhe?codigoEmenda=`
+  e `/despesas/documento/{empenho|liquidacao|pagamento}/{codigo}`. A página
+  do documento responde 202 (desafio anti-robô) pra `curl`, mas abre
+  normalmente num navegador.
+
 **Particularidades descobertas testando com uma chave real:**
 - A API **migrou de domínio**: `portaldatransparencia.gov.br` só devolve um
   redirecionamento em texto plano; o domínio certo é
@@ -274,8 +316,9 @@ a CGU publica de graça, com a mesma chave:
 - **Recusa chamadas vindas dos servidores da Vercel nos EUA** (região
   `iad1`, a padrão): em produção a rota falhava em todas as chamadas,
   enquanto localmente funcionava. Por isso só esta rota roda em São Paulo
-  (`gru1`), configurado em [`vercel.json`](../vercel.json) — vale pras três
-  rotas da CGU (`/api/sancoes`, `/api/governo-federal` e `/api/cpf`). O resto do
+  (`gru1`), configurado em [`vercel.json`](../vercel.json) — vale pras cinco
+  rotas da CGU (`/api/sancoes`, `/api/governo-federal`, `/api/cpf`, `/api/emendas` e
+  `/api/emendas/documentos`). O resto do
   projeto continua na região padrão (`iad1`): mudar tudo pra `gru1` não
   ajudou o PNCP, que em 2026-09-28 falhou a partir da Vercel nas duas regiões
   (`gru1` 11 de 11, `iad1` 5 de 5 logo depois) enquanto respondia normalmente

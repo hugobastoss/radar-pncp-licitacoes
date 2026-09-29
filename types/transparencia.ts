@@ -184,6 +184,80 @@ export interface DadosPessoaFisica {
   contratos: { itens: ContratoFederal[]; completo: boolean } | null;
 }
 
+/** Emenda parlamentar ao orçamento federal. Valores em reais. */
+export interface EmendaParlamentar {
+  /** 12 dígitos: ano + código do autor + número (ex.: "202541840004"). */
+  codigo: string;
+  ano: number;
+  /** Ex.: "Emenda Individual - Transferências com Finalidade Definida", "Emenda de Bancada". */
+  tipo: string;
+  /** Parlamentar, bancada ("BANCADA DO AMAZONAS") ou comissão ("COM. DA SAUDE"). */
+  autor: string;
+  numero: string;
+  /** Ex.: "Nacional", "ESPÍRITO SANTO (UF)", "MANAUS - AM". */
+  localidade?: string;
+  funcao?: string;
+  subfuncao?: string;
+  /** Pode vir negativo quando houve anulação de empenho maior que o empenhado no ano. */
+  empenhado: number;
+  liquidado: number;
+  pago: number;
+  /** Restos a pagar: saldo de anos anteriores inscrito, cancelado e pago. */
+  restoInscrito: number;
+  restoCancelado: number;
+  restoPago: number;
+}
+
+export interface ResultadoEmendas {
+  itens: EmendaParlamentar[];
+  pagina: number;
+  /** A CGU não informa o total: há mais quando a página veio cheia (15). */
+  temMais: boolean;
+}
+
+export interface FavorecidoDocumento {
+  nome: string;
+  /** CNPJ ou CPF formatado, como vem da CGU (CPF já mascarado). */
+  documento?: string;
+  uf?: string;
+}
+
+/** Empenho, liquidação ou pagamento ligado a uma emenda. */
+export interface DocumentoEmenda {
+  /** Código completo (UG + gestão + número), ex.: "785810000012025OB006819". */
+  codigo: string;
+  /** Ex.: "2025OB006819". */
+  codigoResumido: string;
+  /** Como vem da API, DD/MM/AAAA. */
+  data?: string;
+  /** "Empenho", "Liquidação" ou "Pagamento". */
+  fase: string;
+  /** Ex.: "Original", "Estorno / Cancelamento". */
+  especie?: string;
+  /** Só quando `detalhado`. Liquidação não tem valor na CGU; estorno vem negativo. */
+  valor?: number;
+  favorecido?: FavorecidoDocumento;
+  orgao?: string;
+  observacao?: string;
+  /** `false` quando o detalhe (valor, favorecido) não foi buscado ou falhou. */
+  detalhado: boolean;
+}
+
+/** Quanto um favorecido recebeu da emenda: soma dos pagamentos, estornos descontados. */
+export interface RecebedorEmenda extends FavorecidoDocumento {
+  valor: number;
+}
+
+export interface ResultadoDocumentosEmenda {
+  /** Mais recentes primeiro. */
+  itens: DocumentoEmenda[];
+  recebedores: RecebedorEmenda[];
+  /** `false` quando havia mais documentos do que o limite buscado. */
+  completo: boolean;
+  /** `false` quando algum pagamento ficou sem detalhe — a soma por favorecido está incompleta. */
+  pagamentosDetalhados: boolean;
+}
+
 export interface DadosGovernoFederal {
   /** `null` quando a consulta falhou. */
   resumo: ResumoPessoaJuridica | null;

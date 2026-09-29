@@ -1,8 +1,14 @@
 import { descreverFalha } from "@/lib/server/erros";
+import { emParalelo } from "@/lib/server/paralelo";
 import type {
   ContratoFederal,
   DadosGovernoFederal,
   DadosPessoaFisica,
+  DocumentoEmenda,
+  EmendaParlamentar,
+  RecebedorEmenda,
+  ResultadoDocumentosEmenda,
+  ResultadoEmendas,
   PagamentosFederais,
   PessoaExposta,
   PunicaoCeaf,
@@ -106,10 +112,10 @@ function valor(texto: string | null | undefined): string | undefined {
   return limpo;
 }
 
-/** "350.000,00" → 350000. */
+/** "350.000,00" → 350000; "- 35.865,08" (negativo, com espaço) → -35865.08; "-" → undefined. */
 function paraNumero(texto: string | null | undefined): number | undefined {
-  const limpo = valor(texto);
-  if (!limpo) return undefined;
+  const limpo = valor(texto)?.replace(/\s/g, "");
+  if (!limpo || limpo === "-") return undefined;
   const numero = Number(limpo.replace(/\./g, "").replace(",", "."));
   return Number.isFinite(numero) ? numero : undefined;
 }
@@ -547,5 +553,185 @@ export async function buscarPessoaFisica(cpf: string, chave: string, signal?: Ab
     peps,
     vinculos,
     contratos,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Emendas parlamentares
+// ---------------------------------------------------------------------------
+//
+// Dados públicos, atualizados uma vez por dia pela CGU — mesmo cache de 6 h
+// do governo federal.
+
+interface EmendaBruta {
+  codigoEmenda?: string;
+  ano?: number;
+  tipoEmenda?: string;
+  autor?: string;
+  nomeAutor?: string;
+  numeroEmenda?: string;
+  localidadeDoGasto?: string;
+  funcao?: string;
+  subfuncao?: string;
+  valorEmpenhado?: string;
+  valorLiquidado?: string;
+  valorPago?: string;
+  valorRestoInscrito?: string;
+  valorRestoCancelado?: string;
+  valorRestoPago?: string;
+}
+
+function mapearEmenda(raw: EmendaBruta): EmendaParlamentar {
+  return {
+    codigo: raw.codigoEmenda ?? "",
+    ano: raw.ano ?? 0,
+    tipo: valor(raw.tipoEmenda) ?? "Tipo não informado",
+    autor: valor(raw.nomeAutor) ?? valor(raw.autor) ?? "Autor não informado",
+    numero: valor(raw.numeroEmenda) ?? "",
+    localidade: valor(raw.localidadeDoGasto),
+    funcao: valor(raw.funcao),
+    subfuncao: valor(raw.subfuncao),
+    empenhado: paraNumero(raw.valorEmpenhado) ?? 0,
+    liquidado: paraNumero(raw.valorLiquidado) ?? 0,
+    pago: paraNumero(raw.valorPago) ?? 0,
+    restoInscrito: paraNumero(raw.valorRestoInscrito) ?? 0,
+    restoCancelado: paraNumero(raw.valorRestoCancelado) ?? 0,
+    restoPago: paraNumero(raw.valorRestoPago) ?? 0,
+  };
+}
+
+export interface FiltrosEmendas {
+  codigo?: string;
+  ano?: number;
+  autor?: string;
+  numero?: string;
+  tipo?: string;
+  pagina: number;
+}
+
+/**
+ * `nomeAutor` casa com parte do nome ("HEINZE", "BANCADA DO AMAZONAS"), mas
+ * só em maiúsculas e sem acento: "heinze" e "GUIMARÃES" voltam vazio.
+ */
+function normalizarAutor(nome: string): string {
+  return nome.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
+}
+
+export async function buscarEmendas(filtros: FiltrosEmendas, chave: string, signal?: AbortSignal): Promise<ResultadoEmendas> {
+  const parametros = [
+    filtros.codigo && `codigoEmenda=${filtros.codigo}`,
+    filtros.ano && `ano=${filtros.ano}`,
+    filtros.autor && `nomeAutor=${encodeURIComponent(normalizarAutor(filtros.autor))}`,
+    filtros.numero && `numeroEmenda=${filtros.numero}`,
+    filtros.tipo && `tipoEmenda=${encodeURIComponent(filtros.tipo)}`,
+    `pagina=${filtros.pagina}`,
+  ].filter(Boolean);
+
+  const corpo = await requisitar<EmendaBruta[]>(`emendas?${parametros.join("&")}`, chave, signal, {
+    cacheSegundos: CACHE_GOVERNO_FEDERAL_SEGUNDOS,
+  });
+  const lista = Array.isArray(corpo) ? corpo : [];
+  return { itens: lista.map(mapearEmenda), pagina: filtros.pagina, temMais: lista.length === TAMANHO_PAGINA };
+}
+
+interface DocumentoEmendaBruto {
+  data?: string;
+  fase?: string;
+  codigoDocumento?: string;
+  codigoDocumentoResumido?: string;
+  especieTipo?: string;
+}
+
+interface DocumentoDespesaBruto {
+  valor?: string;
+  nomeFavorecido?: string;
+  codigoFavorecido?: string;
+  ufFavorecido?: string;
+  orgao?: string;
+  ug?: string;
+  observacao?: string;
+}
+
+// A lista de documentos da emenda não tem valor nem favorecido — vêm do
+// detalhe de cada documento, uma chamada por documento. Limite pra uma emenda
+// grande não gastar a cota da chave (400/min): pagamentos primeiro (é o que
+// diz quem recebeu), depois empenhos. Liquidação não tem valor no detalhe da
+// CGU ("-"), então não vale a chamada.
+const MAXIMO_DETALHES_DOCUMENTOS = 40;
+const DETALHES_EM_PARALELO = 5;
+
+/** "31/07/2026" → "20260731", pra ordenar. */
+function chaveData(data: string | undefined): string {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(data ?? "");
+  return m ? `${m[3]}${m[2]}${m[1]}` : "";
+}
+
+export async function buscarDocumentosEmenda(
+  codigo: string,
+  chave: string,
+  signal?: AbortSignal,
+): Promise<ResultadoDocumentosEmenda> {
+  const { itens: brutos, completo } = await buscarPaginas<DocumentoEmendaBruto>(
+    (pagina) => `emendas/documentos/${codigo}?pagina=${pagina}`,
+    chave,
+    signal,
+    CACHE_GOVERNO_FEDERAL_SEGUNDOS,
+  );
+
+  const documentos: DocumentoEmenda[] = brutos
+    .filter((d): d is DocumentoEmendaBruto & { codigoDocumento: string } => Boolean(valor(d.codigoDocumento)))
+    .map((d) => ({
+      codigo: d.codigoDocumento,
+      codigoResumido: valor(d.codigoDocumentoResumido) ?? d.codigoDocumento,
+      data: valor(d.data),
+      fase: valor(d.fase) ?? "Fase não informada",
+      especie: valor(d.especieTipo) === "Não se aplica" ? undefined : valor(d.especieTipo),
+      detalhado: false,
+    }))
+    // A API não ordena: mais recentes primeiro.
+    .sort((a, b) => chaveData(b.data).localeCompare(chaveData(a.data)));
+
+  const paraDetalhar = [
+    ...documentos.filter((d) => d.fase === "Pagamento"),
+    ...documentos.filter((d) => d.fase === "Empenho"),
+  ].slice(0, MAXIMO_DETALHES_DOCUMENTOS);
+
+  await emParalelo(paraDetalhar, DETALHES_EM_PARALELO, async (d) => {
+    const detalhe = await requisitar<DocumentoDespesaBruto>(`despesas/documentos/${d.codigo}`, chave, signal, {
+      cacheSegundos: CACHE_GOVERNO_FEDERAL_SEGUNDOS,
+    }).catch((erro: unknown) => {
+      console.error(`[emendas/documentos] detalhe: ${descreverFalha(erro)}`);
+      return undefined;
+    });
+    if (!detalhe) return;
+    const nome = valor(detalhe.nomeFavorecido);
+    Object.assign(d, {
+      detalhado: true,
+      valor: paraNumero(detalhe.valor),
+      favorecido: nome
+        ? { nome, documento: valor(detalhe.codigoFavorecido), uf: valor(detalhe.ufFavorecido) }
+        : undefined,
+      orgao: valor(detalhe.orgao) ?? valor(detalhe.ug),
+      observacao: valor(detalhe.observacao),
+    });
+  });
+
+  // Quem recebeu: pagamentos somados por favorecido. Um estorno vem negativo
+  // e anula o pagamento que desfez — favorecido que fica com zero sai da lista.
+  const porFavorecido = new Map<string, RecebedorEmenda>();
+  for (const d of documentos) {
+    if (d.fase !== "Pagamento" || d.valor === undefined || !d.favorecido) continue;
+    const chaveFavorecido = d.favorecido.documento ?? d.favorecido.nome;
+    const atual = porFavorecido.get(chaveFavorecido) ?? { ...d.favorecido, valor: 0 };
+    atual.valor = Math.round((atual.valor + d.valor) * 100) / 100;
+    porFavorecido.set(chaveFavorecido, atual);
+  }
+  const recebedores = [...porFavorecido.values()].filter((r) => Math.abs(r.valor) >= 0.01).sort((a, b) => b.valor - a.valor);
+
+  return {
+    itens: documentos,
+    recebedores,
+    completo,
+    pagamentosDetalhados: completo && documentos.every((d) => d.fase !== "Pagamento" || d.detalhado),
   };
 }

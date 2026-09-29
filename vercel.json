@@ -16,6 +16,12 @@
     },
     "app/api/cpf/route.ts": {
       "regions": ["gru1"]
+    },
+    "app/api/emendas/route.ts": {
+      "regions": ["gru1"]
+    },
+    "app/api/emendas/documentos/route.ts": {
+      "regions": ["gru1"]
     }
   }
 }
