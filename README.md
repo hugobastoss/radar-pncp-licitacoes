@@ -19,7 +19,7 @@ Pesquisa rápida de licitações e contratações públicas brasileiras, com dad
 - Convênios federais com estados, municípios e entidades: objeto, valor, quanto foi liberado e vigência
 - Consulta de sanções (CEIS/CNEP) com abrangência, fundamentação legal e se a sanção impede contratar, junto com a certidão consolidada do TCU
 - Consulta de produtos para saúde na ANVISA (registro, fabricante, modelos, códigos de barras UDI e certificados de boas práticas) e da nomenclatura técnica
-- Sinapse (beta): mapa de relações entre empresas, sócios, órgãos que contratam e sanções, com os cruzamentos entre elas (sócio, órgão, endereço ou telefone em comum; empresa sancionada com contratos)
+- Sinapse (beta): mapa de relações entre empresas, sócios, órgãos que contratam, sanções (CGU e certidão do TCU), benefícios fiscais, SUFRAMA e emendas parlamentares, com os cruzamentos entre eles (sócio, órgão, benefício, endereço, telefone ou e-mail em comum; empresa sancionada com contratos ou com dinheiro de emenda; sócio sancionado ou PEP). Empenhos a receber e convênios entram sob demanda; o CPF de um sócio pode ser consultado digitando o número completo, conferido com os dígitos que a Receita mostra
 - Consulta de CEP e NCM
 - Indicador de status das fontes de dados no cabeçalho
 - Modo claro/escuro com preferência salva no navegador

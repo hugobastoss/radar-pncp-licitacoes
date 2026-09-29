@@ -5,52 +5,122 @@ import type { FormEvent } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { Core, CoseLayoutOptions, StylesheetJson } from "cytoscape";
-import { ArrowUpRight, Building2, Loader2, Maximize2, Network, Plus, Trash2, TriangleAlert } from "lucide-react";
+import { ArrowUpRight, Building2, Landmark, Loader2, Maximize2, Network, Plus, Trash2, TriangleAlert, UserRound } from "lucide-react";
 import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { buscarContratosAm } from "@/lib/api-am";
-import { buscarEmpresa } from "@/lib/api-cnpj";
+import { buscarContratosAm, buscarEmpenhosAm } from "@/lib/api-am";
+import { buscarComplementoCnpj, buscarEmpresa } from "@/lib/api-cnpj";
+import { buscarConvenios } from "@/lib/api-convenios";
+import { consultarCpf } from "@/lib/api-cpf";
+import { buscarDocumentosEmenda, buscarEmendas } from "@/lib/api-emendas";
+import { buscarEmpenhosFederais } from "@/lib/api-empenhos-federais";
 import { buscarDadosGovernoFederal } from "@/lib/api-governo-federal";
 import { buscarSancoes } from "@/lib/api-sancoes";
+import { buscarCertidaoTcu } from "@/lib/api-tcu";
 import { validarCnpj } from "@/lib/cnpj";
+import { validarCpf } from "@/lib/cpf";
 import { cn } from "@/lib/cn";
-import { formatarCnpj, mascararCnpj } from "@/lib/formatters";
+import { FORMATO_CODIGO_EMENDA } from "@/lib/emendas";
+import { formatarCnpj, mascararCnpj, mascararCpf } from "@/lib/formatters";
 import {
+  comBeneficiosFiscais,
   comCadastro,
+  comCertidaoTcu,
+  comComplemento,
   comContratosAm,
+  comConvenios,
+  comEmenda,
+  comEmpenhosAm,
+  comEmpenhosFederais,
   comEmpresaPendente,
   comGovernoFederal,
+  comPessoaFisica,
   comSancoes,
+  cpfBateComMascara,
   encontrarCruzamentos,
+  idEmenda,
   idEmpresa,
   MODELO_VAZIO,
 } from "@/lib/sinapse";
 import type { Cruzamento, ModeloSinapse, NoSinapse, TipoNo } from "@/lib/sinapse";
+import type { Empresa } from "@/types/cnpj";
 
-// Cada empresa aberta custa de 4 a ~30 chamadas às fontes (a CGU tem cota de 400/min pro app inteiro).
+// Cada empresa aberta custa de 5 a ~30 chamadas às fontes (a CGU tem cota de 400/min pro app inteiro).
 const MAXIMO_EMPRESAS = 8;
+const MAXIMO_EMENDAS = 5;
 
 // Dois fornecedores da Marinha pagos pela mesma emenda: o exemplo mostra um órgão em comum.
 const EXEMPLO = ["54464211000104", "46106851000114"];
 
-type Fonte = "cadastro" | "sancoes" | "federal" | "am";
-type EstadoFonte = "carregando" | "ok" | "vazio" | "erro";
+// A CNPJá tem limite apertado (5/min por IP): só consulta quando pode acrescentar algo, como na tela de CNPJ.
+const UFS_AREA_SUFRAMA = new Set(["AM", "RO", "RR", "AC", "AP"]);
+function precisaComplemento(empresa: Empresa): boolean {
+  return UFS_AREA_SUFRAMA.has(empresa.uf ?? "") || !empresa.email;
+}
+
+type Fonte =
+  | "cadastro"
+  | "sancoes"
+  | "tcu"
+  | "federal"
+  | "complemento"
+  | "am"
+  | "empenhosFederais"
+  | "empenhosAm"
+  | "convenios"
+  | "emenda";
+type FonteSobDemanda = "empenhosFederais" | "empenhosAm" | "convenios";
+type EstadoFonte = "carregando" | "ok" | "vazio" | "limite" | "erro";
 
 const ROTULO_FONTE: Record<Fonte, string> = {
   cadastro: "Cadastro (Receita)",
   sancoes: "Sanções (CGU)",
-  federal: "Governo federal (CGU)",
-  am: "Governo do Amazonas (SEFAZ-AM)",
+  tcu: "Certidão do TCU",
+  federal: "Governo federal e benefícios fiscais (CGU)",
+  complemento: "SUFRAMA e e-mail (CNPJá)",
+  am: "Contratos do Governo do Amazonas",
+  empenhosFederais: "Empenhos a receber — federal",
+  empenhosAm: "Empenhos a receber — Amazonas",
+  convenios: "Convênios (CGU)",
+  emenda: "Emenda e quem recebeu (CGU)",
 };
+
+const ROTULO_ESTADO: Record<EstadoFonte, string> = {
+  carregando: "consultando…",
+  ok: "no mapa",
+  vazio: "nada encontrado",
+  limite: "limite de consultas — tente de novo em 1 minuto",
+  erro: "não respondeu",
+};
+
+const SOB_DEMANDA: { fonte: FonteSobDemanda; botao: string }[] = [
+  { fonte: "empenhosFederais", botao: "Empenhos a receber (federal)" },
+  { fonte: "empenhosAm", botao: "Empenhos a receber (Amazonas)" },
+  { fonte: "convenios", botao: "Convênios desta entidade" },
+];
 
 const ROTULO_TIPO: Record<TipoNo, string> = {
   empresa: "Empresa",
-  pessoa: "Pessoa (sócio)",
+  pessoa: "Pessoa",
   "orgao-federal": "Órgão federal",
   "orgao-am": "Órgão do Amazonas",
   sancao: "Sanção",
+  beneficio: "Benefício fiscal",
+  registro: "Registro (SUFRAMA)",
+  parlamentar: "Autor de emenda",
+  emenda: "Emenda parlamentar",
+  cargo: "Cargo público (PEP)",
 };
+
+type EstadoCpf = { status: "carregando" } | { status: "ok" } | { status: "erro"; mensagem: string };
+
+/** "***455835**" → "***.455.835-**", como a tela de CPF mostra. */
+function formatarCpfMascarado(documento: string | undefined): string {
+  const d = (documento ?? "").replace(/\D/g, "");
+  return d.length === 6 ? `***.${d.slice(0, 3)}.${d.slice(3)}-**` : (documento ?? "");
+}
 
 // ---------------------------------------------------------------------------
 // Cores do grafo: o Cytoscape desenha em canvas e precisa de cores prontas, então
@@ -71,6 +141,11 @@ function cores(escuro: boolean) {
     pessoa: escuro ? v("ink-400", "#94a3b8") : v("ink-500", "#64748b"),
     orgaoFederal: v("accent-600", "#7c3aed"),
     orgaoAm: escuro ? v("accent-900", "#4c1d95") : v("accent-100", "#ede9fe"),
+    beneficio: v("primary-300", "#93c5fd"),
+    registro: escuro ? v("ink-500", "#64748b") : v("ink-400", "#94a3b8"),
+    parlamentar: escuro ? v("ink-200", "#e2e8f0") : v("ink-800", "#1e293b"),
+    emenda: v("success-600", "#059669"),
+    receber: v("primary-400", "#60a5fa"),
     perigo: v("danger-600", "#dc2626"),
     atencao: v("warning-600", "#d97706"),
     linha: escuro ? v("ink-600", "#475569") : v("ink-300", "#cbd5e1"),
@@ -103,7 +178,7 @@ function estilos(c: ReturnType<typeof cores>): StylesheetJson {
     },
     { selector: 'node[tipo = "empresa"]', style: { shape: "round-rectangle", "background-color": c.empresa, width: 30, height: 30 } },
     { selector: 'node[tipo = "empresa"][?expandida]', style: { width: 40, height: 40, "font-weight": 600 } },
-    // Empresa só citada (sócia de outra), ainda não aberta: contorno tracejado.
+    // Empresa só citada (sócia de outra, ou quem recebeu uma emenda), ainda não aberta: contorno tracejado.
     {
       selector: 'node[tipo = "empresa"][!expandida]',
       style: { "background-color": c.fundo, "border-width": 2, "border-style": "dashed", "border-color": c.empresa },
@@ -115,6 +190,11 @@ function estilos(c: ReturnType<typeof cores>): StylesheetJson {
       style: { shape: "round-diamond", "background-color": c.orgaoAm, "border-width": 2, "border-color": c.orgaoFederal, width: 26, height: 26 },
     },
     { selector: 'node[tipo = "sancao"]', style: { shape: "round-octagon", "background-color": c.perigo, width: 20, height: 20 } },
+    { selector: 'node[tipo = "beneficio"]', style: { shape: "round-tag", "background-color": c.beneficio } },
+    { selector: 'node[tipo = "registro"]', style: { shape: "barrel", "background-color": c.registro } },
+    { selector: 'node[tipo = "parlamentar"]', style: { shape: "round-pentagon", "background-color": c.parlamentar, width: 30, height: 30 } },
+    { selector: 'node[tipo = "emenda"]', style: { shape: "rhomboid", "background-color": c.emenda, width: 32, height: 22 } },
+    { selector: 'node[tipo = "cargo"]', style: { shape: "star", "background-color": c.atencao, width: 24, height: 24 } },
     { selector: 'node[alerta = "perigo"]', style: { "border-width": 4, "border-color": c.perigo, "border-style": "solid" } },
     { selector: 'node[alerta = "atencao"]', style: { "border-width": 4, "border-color": c.atencao, "border-style": "solid" } },
     { selector: "node:selected", style: { "overlay-color": c.foco, "overlay-opacity": 0.2, "overlay-padding": 6 } },
@@ -123,8 +203,11 @@ function estilos(c: ReturnType<typeof cores>): StylesheetJson {
       style: { width: "data(largura)", "line-color": c.linha, "curve-style": "bezier", opacity: 0.85 },
     },
     { selector: 'edge[tipo = "sancao"]', style: { "line-color": c.linhaSancao } },
+    { selector: 'edge[tipo = "a-receber"]', style: { "line-style": "dotted", "line-color": c.receber } },
+    { selector: 'edge[tipo = "emenda-pagamento"]', style: { "line-color": c.emenda } },
+    { selector: 'edge[tipo = "pep"], edge[tipo = "servidor"]', style: { "line-style": "dashed" } },
     {
-      selector: 'edge[tipo = "mesmo-endereco"], edge[tipo = "mesmo-telefone"]',
+      selector: 'edge[tipo = "mesmo-endereco"], edge[tipo = "mesmo-telefone"], edge[tipo = "mesmo-email"]',
       style: { "line-style": "dashed", "line-color": c.atencao, width: 2 },
     },
     // O texto de cada ligação fica no painel: no desenho ele cobria os pontos.
@@ -157,10 +240,15 @@ function Legenda() {
   const itens: [string, string][] = [
     ["Empresa", "h-3 w-3 rounded-sm bg-primary-600"],
     ["Empresa ainda não aberta", "h-3 w-3 rounded-sm border-2 border-dashed border-primary-600"],
-    ["Pessoa (sócio)", "h-3 w-3 rounded-full bg-ink-500 dark:bg-ink-400"],
+    ["Pessoa", "h-3 w-3 rounded-full bg-ink-500 dark:bg-ink-400"],
     ["Órgão federal", "h-3 w-3 rotate-45 rounded-sm bg-accent-600"],
     ["Órgão do Amazonas", "h-3 w-3 rotate-45 rounded-sm border-2 border-accent-600 bg-accent-100 dark:bg-accent-900"],
     ["Sanção", "h-3 w-3 rounded-full bg-danger-600"],
+    ["Benefício fiscal", "h-3 w-3 rounded-sm bg-primary-300"],
+    ["SUFRAMA", "h-3 w-3 rounded bg-ink-400 dark:bg-ink-500"],
+    ["Autor de emenda", "h-3 w-3 rounded-sm bg-ink-800 dark:bg-ink-200"],
+    ["Emenda", "h-3 w-3 -skew-x-12 bg-success-600"],
+    ["Cargo público (PEP)", "h-3 w-3 rotate-45 bg-warning-600"],
   ];
   return (
     <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-ink-600 dark:text-ink-300">
@@ -171,8 +259,12 @@ function Legenda() {
         </li>
       ))}
       <li className="inline-flex items-center gap-1.5">
+        <span className="inline-block w-4 border-t-2 border-dotted border-primary-400" aria-hidden />
+        Empenho a receber
+      </li>
+      <li className="inline-flex items-center gap-1.5">
         <span className="inline-block h-3 w-3 rounded-sm border-2 border-danger-600 bg-primary-600" aria-hidden />
-        Contorno vermelho: sanção que impede contratar · âmbar: atenção
+        Contorno vermelho: sanção · âmbar: atenção (inativa, PEP)
       </li>
     </ul>
   );
@@ -182,20 +274,24 @@ const TOM_CRUZAMENTO = { perigo: "danger", atencao: "warning", info: "primary" }
 const ROTULO_CRUZAMENTO: Record<Cruzamento["tipo"], string> = {
   "socio-comum": "Sócio",
   "orgao-comum": "Órgão",
+  "beneficio-comum": "Benefício",
   "mesmo-endereco": "Endereço",
   "mesmo-telefone": "Telefone",
+  "mesmo-email": "E-mail",
   "sancionada-com-contratos": "Sanção",
+  "emenda-para-sancionada": "Emenda",
+  "socio-com-alerta": "Sócio",
 };
 
-function ListaCruzamentos({ cruzamentos, onFocar, empresas }: { cruzamentos: Cruzamento[]; onFocar: (id: string) => void; empresas: number }) {
+function ListaCruzamentos({ cruzamentos, onFocar, pontos }: { cruzamentos: Cruzamento[]; onFocar: (id: string) => void; pontos: number }) {
   return (
     <div>
       <p className="text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">Cruzamentos encontrados</p>
       {cruzamentos.length === 0 ? (
         <p className="mt-1.5 text-sm text-ink-500 dark:text-ink-400">
-          {empresas < 2
-            ? "Adicione outra empresa para o mapa procurar sócios, órgãos, endereço ou telefone em comum."
-            : "Nenhum cruzamento entre as empresas do mapa até agora."}
+          {pontos < 2
+            ? "Adicione outra empresa ou uma emenda para o mapa procurar sócios, órgãos, endereço, telefone ou e-mail em comum."
+            : "Nenhum cruzamento no mapa até agora."}
         </p>
       ) : (
         <ul className="mt-2 space-y-2">
@@ -220,25 +316,104 @@ function ListaCruzamentos({ cruzamentos, onFocar, empresas }: { cruzamentos: Cru
   );
 }
 
+function ListaFontes({ fontes }: { fontes: Partial<Record<Fonte, EstadoFonte>> }) {
+  return (
+    <ul className="space-y-0.5 text-xs text-ink-500 dark:text-ink-400">
+      {(Object.keys(fontes) as Fonte[]).map((f) => (
+        <li key={f} className="flex items-center gap-1.5">
+          {fontes[f] === "carregando" ? (
+            <Loader2 className="h-3 w-3 shrink-0 animate-spin" aria-hidden />
+          ) : (
+            <span
+              className={cn(
+                "h-1.5 w-1.5 shrink-0 rounded-full",
+                fontes[f] === "erro" || fontes[f] === "limite"
+                  ? "bg-danger-600"
+                  : fontes[f] === "vazio"
+                    ? "bg-ink-300 dark:bg-ink-600"
+                    : "bg-success-600",
+              )}
+              aria-hidden
+            />
+          )}
+          {ROTULO_FONTE[f]}: {ROTULO_ESTADO[fontes[f] ?? "vazio"]}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** CPF completo de um sócio, conferido com os dígitos que a Receita mostra antes de consultar. */
+function ConsultaCpfSocio({
+  no,
+  estado,
+  onConsultar,
+}: {
+  no: NoSinapse;
+  estado?: EstadoCpf;
+  onConsultar: (idPessoa: string, documento: string | undefined, cpf: string) => void;
+}) {
+  const [cpf, setCpf] = useState("");
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (cpf.trim()) onConsultar(no.id, no.documento, cpf);
+      }}
+      className="rounded-lg border border-ink-200 p-3 dark:border-ink-700"
+    >
+      <Input
+        label="CPF completo deste sócio"
+        placeholder="000.000.000-00"
+        inputMode="numeric"
+        autoComplete="off"
+        leftIcon={<UserRound className="h-4 w-4" aria-hidden />}
+        value={cpf}
+        maxLength={14}
+        error={estado?.status === "erro" ? estado.mensagem : undefined}
+        onChange={(e) => setCpf(mascararCpf(e.target.value))}
+        onClear={() => setCpf("")}
+      />
+      <p className="mt-1.5 text-xs text-ink-500 dark:text-ink-400">
+        Precisa bater com os dígitos que a Receita mostra ({formatarCpfMascarado(no.documento)}). Traz sanções, PEP e vínculo
+        de servidor. O CPF não fica guardado.
+      </p>
+      <Button type="submit" size="sm" className="mt-2" loading={estado?.status === "carregando"}>
+        Consultar CPF
+      </Button>
+    </form>
+  );
+}
+
 function PainelNo({
   no,
   modelo,
   fontes,
+  estadoCpf,
   onSelecionar,
   onAbrir,
   onCentralizar,
+  onCarregar,
+  onConsultarCpf,
 }: {
   no: NoSinapse;
   modelo: ModeloSinapse;
   fontes?: Partial<Record<Fonte, EstadoFonte>>;
+  estadoCpf?: EstadoCpf;
   onSelecionar: (id: string) => void;
   onAbrir: (cnpj: string) => void;
   onCentralizar: (id: string) => void;
+  onCarregar: (cnpj: string, fonte: FonteSobDemanda, razaoSocial?: string) => void;
+  onConsultarCpf: (idPessoa: string, documento: string | undefined, cpf: string) => void;
 }) {
   const ligacoes = Object.values(modelo.arestas)
     .filter((a) => a.origem === no.id || a.destino === no.id)
     .map((a) => ({ aresta: a, outro: modelo.nos[a.origem === no.id ? a.destino : a.origem] }))
     .filter((l) => l.outro);
+  const razaoSocial = no.info.find(([k]) => k === "Razão social")?.[1];
+  const pendentes = no.tipo === "empresa" && no.expandida && no.cnpj ? SOB_DEMANDA.filter((s) => !fontes?.[s.fonte]) : [];
+  // Só sócio pessoa física com CPF mascarado de verdade pode ser conferido.
+  const podeConsultarCpf = no.tipo === "pessoa" && !no.cpfConsultado && (no.documento ?? "").replace(/\D/g, "").length === 6;
 
   return (
     <div className="space-y-4">
@@ -256,32 +431,12 @@ function PainelNo({
         {no.info.map(([rotulo, valor]) => (
           <div key={rotulo} className="flex gap-2">
             <dt className="w-28 shrink-0 text-xs text-ink-500 dark:text-ink-400">{rotulo}</dt>
-            <dd className="min-w-0 text-ink-700 dark:text-ink-200">{valor}</dd>
+            <dd className="min-w-0 break-words text-ink-700 dark:text-ink-200">{valor}</dd>
           </div>
         ))}
       </dl>
 
-      {fontes && (
-        <ul className="space-y-0.5 text-xs text-ink-500 dark:text-ink-400">
-          {(Object.keys(fontes) as Fonte[]).map((f) => (
-            <li key={f} className="flex items-center gap-1.5">
-              {fontes[f] === "carregando" ? (
-                <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
-              ) : (
-                <span
-                  className={cn(
-                    "h-1.5 w-1.5 rounded-full",
-                    fontes[f] === "erro" ? "bg-danger-600" : fontes[f] === "vazio" ? "bg-ink-300 dark:bg-ink-600" : "bg-success-600",
-                  )}
-                  aria-hidden
-                />
-              )}
-              {ROTULO_FONTE[f]}:{" "}
-              {{ carregando: "consultando…", ok: "no mapa", vazio: "nada encontrado", erro: "não respondeu" }[fontes[f] ?? "vazio"]}
-            </li>
-          ))}
-        </ul>
-      )}
+      {fontes && <ListaFontes fontes={fontes} />}
 
       <div className="flex flex-wrap gap-2">
         {no.tipo === "empresa" && no.cnpj && !no.expandida && (
@@ -289,7 +444,18 @@ function PainelNo({
             Abrir ligações desta empresa
           </Button>
         )}
-        <Button size="sm" variant="secondary" onClick={() => onCentralizar(no.id)}>
+        {pendentes.map((s) => (
+          <Button
+            key={s.fonte}
+            size="sm"
+            variant="secondary"
+            leftIcon={<Plus className="h-4 w-4" aria-hidden />}
+            onClick={() => onCarregar(no.cnpj!, s.fonte, razaoSocial)}
+          >
+            {s.botao}
+          </Button>
+        ))}
+        <Button size="sm" variant="ghost" onClick={() => onCentralizar(no.id)}>
           Centralizar
         </Button>
         {no.tipo === "empresa" && no.cnpj && (
@@ -305,6 +471,14 @@ function PainelNo({
           </Link>
         )}
       </div>
+      {pendentes.length > 0 && (
+        <p className="text-xs text-ink-400 dark:text-ink-500">
+          Empenhos e convênios são consultas pesadas: só entram no mapa quando você pede. Convênios procura pelo nome da
+          entidade, então só acham prefeituras, secretarias e entidades que recebem repasse.
+        </p>
+      )}
+
+      {podeConsultarCpf && <ConsultaCpfSocio no={no} estado={estadoCpf} onConsultar={onConsultarCpf} />}
 
       {ligacoes.length > 0 && (
         <div>
@@ -329,6 +503,13 @@ function PainelNo({
   );
 }
 
+function listaDaUrl(valor: string | null): string[] {
+  return (valor ?? "")
+    .split(",")
+    .map((c) => c.trim())
+    .filter(Boolean);
+}
+
 export function SinapseClient() {
   const router = useRouter();
   const pathname = usePathname();
@@ -337,20 +518,19 @@ export function SinapseClient() {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
   const layoutTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const iniciais = useRef(
-    (searchParams.get("cnpj") ?? "")
-      .split(",")
-      .map((c) => c.trim())
-      .filter(Boolean),
-  );
+  const iniciais = useRef({ cnpjs: listaDaUrl(searchParams.get("cnpj")), emendas: listaDaUrl(searchParams.get("emenda")) });
 
   const [pronto, setPronto] = useState(false);
   const [modelo, setModelo] = useState<ModeloSinapse>(MODELO_VAZIO);
-  const [abertas, setAbertas] = useState<string[]>([]);
-  // Fonte da verdade das empresas abertas: o estado acima só serve pra redesenhar a tela.
+  // Fontes da verdade do que está aberto: os estados só servem pra redesenhar a tela.
   const abertasRef = useRef<string[]>([]);
+  const emendasRef = useRef<string[]>([]);
+  const [abertas, setAbertas] = useState<string[]>([]);
+  const [emendas, setEmendas] = useState<string[]>([]);
   const [fontes, setFontes] = useState<Record<string, Partial<Record<Fonte, EstadoFonte>>>>({});
+  const [consultasCpf, setConsultasCpf] = useState<Record<string, EstadoCpf>>({});
   const [selecionado, setSelecionado] = useState<string | null>(null);
+  const [modo, setModo] = useState<"cnpj" | "emenda">("cnpj");
   const [valor, setValor] = useState("");
   const [incluirAm, setIncluirAm] = useState(true);
   const [erroForm, setErroForm] = useState<string | undefined>();
@@ -467,9 +647,18 @@ export function SinapseClient() {
     no.connectedEdges().addClass("destaque");
   }, [selecionado, modelo, pronto]);
 
-  const marcarFonte = useCallback((cnpj: string, fonte: Fonte, estado: EstadoFonte) => {
-    setFontes((f) => ({ ...f, [cnpj]: { ...f[cnpj], [fonte]: estado } }));
+  const marcarFonte = useCallback((chave: string, fonte: Fonte, estado: EstadoFonte) => {
+    setFontes((f) => ({ ...f, [chave]: { ...f[chave], [fonte]: estado } }));
   }, []);
+
+  /** Uma consulta de uma fonte: `aplicar` põe o resultado no modelo e diz o estado; erro vira "não respondeu". */
+  const consultarFonte = useCallback(
+    <T,>(chave: string, fonte: Fonte, promessa: Promise<T>, aplicar: (r: T) => EstadoFonte) => {
+      marcarFonte(chave, fonte, "carregando");
+      promessa.then((r) => marcarFonte(chave, fonte, aplicar(r))).catch(() => marcarFonte(chave, fonte, "erro"));
+    },
+    [marcarFonte],
+  );
 
   const abrirEmpresa = useCallback(
     (entrada: string, selecionar = true) => {
@@ -489,74 +678,177 @@ export function SinapseClient() {
       }
       abertasRef.current = [...abertasRef.current, cnpj];
       setAbertas(abertasRef.current);
-
       setModelo((m) => comEmpresaPendente(m, cnpj));
-      const consultar = <T,>(fonte: Fonte, promessa: Promise<T>, aplicar: (r: T) => boolean) => {
-        marcarFonte(cnpj, fonte, "carregando");
-        promessa
-          .then((r) => marcarFonte(cnpj, fonte, aplicar(r) ? "ok" : "vazio"))
-          .catch(() => marcarFonte(cnpj, fonte, "erro"));
-      };
 
-      consultar("cadastro", buscarEmpresa(cnpj), (r) => {
-        if (r.status !== "sucesso") {
-          if (r.status === "erro_servidor") throw new Error("cadastro");
-          return false;
-        }
+      consultarFonte(cnpj, "cadastro", buscarEmpresa(cnpj), (r) => {
+        if (r.status === "erro_servidor") throw new Error("cadastro");
+        if (r.status !== "sucesso") return "vazio";
         setModelo((m) => comCadastro(m, r.empresa));
-        return true;
+        if (precisaComplemento(r.empresa)) {
+          consultarFonte(cnpj, "complemento", buscarComplementoCnpj(cnpj), (rc) => {
+            if (rc.status === "limite") return "limite";
+            if (rc.status === "erro_servidor") throw new Error("complemento");
+            if (rc.status !== "sucesso") return "vazio";
+            setModelo((m) => comComplemento(m, cnpj, rc.complemento));
+            return rc.complemento.suframa.length || rc.complemento.emails.length ? "ok" : "vazio";
+          });
+        }
+        return "ok";
       });
-      consultar("sancoes", buscarSancoes(cnpj), (r) => {
+      consultarFonte(cnpj, "sancoes", buscarSancoes(cnpj), (r) => {
         if (r.status === "erro_servidor") throw new Error("sanções");
-        if (r.status !== "sucesso") return false;
+        if (r.status !== "sucesso") return "vazio";
         const todas = [...r.ceis, ...r.cnep];
         setModelo((m) => comSancoes(m, cnpj, todas));
-        return todas.length > 0;
+        return todas.length ? "ok" : "vazio";
       });
-      consultar("federal", buscarDadosGovernoFederal(cnpj), (r) => {
+      consultarFonte(cnpj, "tcu", buscarCertidaoTcu(cnpj), (r) => {
+        if (r.status === "erro_servidor") throw new Error("TCU");
+        if (r.status !== "sucesso") return "vazio";
+        setModelo((m) => comCertidaoTcu(m, cnpj, r));
+        return r.itens.some((i) => i.situacao === "consta" && i.tipo !== "CEIS" && i.tipo !== "CNEP") ? "ok" : "vazio";
+      });
+      consultarFonte(cnpj, "federal", buscarDadosGovernoFederal(cnpj), (r) => {
         if (r.status === "erro_servidor") throw new Error("governo federal");
-        if (r.status !== "sucesso") return false;
-        setModelo((m) => comGovernoFederal(m, cnpj, r));
-        return Boolean(r.contratos?.itens.length || r.pagamentos?.porOrgao.length);
+        if (r.status !== "sucesso") return "vazio";
+        setModelo((m) => {
+          const comFederal = comGovernoFederal(m, cnpj, r);
+          return r.beneficiosFiscais ? comBeneficiosFiscais(comFederal, cnpj, r.beneficiosFiscais) : comFederal;
+        });
+        const temAlgo =
+          r.contratos?.itens.length ||
+          r.pagamentos?.porOrgao.length ||
+          r.beneficiosFiscais?.regimes.length ||
+          r.beneficiosFiscais?.renunciasPorAno.length;
+        return temAlgo ? "ok" : "vazio";
       });
       if (incluirAm) {
-        consultar("am", buscarContratosAm(cnpj), (r) => {
+        consultarFonte(cnpj, "am", buscarContratosAm(cnpj), (r) => {
           if (r.status === "erro_servidor") throw new Error("Amazonas");
-          if (r.status !== "sucesso") return false;
+          if (r.status !== "sucesso") return "vazio";
           setModelo((m) => comContratosAm(m, cnpj, r.contratos));
-          return r.contratos.length > 0;
+          return r.contratos.length ? "ok" : "vazio";
         });
       }
     },
-    [incluirAm, marcarFonte],
+    [incluirAm, consultarFonte],
   );
 
-  // Abre o que veio na URL (/sinapse?cnpj=A,B) quando o grafo fica pronto.
-  useEffect(() => {
-    if (!pronto) return;
-    const lista = iniciais.current;
-    iniciais.current = [];
-    for (const c of lista) abrirEmpresa(c, lista.length === 1);
-  }, [pronto, abrirEmpresa]);
+  /** Empenhos e convênios: pesados demais pra entrar sozinhos; o painel da empresa pede. */
+  const carregarSobDemanda = useCallback(
+    (cnpj: string, fonte: FonteSobDemanda, razaoSocial?: string) => {
+      if (fonte === "empenhosFederais") {
+        consultarFonte(cnpj, fonte, buscarEmpenhosFederais(cnpj), (r) => {
+          if (r.status === "limite") return "limite";
+          if (r.status === "erro_servidor") throw new Error("empenhos federais");
+          if (r.status !== "sucesso") return "vazio";
+          setModelo((m) => comEmpenhosFederais(m, cnpj, r));
+          return r.totais.aReceber > 0 ? "ok" : "vazio";
+        });
+      } else if (fonte === "empenhosAm") {
+        consultarFonte(cnpj, fonte, buscarEmpenhosAm(cnpj), (r) => {
+          if (r.status === "erro_servidor") throw new Error("empenhos AM");
+          if (r.status !== "sucesso") return "vazio";
+          setModelo((m) => comEmpenhosAm(m, cnpj, r));
+          return r.totais.aReceber > 0 ? "ok" : "vazio";
+        });
+      } else if (razaoSocial) {
+        consultarFonte(cnpj, fonte, buscarConvenios({ convenente: razaoSocial, pagina: 1 }), (r) => {
+          if (r.status === "erro_servidor") throw new Error("convênios");
+          if (r.status !== "sucesso") return "vazio";
+          setModelo((m) => comConvenios(m, cnpj, r.itens));
+          return r.itens.length ? "ok" : "vazio";
+        });
+      }
+    },
+    [consultarFonte],
+  );
 
-  // A URL guarda as empresas abertas, pra dar pra compartilhar o mapa.
+  const abrirEmenda = useCallback(
+    (entrada: string, selecionar = true) => {
+      const codigo = entrada.replace(/\D/g, "");
+      if (!FORMATO_CODIGO_EMENDA.test(codigo)) {
+        setErroForm("Código da emenda inválido: são 12 dígitos, como aparece na tela de Emendas (ex.: 202471040014).");
+        return;
+      }
+      setErroForm(undefined);
+      const id = idEmenda(codigo);
+      if (selecionar) setSelecionado(id);
+      if (emendasRef.current.includes(codigo)) return;
+      if (emendasRef.current.length >= MAXIMO_EMENDAS) {
+        setErroForm(`Nesta versão beta o mapa abre até ${MAXIMO_EMENDAS} emendas. Limpe o mapa para começar outro.`);
+        return;
+      }
+      emendasRef.current = [...emendasRef.current, codigo];
+      setEmendas(emendasRef.current);
+
+      const busca = Promise.all([buscarEmendas({ codigo, pagina: 1 }), buscarDocumentosEmenda(codigo)]);
+      consultarFonte(id, "emenda", busca, ([re, rd]) => {
+        if (re.status === "erro_servidor") throw new Error("emenda");
+        const emenda = re.status === "sucesso" ? re.itens[0] : undefined;
+        if (!emenda) {
+          setErroForm(`A emenda ${codigo} não foi encontrada no Portal da Transparência.`);
+          emendasRef.current = emendasRef.current.filter((c) => c !== codigo);
+          setEmendas(emendasRef.current);
+          return "vazio";
+        }
+        setModelo((m) => comEmenda(m, emenda, rd.status === "sucesso" ? rd : null));
+        return "ok";
+      });
+    },
+    [consultarFonte],
+  );
+
+  const consultarCpfDoSocio = useCallback(async (idPessoa: string, documento: string | undefined, cpf: string) => {
+    const validacao = validarCpf(cpf);
+    const erro = (mensagem: string) => setConsultasCpf((c) => ({ ...c, [idPessoa]: { status: "erro", mensagem } }));
+    if (!validacao.valido) return erro(validacao.mensagem);
+    if (!cpfBateComMascara(validacao.cpf, documento)) {
+      return erro(`Esse CPF não bate com os dígitos que a Receita mostra para este sócio (${formatarCpfMascarado(documento)}).`);
+    }
+    setConsultasCpf((c) => ({ ...c, [idPessoa]: { status: "carregando" } }));
+    const r = await consultarCpf(validacao.cpf);
+    if (r.status === "sucesso") {
+      setModelo((m) => comPessoaFisica(m, idPessoa, r.pessoa));
+      setConsultasCpf((c) => ({ ...c, [idPessoa]: { status: "ok" } }));
+    } else if (r.status !== "cancelado") {
+      erro("mensagem" in r && r.mensagem ? r.mensagem : "Não foi possível consultar o CPF agora.");
+    }
+  }, []);
+
+  // Abre o que veio na URL (/sinapse?cnpj=A,B&emenda=C) quando o grafo fica pronto.
   useEffect(() => {
     if (!pronto) return;
-    router.replace(abertas.length ? `${pathname}?cnpj=${abertas.join(",")}` : pathname, { scroll: false });
-  }, [abertas, pathname, router, pronto]);
+    const { cnpjs, emendas: codigos } = iniciais.current;
+    iniciais.current = { cnpjs: [], emendas: [] };
+    const sozinho = cnpjs.length + codigos.length === 1;
+    for (const c of cnpjs) abrirEmpresa(c, sozinho);
+    for (const c of codigos) abrirEmenda(c, sozinho);
+  }, [pronto, abrirEmpresa, abrirEmenda]);
+
+  // A URL guarda o que está aberto, pra dar pra compartilhar o mapa.
+  useEffect(() => {
+    if (!pronto) return;
+    const partes = [abertas.length && `cnpj=${abertas.join(",")}`, emendas.length && `emenda=${emendas.join(",")}`].filter(Boolean);
+    router.replace(partes.length ? `${pathname}?${partes.join("&")}` : pathname, { scroll: false });
+  }, [abertas, emendas, pathname, router, pronto]);
 
   function adicionar(evento: FormEvent) {
     evento.preventDefault();
     if (!valor.trim()) return;
-    abrirEmpresa(valor);
+    if (modo === "cnpj") abrirEmpresa(valor);
+    else abrirEmenda(valor);
     setValor("");
   }
 
   function limpar() {
     abertasRef.current = [];
+    emendasRef.current = [];
     setModelo(MODELO_VAZIO);
     setAbertas([]);
+    setEmendas([]);
     setFontes({});
+    setConsultasCpf({});
     setSelecionado(null);
     setErroForm(undefined);
   }
@@ -575,6 +867,11 @@ export function SinapseClient() {
   const noSelecionado = selecionado ? modelo.nos[selecionado] : undefined;
   const totalNos = Object.keys(modelo.nos).length;
   const totalArestas = Object.keys(modelo.arestas).length;
+  const fontesDoSelecionado = noSelecionado?.cnpj
+    ? fontes[noSelecionado.cnpj]
+    : noSelecionado?.tipo === "emenda"
+      ? fontes[noSelecionado.id]
+      : undefined;
 
   return (
     <div className="flex flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
@@ -584,8 +881,8 @@ export function SinapseClient() {
           <Badge tone="accent">Beta</Badge>
         </h1>
         <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">
-          Mapa de relações: empresas, sócios, órgãos que contratam e sanções num só desenho. Adicione mais de uma
-          empresa para ver o que elas têm em comum.
+          Mapa de relações: empresas, sócios, órgãos, sanções, benefícios, emendas e o dinheiro entre eles num só desenho.
+          Adicione mais de uma empresa ou emenda para ver o que elas têm em comum.
         </p>
       </div>
 
@@ -593,19 +890,32 @@ export function SinapseClient() {
         onSubmit={adicionar}
         className="rounded-2xl border border-ink-200 bg-white p-5 shadow-card dark:border-ink-700 dark:bg-ink-900 sm:p-6"
       >
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <div className="flex-1">
-            <Input
-              label="CNPJ para adicionar ao mapa"
-              placeholder="00.000.000/0000-00"
-              leftIcon={<Building2 className="h-4 w-4" aria-hidden />}
-              value={valor}
-              maxLength={18}
-              error={erroForm}
-              onChange={(e) => setValor(mascararCnpj(e.target.value))}
-              onClear={() => setValor("")}
-            />
-          </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[12rem_minmax(0,1fr)_auto] sm:items-end">
+          <Select
+            label="Adicionar"
+            value={modo}
+            onChange={(e) => {
+              setModo(e.target.value as "cnpj" | "emenda");
+              setValor("");
+              setErroForm(undefined);
+            }}
+          >
+            <option value="cnpj">Empresa (CNPJ)</option>
+            <option value="emenda">Emenda (código)</option>
+          </Select>
+          <Input
+            label={modo === "cnpj" ? "CNPJ" : "Código da emenda"}
+            placeholder={modo === "cnpj" ? "00.000.000/0000-00" : "Ex.: 202471040014"}
+            inputMode="numeric"
+            leftIcon={
+              modo === "cnpj" ? <Building2 className="h-4 w-4" aria-hidden /> : <Landmark className="h-4 w-4" aria-hidden />
+            }
+            value={valor}
+            maxLength={modo === "cnpj" ? 18 : 12}
+            error={erroForm}
+            onChange={(e) => setValor(modo === "cnpj" ? mascararCnpj(e.target.value) : e.target.value.replace(/\D/g, ""))}
+            onClear={() => setValor("")}
+          />
           <Button type="submit" leftIcon={<Plus className="h-4 w-4" aria-hidden />}>
             Adicionar ao mapa
           </Button>
@@ -645,7 +955,8 @@ export function SinapseClient() {
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 px-6 text-center">
               <Network className="h-8 w-8 text-ink-300 dark:text-ink-600" aria-hidden />
               <p className="text-sm text-ink-500 dark:text-ink-400">
-                Adicione um CNPJ para começar o mapa. Cada empresa traz sócios, órgãos que contratam com ela e sanções.
+                Adicione um CNPJ ou uma emenda para começar o mapa. Cada empresa traz sócios, órgãos que contratam com
+                ela, sanções e benefícios; cada emenda traz o autor e quem recebeu o dinheiro.
               </p>
             </div>
           )}
@@ -675,12 +986,16 @@ export function SinapseClient() {
         <aside className="flex min-w-0 flex-col gap-5 rounded-2xl border border-ink-200 bg-white p-5 shadow-card scrollbar-fina dark:border-ink-700 dark:bg-ink-900 lg:max-h-[600px] lg:overflow-y-auto">
           {noSelecionado ? (
             <PainelNo
+              key={noSelecionado.id}
               no={noSelecionado}
               modelo={modelo}
-              fontes={noSelecionado.cnpj ? fontes[noSelecionado.cnpj] : undefined}
+              fontes={fontesDoSelecionado}
+              estadoCpf={consultasCpf[noSelecionado.id]}
               onSelecionar={focar}
               onAbrir={abrirEmpresa}
               onCentralizar={centralizar}
+              onCarregar={carregarSobDemanda}
+              onConsultarCpf={consultarCpfDoSocio}
             />
           ) : (
             <p className="text-sm text-ink-500 dark:text-ink-400">
@@ -688,7 +1003,7 @@ export function SinapseClient() {
             </p>
           )}
           <div className="border-t border-ink-100 pt-5 dark:border-ink-800">
-            <ListaCruzamentos cruzamentos={cruzamentos} onFocar={focar} empresas={abertas.length} />
+            <ListaCruzamentos cruzamentos={cruzamentos} onFocar={focar} pontos={abertas.length + emendas.length} />
           </div>
         </aside>
       </div>
@@ -697,10 +1012,11 @@ export function SinapseClient() {
         <Legenda />
         <p className="flex items-start gap-1.5 text-xs text-ink-400 dark:text-ink-500">
           <TriangleAlert className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
-          Versão beta. Fontes: Receita Federal (BrasilAPI), Portal da Transparência (CGU) e SEFAZ-AM. O CPF dos sócios
-          vem mascarado da Receita, então o mapa liga pessoas pelo nome e pelos dígitos visíveis do CPF — só entre
-          empresas que estão no mapa. Cada empresa mostra até 20 órgãos, os de maior valor.
+          Versão beta. Fontes: Receita Federal (BrasilAPI), CNPJá, Portal da Transparência (CGU), TCU e SEFAZ-AM. O CPF dos
+          sócios vem mascarado da Receita, então o mapa liga pessoas pelo nome e pelos dígitos visíveis do CPF — só entre
+          pontos que estão no mapa. Cada empresa mostra até 20 órgãos, os de maior valor.
           {abertas.length > 0 && ` Empresas abertas: ${abertas.map((c) => formatarCnpj(c)).join(", ")}.`}
+          {emendas.length > 0 && ` Emendas: ${emendas.join(", ")}.`}
         </p>
       </div>
     </div>

@@ -1,7 +1,17 @@
 import { formatarCnpj, formatarMoeda } from "@/lib/formatters";
-import type { Empresa } from "@/types/cnpj";
-import type { ContratoEstadual } from "@/types/am";
-import type { DadosGovernoFederal, Sancao } from "@/types/transparencia";
+import type { ComplementoCnpj, Empresa } from "@/types/cnpj";
+import type { ContratoEstadual, ResultadoEmpenhosAm } from "@/types/am";
+import type { CertidaoTcu } from "@/types/tcu";
+import type {
+  BeneficiosFiscais,
+  ConvenioFederal,
+  DadosGovernoFederal,
+  DadosPessoaFisica,
+  EmendaParlamentar,
+  ResultadoDocumentosEmenda,
+  ResultadoEmpenhosFederais,
+  Sancao,
+} from "@/types/transparencia";
 
 /**
  * Modelo do modo Sinapse: um grafo de empresas, sócios, órgãos e sanções
@@ -12,9 +22,34 @@ import type { DadosGovernoFederal, Sancao } from "@/types/transparencia";
  * por duas empresas vira UM ponto — é isso que faz o cruzamento aparecer.
  */
 
-export type TipoNo = "empresa" | "pessoa" | "orgao-federal" | "orgao-am" | "sancao";
+export type TipoNo =
+  | "empresa"
+  | "pessoa"
+  | "orgao-federal"
+  | "orgao-am"
+  | "sancao"
+  | "beneficio"
+  | "registro"
+  | "parlamentar"
+  | "emenda"
+  | "cargo";
 
-export type TipoAresta = "socio" | "federal" | "am" | "sancao" | "mesmo-endereco" | "mesmo-telefone";
+export type TipoAresta =
+  | "socio"
+  | "federal"
+  | "am"
+  | "sancao"
+  | "a-receber"
+  | "convenio"
+  | "beneficio"
+  | "registro"
+  | "autoria"
+  | "emenda-pagamento"
+  | "pep"
+  | "servidor"
+  | "mesmo-endereco"
+  | "mesmo-telefone"
+  | "mesmo-email";
 
 export interface NoSinapse {
   id: string;
@@ -28,6 +63,10 @@ export interface NoSinapse {
   cnpj?: string;
   /** Empresa cujas ligações já foram consultadas. */
   expandida?: boolean;
+  /** Pessoa: CPF como a Receita publica ("***455835**"), pra conferir o CPF completo digitado. */
+  documento?: string;
+  /** Pessoa cujo CPF já foi consultado no Portal da Transparência. */
+  cpfConsultado?: boolean;
   /** Pares rótulo → valor pro painel de detalhes. */
   info: [string, string][];
 }
@@ -109,6 +148,7 @@ export function comCadastro(modelo: ModeloSinapse, empresa: Empresa): ModeloSina
       ["Atividade", empresa.atividadePrincipal?.descricao ?? "—"],
       ["Endereço", [empresa.endereco, empresa.bairro, local].filter(Boolean).join(", ") || "—"],
       ["Telefone", empresa.telefones.join(" · ") || "—"],
+      ...(empresa.email ? [["E-mail", empresa.email.toLowerCase()] as [string, string]] : []),
     ],
   });
 
@@ -135,6 +175,7 @@ export function comCadastro(modelo: ModeloSinapse, empresa: Empresa): ModeloSina
       tipo: "pessoa",
       rotulo: socio.nome,
       detalhe: socio.tipo === "estrangeiro" ? "Sócio estrangeiro" : "Sócio",
+      documento: socio.documento,
       info: [["Nome", socio.nome], ["CPF", socio.documento ?? "não informado"]],
     });
     m = comAresta(m, { id: `socio:${idPessoa}>${empresa.cnpj}`, origem: idPessoa, destino: id, tipo: "socio", rotulo: socio.qualificacao });
@@ -143,8 +184,14 @@ export function comCadastro(modelo: ModeloSinapse, empresa: Empresa): ModeloSina
 }
 
 export function comSancoes(modelo: ModeloSinapse, cnpj: string, sancoes: Sancao[]): ModeloSinapse {
+  return comSancoesDe(modelo, idEmpresa(cnpj), cnpj, sancoes);
+}
+
+/** Sanções de uma empresa ou de uma pessoa (consulta de CPF): `origem` é o ponto sancionado. */
+function comSancoesDe(modelo: ModeloSinapse, origem: string, chaveOrigem: string, sancoes: Sancao[]): ModeloSinapse {
   let m = modelo;
-  const idE = idEmpresa(cnpj);
+  const idE = origem;
+  const cnpj = chaveOrigem;
   for (const s of sancoes) {
     const id = `sancao:${s.tipo}-${s.id}`;
     m = comNo(m, {
@@ -241,8 +288,324 @@ export function comContratosAm(modelo: ModeloSinapse, cnpj: string, contratos: C
   return m;
 }
 
-/** Liga empresas do mapa que dividem telefone ou endereço — ninguém declara isso, o mapa acha. */
-function comCoincidencias(modelo: ModeloSinapse): ModeloSinapse {
+/** Acrescenta (ou troca) uma linha de detalhe no painel de um ponto. */
+function comInfo(modelo: ModeloSinapse, id: string, chave: string, valor: string): ModeloSinapse {
+  const no = modelo.nos[id];
+  if (!no) return modelo;
+  const info = [...no.info.filter(([k]) => k !== chave), [chave, valor] as [string, string]];
+  return { ...modelo, nos: { ...modelo.nos, [id]: { ...no, info } } };
+}
+
+function comAlerta(modelo: ModeloSinapse, id: string, alerta: "perigo" | "atencao"): ModeloSinapse {
+  const no = modelo.nos[id];
+  if (!no || no.alerta === "perigo") return modelo;
+  return { ...modelo, nos: { ...modelo.nos, [id]: { ...no, alerta } } };
+}
+
+// ---------------------------------------------------------------------------
+// Certidão do TCU: inidôneos (TCU) e improbidade (CNJ). CEIS e CNEP também vêm
+// na certidão, mas já estão no mapa pela CGU — não viram ponto de novo.
+// ---------------------------------------------------------------------------
+export function comCertidaoTcu(modelo: ModeloSinapse, cnpj: string, certidao: CertidaoTcu): ModeloSinapse {
+  const idE = idEmpresa(cnpj);
+  let m = modelo;
+  const proprios = certidao.itens.filter((i) => i.tipo !== "CEIS" && i.tipo !== "CNEP");
+  for (const item of proprios.filter((i) => i.situacao === "consta")) {
+    const id = `tcu:${cnpj}:${item.tipo}`;
+    m = comNo(m, {
+      id,
+      tipo: "sancao",
+      rotulo: `${item.emissor}: ${item.tipo === "Inidôneos" ? "licitante inidôneo" : item.tipo}`,
+      detalhe: item.observacao,
+      alerta: "perigo",
+      info: [["Cadastro", item.descricao], ["Emissor", item.emissor], ["Registro", item.observacao ?? "—"]],
+    });
+    m = comAresta(m, { id: `sancao:${cnpj}>${id}`, origem: idE, destino: id, tipo: "sancao", rotulo: item.descricao });
+    m = comAlerta(m, idE, "perigo");
+  }
+  const resumo = proprios.map((i) => `${i.tipo}: ${i.situacao === "consta" ? "constam registros" : i.situacao === "nada_consta" ? "nada consta" : "não consultado"}`);
+  return comInfo(m, idE, "Certidão TCU", resumo.join(" · ") || "—");
+}
+
+// ---------------------------------------------------------------------------
+// Benefícios fiscais: cada regime especial (REIDI, PADIS…) é um ponto
+// compartilhado — duas empresas no mesmo regime aparecem ligadas a ele.
+// ---------------------------------------------------------------------------
+export function comBeneficiosFiscais(modelo: ModeloSinapse, cnpj: string, beneficios: BeneficiosFiscais): ModeloSinapse {
+  const idE = idEmpresa(cnpj);
+  let m = modelo;
+  for (const r of beneficios.regimes) {
+    const id = `beneficio:${normalizar(r.beneficio)}`;
+    m = comNo(m, {
+      id,
+      tipo: "beneficio",
+      rotulo: r.beneficio.toUpperCase(),
+      detalhe: r.descricao ?? "Regime especial de tributação",
+      info: [["Benefício", r.beneficio.toUpperCase()], ["O que é", r.descricao ?? "—"], ["Fundamento", r.fundamentoLegal ?? "—"]],
+    });
+    m = comAresta(m, {
+      id: `beneficio:${cnpj}>${id}`,
+      origem: idE,
+      destino: id,
+      tipo: "beneficio",
+      rotulo: `${r.vigente ? "vigente" : "encerrado"}${r.inicio ? ` · de ${r.inicio}${r.fim ? ` a ${r.fim}` : ""}` : ""}`,
+    });
+  }
+  const recente = beneficios.renunciasPorAno[0];
+  if (recente) m = comInfo(m, idE, "Tributos não pagos", `${formatarMoeda(recente.total)} em ${recente.ano} (renúncia fiscal)`);
+  if (beneficios.imunidades.length) {
+    m = comInfo(m, idE, "Imunidade/isenção", beneficios.imunidades.map((i) => i.beneficio).join(" · "));
+  }
+  return m;
+}
+
+// ---------------------------------------------------------------------------
+// SUFRAMA e e-mail (CNPJá). A SUFRAMA é um ponto só, compartilhado; o e-mail
+// entra no detalhe da empresa e alimenta o cruzamento "mesmo e-mail".
+// ---------------------------------------------------------------------------
+export function comComplemento(modelo: ModeloSinapse, cnpj: string, complemento: ComplementoCnpj): ModeloSinapse {
+  const idE = idEmpresa(cnpj);
+  let m = modelo;
+  if (complemento.emails.length) {
+    const atuais = m.nos[idE]?.info.find(([k]) => k === "E-mail")?.[1];
+    const todos = [...new Set([...(atuais ? atuais.split(" · ") : []), ...complemento.emails])];
+    m = comInfo(m, idE, "E-mail", todos.join(" · "));
+  }
+  for (const inscricao of complemento.suframa) {
+    const id = "registro:suframa";
+    m = comNo(m, {
+      id,
+      tipo: "registro",
+      rotulo: "SUFRAMA",
+      detalhe: "Cadastro de empresas da Zona Franca de Manaus",
+      info: [["Órgão", "Superintendência da Zona Franca de Manaus"]],
+    });
+    const incentivos = [...new Set(inscricao.incentivos.map((i) => i.tributo))].join(", ");
+    m = comAresta(m, {
+      id: `registro:${cnpj}>${id}:${inscricao.numero}`,
+      origem: idE,
+      destino: id,
+      tipo: "registro",
+      rotulo: [`inscrição ${inscricao.numero}`, inscricao.situacao, incentivos && `incentivos: ${incentivos}`].filter(Boolean).join(" · "),
+    });
+  }
+  return comCoincidencias(m);
+}
+
+// ---------------------------------------------------------------------------
+// Empenhos a receber: somados por órgão, na mesma chave do órgão dos contratos.
+// ---------------------------------------------------------------------------
+export function comEmpenhosFederais(modelo: ModeloSinapse, cnpj: string, resultado: ResultadoEmpenhosFederais): ModeloSinapse {
+  const idE = idEmpresa(cnpj);
+  const porOrgao = new Map<string, { nome: string; valor: number; empenhos: number }>();
+  for (const e of resultado.empenhos) {
+    if (e.aReceber <= 0) continue;
+    const nome = e.orgao ?? e.orgaoSuperior ?? e.ug;
+    if (!nome) continue;
+    const chave = chaveOrgaoFederal(nome);
+    const atual = porOrgao.get(chave) ?? { nome, valor: 0, empenhos: 0 };
+    atual.valor += e.aReceber;
+    atual.empenhos++;
+    porOrgao.set(chave, atual);
+  }
+  let m = modelo;
+  for (const [chave, o] of [...porOrgao.entries()].sort((a, b) => b[1].valor - a[1].valor).slice(0, MAXIMO_ORGAOS_POR_EMPRESA)) {
+    m = comNo(m, { id: chave, tipo: "orgao-federal", rotulo: o.nome, detalhe: "Governo federal", info: [["Órgão", o.nome], ["Esfera", "Federal"]] });
+    m = comAresta(m, {
+      id: `receber-federal:${cnpj}>${chave}`,
+      origem: idE,
+      destino: chave,
+      tipo: "a-receber",
+      rotulo: `a receber ${formatarMoeda(o.valor)} (${o.empenhos} ${o.empenhos === 1 ? "empenho" : "empenhos"})`,
+      valor: o.valor,
+    });
+  }
+  return comInfo(m, idE, "A receber (federal)", resultado.totais.aReceber > 0 ? formatarMoeda(resultado.totais.aReceber) : "nada a receber");
+}
+
+export function comEmpenhosAm(modelo: ModeloSinapse, cnpj: string, resultado: ResultadoEmpenhosAm): ModeloSinapse {
+  const idE = idEmpresa(cnpj);
+  const porUg = new Map<string, { nome: string; valor: number; contratos: number }>();
+  for (const c of resultado.contratos) {
+    if (c.totais.aReceber <= 0) continue;
+    const atual = porUg.get(c.ug) ?? { nome: c.ugSigla ?? c.ugNome ?? c.ug, valor: 0, contratos: 0 };
+    atual.valor += c.totais.aReceber;
+    atual.contratos++;
+    porUg.set(c.ug, atual);
+  }
+  let m = modelo;
+  for (const [ug, o] of porUg) {
+    const id = `orgao-am:${ug}`;
+    m = comNo(m, { id, tipo: "orgao-am", rotulo: o.nome, detalhe: "Governo do Amazonas", info: [["Órgão", o.nome], ["Esfera", "Estadual (AM)"], ["UG", ug]] });
+    m = comAresta(m, {
+      id: `receber-am:${cnpj}>${id}`,
+      origem: idE,
+      destino: id,
+      tipo: "a-receber",
+      rotulo: `a receber ${formatarMoeda(o.valor)} (${o.contratos} ${o.contratos === 1 ? "contrato" : "contratos"})`,
+      valor: o.valor,
+    });
+  }
+  return comInfo(m, idE, "A receber (Amazonas)", resultado.totais.aReceber > 0 ? formatarMoeda(resultado.totais.aReceber) : "nada a receber");
+}
+
+// ---------------------------------------------------------------------------
+// Convênios: a entidade (prefeitura, secretaria, ONG) ligada a quem repassa.
+// ---------------------------------------------------------------------------
+export function comConvenios(modelo: ModeloSinapse, cnpj: string, convenios: ConvenioFederal[]): ModeloSinapse {
+  const idE = idEmpresa(cnpj);
+  const porConcedente = new Map<string, { nome: string; quantidade: number; valor: number; liberado: number }>();
+  for (const c of convenios) {
+    const nome = c.concedente ?? c.unidadeGestora;
+    if (!nome) continue;
+    const chave = chaveOrgaoFederal(nome);
+    const atual = porConcedente.get(chave) ?? { nome, quantidade: 0, valor: 0, liberado: 0 };
+    atual.quantidade++;
+    atual.valor += c.valor;
+    atual.liberado += c.valorLiberado;
+    porConcedente.set(chave, atual);
+  }
+  let m = modelo;
+  for (const [chave, o] of porConcedente) {
+    m = comNo(m, { id: chave, tipo: "orgao-federal", rotulo: o.nome.split(" — ")[0], detalhe: "Governo federal", info: [["Órgão", o.nome], ["Esfera", "Federal"]] });
+    m = comAresta(m, {
+      id: `convenio:${cnpj}>${chave}`,
+      origem: idE,
+      destino: chave,
+      tipo: "convenio",
+      rotulo: `${o.quantidade} ${o.quantidade === 1 ? "convênio" : "convênios"} · ${formatarMoeda(o.valor)} · liberado ${formatarMoeda(o.liberado)}`,
+      valor: o.valor,
+    });
+  }
+  return comInfo(m, idE, "Convênios", convenios.length ? `${convenios.length} encontrados (primeira página da CGU)` : "nenhum com este nome");
+}
+
+// ---------------------------------------------------------------------------
+// Emenda: parlamentar → emenda → quem recebeu o dinheiro. Quem recebeu vira
+// ponto de empresa (pra abrir depois) ou de pessoa — e se essa pessoa já é
+// sócia de uma empresa do mapa, o ponto é o mesmo.
+// ---------------------------------------------------------------------------
+export function idEmenda(codigo: string): string {
+  return `emenda:${codigo}`;
+}
+
+export function comEmenda(modelo: ModeloSinapse, emenda: EmendaParlamentar, documentos: ResultadoDocumentosEmenda | null): ModeloSinapse {
+  const id = idEmenda(emenda.codigo);
+  const idAutor = `parlamentar:${normalizar(emenda.autor)}`;
+  let m = comNo(modelo, {
+    id: idAutor,
+    tipo: "parlamentar",
+    rotulo: emenda.autor,
+    detalhe: "Autor de emenda (parlamentar, bancada ou comissão)",
+    info: [["Autor", emenda.autor]],
+  });
+  m = comNo(m, {
+    id,
+    tipo: "emenda",
+    rotulo: `Emenda ${emenda.numero}/${emenda.ano}`,
+    detalhe: [emenda.tipo.replace(/^Emenda /, ""), emenda.localidade].filter(Boolean).join(" · "),
+    info: [
+      ["Código", emenda.codigo],
+      ["Tipo", emenda.tipo],
+      ["Função", [emenda.funcao, emenda.subfuncao].filter(Boolean).join(" › ") || "—"],
+      ["Empenhado", formatarMoeda(emenda.empenhado)],
+      ["Pago", `${formatarMoeda(emenda.pago)}${emenda.restoPago ? ` (+ ${formatarMoeda(emenda.restoPago)} de restos a pagar)` : ""}`],
+    ],
+  });
+  m = comAresta(m, { id: `autoria:${idAutor}>${id}`, origem: idAutor, destino: id, tipo: "autoria", rotulo: "autor da emenda" });
+  if (!documentos) return comInfo(m, id, "Quem recebeu", "não foi possível consultar os documentos");
+
+  for (const r of documentos.recebedores) {
+    const digitos = digitosVisiveis(r.documento);
+    const destino =
+      digitos.length === 14 ? idEmpresa(digitos) : `pessoa:${normalizar(r.nome)}|${digitos}`;
+    if (digitos.length === 14) {
+      m = comNo(m, {
+        id: destino,
+        tipo: "empresa",
+        rotulo: r.nome,
+        detalhe: "Recebeu dinheiro de emenda — clique em Abrir ligações",
+        cnpj: digitos,
+        info: [["Razão social", r.nome], ["CNPJ", formatarCnpj(digitos) ?? digitos], ["UF", r.uf ?? "—"]],
+      });
+    } else {
+      m = comNo(m, { id: destino, tipo: "pessoa", rotulo: r.nome, detalhe: "Recebeu dinheiro de emenda", documento: r.documento, info: [["Nome", r.nome], ["CPF", r.documento ?? "—"]] });
+    }
+    m = comAresta(m, { id: `emenda-pagamento:${id}>${destino}`, origem: id, destino, tipo: "emenda-pagamento", rotulo: `recebeu ${formatarMoeda(r.valor)}`, valor: r.valor });
+  }
+  return comInfo(m, id, "Quem recebeu", documentos.recebedores.length ? `${documentos.recebedores.length} favorecidos` : "nenhum pagamento ainda");
+}
+
+// ---------------------------------------------------------------------------
+// CPF de um sócio, digitado inteiro pelo usuário e conferido com os dígitos
+// que a Receita mostra. O CPF não fica no modelo — só o que a CGU devolve.
+// ---------------------------------------------------------------------------
+
+/** O CPF completo bate com o mascarado da Receita ("***455835**" = dígitos 4 a 9)? */
+export function cpfBateComMascara(cpf: string, mascarado: string | undefined): boolean {
+  const visiveis = digitosVisiveis(mascarado);
+  const digitos = cpf.replace(/\D/g, "");
+  return visiveis.length === 6 && digitos.length === 11 && digitos.slice(3, 9) === visiveis;
+}
+
+export function comPessoaFisica(modelo: ModeloSinapse, idPessoa: string, dados: DadosPessoaFisica): ModeloSinapse {
+  let m = modelo;
+  const no = m.nos[idPessoa];
+  if (!no) return m;
+  m = { ...m, nos: { ...m.nos, [idPessoa]: { ...no, cpfConsultado: true } } };
+  if (dados.nome) m = comInfo(m, idPessoa, "Nome na CGU", dados.nome);
+
+  const sancoes = dados.sancoes ? [...dados.sancoes.ceis, ...dados.sancoes.cnep] : [];
+  if (sancoes.length) m = comSancoesDe(m, idPessoa, idPessoa, sancoes);
+  for (const p of dados.ceaf ?? []) {
+    const id = `ceaf:${p.id}`;
+    m = comNo(m, {
+      id,
+      tipo: "sancao",
+      rotulo: `CEAF: ${p.tipo}`,
+      detalhe: [p.orgao, p.dataPublicacao].filter(Boolean).join(" · "),
+      alerta: "perigo",
+      info: [["Cadastro", "CEAF — expulsos da administração federal"], ["Punição", p.tipo], ["Órgão", p.orgao ?? "—"], ["Publicada em", p.dataPublicacao ?? "—"]],
+    });
+    m = comAresta(m, { id: `sancao:${idPessoa}>${id}`, origem: idPessoa, destino: id, tipo: "sancao", rotulo: p.tipo });
+  }
+  if (sancoes.length || dados.ceaf?.length) m = comAlerta(m, idPessoa, "perigo");
+
+  (dados.peps ?? []).forEach((p, i) => {
+    const id = `pep:${idPessoa}:${i}`;
+    m = comNo(m, {
+      id,
+      tipo: "cargo",
+      rotulo: p.funcao,
+      detalhe: [p.orgao, p.fimCarencia && `PEP até ${p.fimCarencia}`].filter(Boolean).join(" · "),
+      alerta: "atencao",
+      info: [["Função", p.funcao], ["Órgão", p.orgao ?? "—"], ["Exercício", [p.inicioExercicio, p.fimExercicio].filter(Boolean).join(" a ") || "—"], ["Segue PEP até", p.fimCarencia ?? "—"]],
+    });
+    m = comAresta(m, { id: `pep:${idPessoa}>${id}`, origem: idPessoa, destino: id, tipo: "pep", rotulo: "pessoa politicamente exposta" });
+  });
+  if (dados.peps?.length) m = comAlerta(m, idPessoa, "atencao");
+
+  for (const v of dados.vinculos ?? []) {
+    const nome = v.orgaoLotacao ?? v.orgaoExercicio;
+    if (!nome) continue;
+    const chave = chaveOrgaoFederal(nome);
+    m = comNo(m, { id: chave, tipo: "orgao-federal", rotulo: nome.split(" — ")[0], detalhe: "Governo federal", info: [["Órgão", nome], ["Esfera", "Federal"]] });
+    m = comAresta(m, { id: `servidor:${idPessoa}>${chave}`, origem: idPessoa, destino: chave, tipo: "servidor", rotulo: [v.situacao, v.cargo ?? v.funcao].filter(Boolean).join(" · ") || "servidor" });
+  }
+
+  const r = dados.resumo;
+  const marcas = [
+    r.servidor && "servidor federal",
+    r.servidorInativo && "aposentado",
+    r.pensionista && "pensionista",
+    r.contratado && "contratado pelo governo federal",
+    dados.peps?.length && "PEP",
+  ].filter(Boolean);
+  return comInfo(m, idPessoa, "Na CGU", r.semRegistro ? "sem registro" : marcas.join(" · ") || "sem vínculo federal registrado");
+}
+
+/** Liga empresas do mapa que dividem telefone, e-mail ou endereço — ninguém declara isso, o mapa acha. */
+export function comCoincidencias(modelo: ModeloSinapse): ModeloSinapse {
   const empresas = Object.values(modelo.nos).filter((n) => n.tipo === "empresa" && n.expandida);
   let m = modelo;
   const valorInfo = (n: NoSinapse, chave: string) => n.info.find(([k]) => k === chave)?.[1];
@@ -253,6 +616,10 @@ function comCoincidencias(modelo: ModeloSinapse): ModeloSinapse {
       const ta = telefones(a);
       const comum = [...telefones(b)].find((t) => ta.has(t));
       if (comum) m = comAresta(m, { id: `mesmo-telefone:${a.id}|${b.id}`, origem: a.id, destino: b.id, tipo: "mesmo-telefone", rotulo: "mesmo telefone" });
+      const emails = (n: NoSinapse) => new Set((valorInfo(n, "E-mail") ?? "").split(" · ").map((e) => e.trim().toLowerCase()).filter((e) => e.includes("@")));
+      const eaEmails = emails(a);
+      const emailComum = [...emails(b)].find((e) => eaEmails.has(e));
+      if (emailComum) m = comAresta(m, { id: `mesmo-email:${a.id}|${b.id}`, origem: a.id, destino: b.id, tipo: "mesmo-email", rotulo: `mesmo e-mail (${emailComum})` });
       const ea = normalizar(valorInfo(a, "Endereço") ?? "");
       if (ea && ea !== "—" && ea === normalizar(valorInfo(b, "Endereço") ?? "")) {
         m = comAresta(m, { id: `mesmo-endereco:${a.id}|${b.id}`, origem: a.id, destino: b.id, tipo: "mesmo-endereco", rotulo: "mesmo endereço" });
@@ -264,7 +631,16 @@ function comCoincidencias(modelo: ModeloSinapse): ModeloSinapse {
 
 export interface Cruzamento {
   id: string;
-  tipo: "socio-comum" | "orgao-comum" | "mesmo-endereco" | "mesmo-telefone" | "sancionada-com-contratos";
+  tipo:
+    | "socio-comum"
+    | "orgao-comum"
+    | "beneficio-comum"
+    | "mesmo-endereco"
+    | "mesmo-telefone"
+    | "mesmo-email"
+    | "sancionada-com-contratos"
+    | "emenda-para-sancionada"
+    | "socio-com-alerta";
   titulo: string;
   descricao: string;
   /** Ponto pra focar ao clicar. */
@@ -288,8 +664,40 @@ export function encontrarCruzamentos(modelo: ModeloSinapse): Cruzamento[] {
         lista.push({ id: `socio:${no.id}`, tipo: "socio-comum", titulo: `Sócio em comum: ${no.rotulo}`, descricao: empresas.map(nome).join(" · "), foco: no.id, gravidade: "atencao" });
       }
     }
+    if (no.tipo === "pessoa" && no.alerta) {
+      const empresas = empresasLigadas(no.id, ["socio"]);
+      if (empresas.length > 0) {
+        lista.push({
+          id: `alerta-socio:${no.id}`,
+          tipo: "socio-com-alerta",
+          titulo: `${no.alerta === "perigo" ? "Sócio com sanção" : "Sócio é pessoa politicamente exposta"}: ${no.rotulo}`,
+          descricao: `Sócio de ${empresas.map(nome).join(" · ")}`,
+          foco: no.id,
+          gravidade: no.alerta,
+        });
+      }
+    }
+    if (no.tipo === "beneficio") {
+      const empresas = empresasLigadas(no.id, ["beneficio"]);
+      if (empresas.length >= 2) {
+        lista.push({ id: `beneficio:${no.id}`, tipo: "beneficio-comum", titulo: `Benefício fiscal em comum: ${no.rotulo}`, descricao: empresas.map(nome).join(" · "), foco: no.id, gravidade: "info" });
+      }
+    }
+    if (no.tipo === "emenda") {
+      const sancionadas = empresasLigadas(no.id, ["emenda-pagamento"]).filter((e) => modelo.nos[e]?.alerta === "perigo");
+      if (sancionadas.length > 0) {
+        lista.push({
+          id: `emenda-sancionada:${no.id}`,
+          tipo: "emenda-para-sancionada",
+          titulo: `Dinheiro de emenda para empresa sancionada: ${no.rotulo}`,
+          descricao: sancionadas.map(nome).join(" · "),
+          foco: no.id,
+          gravidade: "perigo",
+        });
+      }
+    }
     if (no.tipo === "orgao-federal" || no.tipo === "orgao-am") {
-      const empresas = empresasLigadas(no.id, ["federal", "am"]);
+      const empresas = empresasLigadas(no.id, ["federal", "am", "a-receber", "convenio"]);
       if (empresas.length >= 2) {
         lista.push({ id: `orgao:${no.id}`, tipo: "orgao-comum", titulo: `Órgão em comum: ${no.rotulo}`, descricao: empresas.map(nome).join(" · "), foco: no.id, gravidade: "info" });
       }
@@ -309,11 +717,11 @@ export function encontrarCruzamentos(modelo: ModeloSinapse): Cruzamento[] {
     }
   }
   for (const a of arestas) {
-    if (a.tipo === "mesmo-endereco" || a.tipo === "mesmo-telefone") {
+    if (a.tipo === "mesmo-endereco" || a.tipo === "mesmo-telefone" || a.tipo === "mesmo-email") {
       lista.push({
         id: a.id,
         tipo: a.tipo,
-        titulo: a.tipo === "mesmo-endereco" ? "Mesmo endereço" : "Mesmo telefone",
+        titulo: { "mesmo-endereco": "Mesmo endereço", "mesmo-telefone": "Mesmo telefone", "mesmo-email": "Mesmo e-mail" }[a.tipo],
         descricao: `${nome(a.origem)} · ${nome(a.destino)}`,
         foco: a.origem,
         gravidade: "atencao",
