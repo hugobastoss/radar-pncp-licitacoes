@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { vigencia } from "@/components/ContratosAmSecao";
+import { AbasEmpenhos } from "@/components/AbasEmpenhos";
 import { buscarEmpenhosAm } from "@/lib/api-am";
 import { validarCnpj } from "@/lib/cnpj";
 import { cn } from "@/lib/cn";
@@ -16,7 +17,8 @@ import type { ContratoComEmpenhos, NotaEmpenhoContrato, ResultadoEmpenhosAm, Tot
 
 type Status = "idle" | "carregando" | "sucesso" | "invalido" | "erro";
 
-function CartaoValor({
+/** Também usado na tela de empenhos federais. */
+export function CartaoValor({
   rotulo,
   valor,
   destaque,
@@ -331,6 +333,8 @@ export function EmpenhosAmClient() {
           Contratos do fornecedor com o estado e quanto de cada nota de empenho já foi liquidado e pago.
         </p>
       </div>
+
+      <AbasEmpenhos />
 
       <form
         onSubmit={pesquisar}

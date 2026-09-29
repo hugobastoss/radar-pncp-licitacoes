@@ -6,7 +6,11 @@ import { Building2, Loader2, Search, ShieldAlert, ShieldCheck } from "lucide-rea
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { descreverResumoSancoes, SancaoItem } from "@/components/SancaoItem";
+import { CertidaoTcuSecao } from "@/components/CertidaoTcuSecao";
+import type { EstadoCertidaoTcu } from "@/components/CertidaoTcuSecao";
 import { buscarSancoes } from "@/lib/api-sancoes";
+import { buscarCertidaoTcu } from "@/lib/api-tcu";
+import { normalizarCnpj } from "@/lib/cnpj";
 import { mascararCnpj } from "@/lib/formatters";
 import type { Sancao } from "@/types/transparencia";
 
@@ -17,6 +21,8 @@ export function SancoesClient() {
   const [status, setStatus] = useState<Status>("idle");
   const [resultado, setResultado] = useState<{ ceis: Sancao[]; cnep: Sancao[] } | null>(null);
   const [mensagemErro, setMensagemErro] = useState<string | undefined>();
+  const [certidaoTcu, setCertidaoTcu] = useState<EstadoCertidaoTcu>({ status: "carregando" });
+  const [cnpjConsultado, setCnpjConsultado] = useState("");
   const abortRef = useRef<AbortController | null>(null);
 
   async function pesquisar(evento: FormEvent) {
@@ -29,6 +35,15 @@ export function SancoesClient() {
 
     setStatus("carregando");
     setMensagemErro(undefined);
+    setCertidaoTcu({ status: "carregando" });
+    setCnpjConsultado(normalizarCnpj(valor));
+
+    // O TCU é mais lento (~6 s na primeira consulta) — aparece quando chegar, sem segurar as sanções.
+    void buscarCertidaoTcu(valor, { signal: controller.signal }).then((r) => {
+      if (controller.signal.aborted) return;
+      if (r.status === "sucesso") setCertidaoTcu(r);
+      else if (r.status !== "cancelado") setCertidaoTcu({ status: "erro", mensagem: "mensagem" in r ? r.mensagem : undefined });
+    });
 
     const resposta = await buscarSancoes(valor, { signal: controller.signal });
 
@@ -133,6 +148,12 @@ export function SancoesClient() {
           )}
 
           <p className="mt-3 text-xs text-ink-400 dark:text-ink-500">Fonte: Portal da Transparência (CGU).</p>
+
+          <CertidaoTcuSecao
+            estado={certidaoTcu}
+            cnpj={cnpjConsultado}
+            className="mt-5 border-t border-ink-100 pt-5 dark:border-ink-800"
+          />
         </div>
       )}
     </div>

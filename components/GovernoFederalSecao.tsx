@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Landmark, Loader2, Minus, TriangleAlert } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, Check, Landmark, Loader2, Minus, TriangleAlert } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { formatarDataSimples, formatarMoeda } from "@/lib/formatters";
-import type { ContratoFederal, DadosGovernoFederal, ResumoPessoaJuridica } from "@/types/transparencia";
+import type { BeneficiosFiscais, ContratoFederal, DadosGovernoFederal, ResumoPessoaJuridica } from "@/types/transparencia";
 
 export type EstadoGovernoFederal =
   | { status: "carregando" }
@@ -171,8 +172,84 @@ function Contratos({ dados }: { dados: NonNullable<DadosGovernoFederal["contrato
   );
 }
 
+const ANOS_RENUNCIA_VISIVEIS = 5;
+
+/** Regimes especiais, imunidades e quanto a empresa deixou de pagar de tributos federais por ano. */
+function BeneficiosFiscaisBloco({ dados }: { dados: BeneficiosFiscais }) {
+  const [todosAnos, setTodosAnos] = useState(false);
+  const recente = dados.renunciasPorAno[0];
+  const anos = todosAnos ? dados.renunciasPorAno : dados.renunciasPorAno.slice(0, ANOS_RENUNCIA_VISIVEIS);
+
+  if (dados.regimes.length === 0 && dados.imunidades.length === 0 && dados.renunciasPorAno.length === 0) {
+    return <TextoSecundario>Nenhum benefício fiscal federal registrado.</TextoSecundario>;
+  }
+
+  return (
+    <div className="mt-1.5 space-y-3">
+      {dados.regimes.length > 0 && (
+        <ul className="space-y-1.5">
+          {dados.regimes.map((r) => (
+            <li key={`${r.beneficio}-${r.inicio ?? ""}`} className="text-sm">
+              <p className="flex flex-wrap items-center gap-1.5 text-ink-900 dark:text-ink-50">
+                <span className="font-medium">{r.beneficio.toUpperCase()}</span>
+                {r.vigente ? <Badge tone="success">Vigente</Badge> : <Badge>Encerrado</Badge>}
+              </p>
+              <p className="text-xs text-ink-500 dark:text-ink-400">
+                {[r.descricao, r.inicio && `de ${r.inicio}${r.fim ? ` a ${r.fim}` : ""}`].filter(Boolean).join(" · ")}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {dados.imunidades.length > 0 && (
+        <p className="text-sm text-ink-700 dark:text-ink-200">
+          {dados.imunidades
+            .map((i) => [i.beneficio, i.tipoEntidade && `(${i.tipoEntidade})`].filter(Boolean).join(" "))
+            .join(" · ")}
+        </p>
+      )}
+
+      {recente && (
+        <div>
+          <p className="text-sm text-ink-900 dark:text-ink-50">
+            <span className="text-lg font-semibold tabular-nums">{formatarMoeda(recente.total)}</span>
+            <span className="text-ink-500 dark:text-ink-400">
+              {" "}
+              em tributos federais que deixou de pagar em {recente.ano}
+              {!dados.completo && " (ou mais — a lista da CGU passou do limite consultado)"}
+            </span>
+          </p>
+          <p className="mt-0.5 text-xs text-ink-500 dark:text-ink-400">
+            {recente.porTributo.map((t) => `${t.tributo} ${formatarMoeda(t.valor)}`).join(" · ")}
+          </p>
+          {dados.renunciasPorAno.length > 1 && (
+            <ul className="mt-2 space-y-0.5 text-xs">
+              {anos.slice(1).map((a) => (
+                <li key={a.ano} className="flex justify-between gap-3 text-ink-600 dark:text-ink-300">
+                  <span>{a.ano}</span>
+                  <span className="tabular-nums">{formatarMoeda(a.total)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {dados.renunciasPorAno.length > ANOS_RENUNCIA_VISIVEIS && (
+            <button
+              type="button"
+              onClick={() => setTodosAnos(!todosAnos)}
+              className="mt-1 text-xs font-medium text-primary-600 hover:underline dark:text-primary-400"
+            >
+              {todosAnos ? "Mostrar menos" : `Mostrar todos os anos (${dados.renunciasPorAno.length})`}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Seção da consulta de CNPJ com o que a empresa tem de relação com o governo federal. */
-export function GovernoFederalSecao({ estado }: { estado: EstadoGovernoFederal }) {
+export function GovernoFederalSecao({ estado, cnpj }: { estado: EstadoGovernoFederal; cnpj: string }) {
   return (
     <div className="mt-5 border-t border-ink-100 pt-5 dark:border-ink-800">
       <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">
@@ -218,6 +295,16 @@ export function GovernoFederalSecao({ estado }: { estado: EstadoGovernoFederal }
                 )}
               </div>
 
+              {(estado.resumo?.favorecidoDespesas || estado.resumo?.possuiContratacao) && (
+                <Link
+                  href={`/empenhos-federal?cnpj=${cnpj}`}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:underline dark:text-primary-400"
+                >
+                  Ver empenhos a receber do governo federal
+                  <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+                </Link>
+              )}
+
               <div>
                 <Titulo>Contratos</Titulo>
                 {estado.contratos ? (
@@ -229,10 +316,27 @@ export function GovernoFederalSecao({ estado }: { estado: EstadoGovernoFederal }
             </>
           )}
 
+          {(estado.beneficiosFiscais === null ||
+            (estado.beneficiosFiscais &&
+              (estado.beneficiosFiscais.regimes.length > 0 ||
+                estado.beneficiosFiscais.imunidades.length > 0 ||
+                estado.beneficiosFiscais.renunciasPorAno.length > 0)) ||
+            estado.resumo?.beneficiadoRenunciaFiscal) && (
+            <div>
+              <Titulo>Benefícios fiscais</Titulo>
+              {estado.beneficiosFiscais ? (
+                <BeneficiosFiscaisBloco dados={estado.beneficiosFiscais} />
+              ) : (
+                <TextoSecundario>Não foi possível consultar os benefícios fiscais agora.</TextoSecundario>
+              )}
+            </div>
+          )}
+
           <p className="flex items-start gap-1.5 text-xs text-ink-400 dark:text-ink-500">
             <TriangleAlert className="mt-px h-3 w-3 shrink-0" aria-hidden />
             Fonte: Portal da Transparência (CGU). Contratos e pagamentos são só do Poder Executivo federal — não
-            incluem estados e municípios.
+            incluem estados e municípios. Benefícios fiscais: renúncias de tributos federais informadas pela Receita,
+            que publica os valores com cerca de 2 anos de atraso.
           </p>
         </div>
       )}

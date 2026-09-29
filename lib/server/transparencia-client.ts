@@ -1,14 +1,19 @@
 import { descreverFalha } from "@/lib/server/erros";
 import { emParalelo } from "@/lib/server/paralelo";
 import type {
+  BeneficiosFiscais,
   ContratoFederal,
+  ConvenioFederal,
   DadosGovernoFederal,
   DadosPessoaFisica,
   DocumentoEmenda,
   EmendaParlamentar,
+  EmpenhoFederal,
   RecebedorEmenda,
+  ResultadoConvenios,
   ResultadoDocumentosEmenda,
   ResultadoEmendas,
+  ResultadoEmpenhosFederais,
   PagamentosFederais,
   PessoaExposta,
   PunicaoCeaf,
@@ -86,11 +91,12 @@ async function buscarPaginas<T>(
   chave: string,
   signal: AbortSignal | undefined,
   cacheSegundos: number,
+  maximoPaginas = MAXIMO_PAGINAS,
 ): Promise<{ itens: T[]; completo: boolean }> {
   const itens: T[] = [];
-  for (let primeira = 1; primeira <= MAXIMO_PAGINAS; primeira += PAGINAS_EM_PARALELO) {
+  for (let primeira = 1; primeira <= maximoPaginas; primeira += PAGINAS_EM_PARALELO) {
     const numeros = Array.from(
-      { length: Math.min(PAGINAS_EM_PARALELO, MAXIMO_PAGINAS - primeira + 1) },
+      { length: Math.min(PAGINAS_EM_PARALELO, maximoPaginas - primeira + 1) },
       (_, i) => primeira + i,
     );
     const paginas = await Promise.all(
@@ -371,16 +377,110 @@ export async function buscarDadosGovernoFederal(
   const resumo = await buscarResumo(cnpj, chave, signal).catch(registrarFalha("resumo"));
 
   // Sem o resumo, não dá pra saber se vale consultar — tenta as duas.
-  const [contratos, pagamentos] = await Promise.all([
+  const [contratos, pagamentos, beneficiosFiscais] = await Promise.all([
     resumo && !resumo.possuiContratacao
       ? { itens: [], completo: true }
       : buscarContratos(cnpj, chave, signal).catch(registrarFalha("contratos")),
     resumo && !resumo.favorecidoDespesas
       ? { ...periodoDozeMeses(), total: 0, porOrgao: [], completo: true }
       : buscarPagamentos(cnpj, chave, signal).catch(registrarFalha("pagamentos")),
+    buscarBeneficiosFiscais(cnpj, chave, signal, resumo?.beneficiadoRenunciaFiscal ?? true).catch(
+      registrarFalha("beneficios-fiscais"),
+    ),
   ]);
 
-  return { resumo, contratos, pagamentos };
+  return { resumo, beneficiosFiscais, contratos, pagamentos };
+}
+
+// ---------------------------------------------------------------------------
+// Benefícios fiscais (renúncias da Receita Federal)
+// ---------------------------------------------------------------------------
+
+interface RegimeBruto {
+  beneficioFiscal?: string;
+  descricao?: string;
+  fruicaoVigente?: string;
+  dataInicioFruicao?: string;
+  dataFimFruicao?: string;
+  fundamentoLegal?: string;
+}
+
+interface ImunidadeBruta {
+  beneficioFiscal?: string;
+  tipoEntidade?: string;
+}
+
+interface RenunciaBruta {
+  ano?: number;
+  valorRenunciado?: number;
+  tributo?: string;
+  tipoRenuncia?: string;
+}
+
+// Fabricante da Zona Franca tem dezenas de linhas de renúncia por ano (Moto
+// Honda: 161 linhas, 11 páginas, de 2015 a 2024).
+const MAXIMO_PAGINAS_RENUNCIAS = 20;
+
+/**
+ * Regimes especiais e imunidades vêm sempre (2 chamadas): o indicador
+ * `beneficiadoRenunciaFiscal` do resumo não os cobre — a PECEM ENERGIA é
+ * habilitada no REIDI com o indicador `false`. Os valores renunciados, que
+ * podem passar de 10 páginas, só quando o indicador diz que existem.
+ */
+async function buscarBeneficiosFiscais(
+  cnpj: string,
+  chave: string,
+  signal: AbortSignal | undefined,
+  temRenuncia: boolean,
+): Promise<BeneficiosFiscais> {
+  const opcoes = { cacheSegundos: CACHE_GOVERNO_FEDERAL_SEGUNDOS };
+  const [regimes, imunidades, renuncias] = await Promise.all([
+    requisitar<RegimeBruto[]>(`renuncias-fiscais-empresas-habilitadas-beneficios-fiscais?cnpj=${cnpj}&pagina=1`, chave, signal, opcoes),
+    requisitar<ImunidadeBruta[]>(`renuncias-fiscais-empresas-imunes-isentas?cnpj=${cnpj}&pagina=1`, chave, signal, opcoes),
+    temRenuncia
+      ? buscarPaginas<RenunciaBruta>(
+          (pagina) => `renuncias-valor?cnpj=${cnpj}&pagina=${pagina}`,
+          chave,
+          signal,
+          CACHE_GOVERNO_FEDERAL_SEGUNDOS,
+          MAXIMO_PAGINAS_RENUNCIAS,
+        )
+      : { itens: [], completo: true },
+  ]);
+
+  const porAno = new Map<number, Map<string, number>>();
+  for (const r of renuncias.itens) {
+    if (!r.ano || !r.valorRenunciado) continue;
+    const tributos = porAno.get(r.ano) ?? new Map<string, number>();
+    const tributo = valor(r.tributo) ?? valor(r.tipoRenuncia) ?? "Não informado";
+    tributos.set(tributo, (tributos.get(tributo) ?? 0) + r.valorRenunciado);
+    porAno.set(r.ano, tributos);
+  }
+
+  return {
+    regimes: (Array.isArray(regimes) ? regimes : []).map((r) => ({
+      beneficio: valor(r.beneficioFiscal) ?? "Benefício não informado",
+      descricao: valor(r.descricao),
+      vigente: /^sim$/i.test(r.fruicaoVigente ?? ""),
+      inicio: valor(r.dataInicioFruicao),
+      fim: valor(r.dataFimFruicao),
+      fundamentoLegal: valor(r.fundamentoLegal),
+    })),
+    imunidades: (Array.isArray(imunidades) ? imunidades : []).map((i) => ({
+      beneficio: valor(i.beneficioFiscal) ?? "Benefício não informado",
+      tipoEntidade: valor(i.tipoEntidade),
+    })),
+    renunciasPorAno: [...porAno.entries()]
+      .map(([ano, tributos]) => ({
+        ano,
+        total: [...tributos.values()].reduce((soma, v) => soma + v, 0),
+        porTributo: [...tributos.entries()]
+          .map(([tributo, v]) => ({ tributo, valor: v }))
+          .sort((a, b) => b.valor - a.valor),
+      }))
+      .sort((a, b) => b.ano - a.ano),
+    completo: renuncias.completo,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -733,5 +833,397 @@ export async function buscarDocumentosEmenda(
     recebedores,
     completo,
     pagamentosDetalhados: completo && documentos.every((d) => d.fase !== "Pagamento" || d.detalhado),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Convênios
+// ---------------------------------------------------------------------------
+
+interface ConvenioBruto {
+  id: number;
+  dataInicioVigencia?: string | null;
+  dataFinalVigencia?: string | null;
+  dataUltimaLiberacao?: string | null;
+  dimConvenio?: { codigo?: string; numero?: string; objeto?: string };
+  situacao?: string;
+  convenente?: { nome?: string; cnpjFormatado?: string; cpfFormatado?: string; tipo?: string };
+  municipioConvenente?: { nomeIBGE?: string; uf?: { sigla?: string; nome?: string } };
+  orgao?: { nome?: string; sigla?: string; orgaoMaximo?: { sigla?: string; nome?: string } };
+  unidadeGestora?: { nome?: string };
+  valor?: number;
+  valorLiberado?: number;
+  valorContrapartida?: number;
+  valorDaUltimaLiberacao?: number;
+}
+
+/** A CGU troca os campos da UF no convênio: `sigla` vem "AMAZONAS" e `nome` vem "AM". */
+function siglaUf(uf: { sigla?: string; nome?: string } | undefined): string | undefined {
+  return [uf?.sigla, uf?.nome].map((t) => valor(t)).find((t) => t?.length === 2);
+}
+
+function mapearConvenio(raw: ConvenioBruto): ConvenioFederal {
+  const maximo = raw.orgao?.orgaoMaximo;
+  return {
+    id: raw.id,
+    codigo: valor(raw.dimConvenio?.codigo),
+    numero: valor(raw.dimConvenio?.numero),
+    objeto: valor(raw.dimConvenio?.objeto),
+    situacao: valor(raw.situacao),
+    convenente: {
+      nome: valor(raw.convenente?.nome) ?? "Convenente não informado",
+      documento: valor(raw.convenente?.cnpjFormatado) ?? valor(raw.convenente?.cpfFormatado),
+      tipo: valor(raw.convenente?.tipo),
+    },
+    municipio: valor(raw.municipioConvenente?.nomeIBGE),
+    uf: siglaUf(raw.municipioConvenente?.uf),
+    concedente:
+      [valor(maximo?.sigla), valor(maximo?.nome)].filter(Boolean).join(" — ") || valor(raw.orgao?.nome),
+    unidadeGestora: valor(raw.unidadeGestora?.nome),
+    valor: raw.valor ?? 0,
+    valorLiberado: raw.valorLiberado ?? 0,
+    valorContrapartida: raw.valorContrapartida ?? 0,
+    inicioVigencia: valor(raw.dataInicioVigencia),
+    fimVigencia: valor(raw.dataFinalVigencia),
+    ultimaLiberacao: valor(raw.dataUltimaLiberacao),
+    valorUltimaLiberacao: raw.valorDaUltimaLiberacao || undefined,
+  };
+}
+
+export interface FiltrosConvenios {
+  uf?: string;
+  codigoIbge?: string;
+  convenente?: string;
+  /** Só os que ainda estão em vigência (terminam hoje ou depois). */
+  somenteVigentes: boolean;
+  pagina: number;
+}
+
+/** Hoje em Brasília, DD/MM/AAAA. */
+function hojeBrasiliaBr(): string {
+  const [a, m, d] = hojeBrasilia().split("-");
+  return `${d}/${m}/${a}`;
+}
+
+/**
+ * A CGU exige ao menos um filtro de peso — período de até 1 mês, convenente,
+ * órgão ou localidade (UF ou município); sem isso, 400. `convenente` é o
+ * nome COMPLETO e exato ("MUNICIPIO DE MANAUS" acha; "MANAUS" e "MUNICIPIO DE
+ * MAN" não) — CNPJ volta vazio, com ou sem pontuação. Maiúsculas e acentos
+ * não importam depois de normalizar.
+ */
+export async function buscarConvenios(
+  filtros: FiltrosConvenios,
+  chave: string,
+  signal?: AbortSignal,
+): Promise<ResultadoConvenios> {
+  const parametros = [
+    filtros.uf && `uf=${filtros.uf}`,
+    filtros.codigoIbge && `codigoIBGE=${filtros.codigoIbge}`,
+    filtros.convenente && `convenente=${encodeURIComponent(normalizarAutor(filtros.convenente))}`,
+    // `dataVigencia*` filtra pelo FIM da vigência (as duas datas são obrigatórias): de hoje em diante = em vigência.
+    filtros.somenteVigentes && `dataVigenciaInicial=${hojeBrasiliaBr()}&dataVigenciaFinal=31/12/2099`,
+    `pagina=${filtros.pagina}`,
+  ].filter(Boolean);
+
+  const corpo = await requisitar<ConvenioBruto[]>(`convenios?${parametros.join("&")}`, chave, signal, {
+    cacheSegundos: CACHE_GOVERNO_FEDERAL_SEGUNDOS,
+  });
+  const lista = Array.isArray(corpo) ? corpo : [];
+  return { itens: lista.map(mapearConvenio), pagina: filtros.pagina, temMais: lista.length === TAMANHO_PAGINA };
+}
+
+// ---------------------------------------------------------------------------
+// Empenhos a receber do governo federal
+// ---------------------------------------------------------------------------
+//
+// Não há endpoint com o saldo de um empenho. O caminho (testado em
+// 2026-09-29 com a Dell e com fornecedores das emendas):
+// 1. `despesas/documentos-por-favorecido` (fase 1) lista os empenhos da
+//    empresa por ano. O `valor` ali e o `valorAtual` dos itens
+//    (`despesas/itens-de-empenho`) costumam bater com o valor atual, mas cada
+//    um erra em casos diferentes (Dell, 2026-09-29): a lista não pega reforços
+//    recentes (2026NE000072: 225.239,76 na lista, 807.743,76 de fato) nem
+//    anulações (2026NE000214, anulado inteiro, segue 118.943,26); os itens
+//    SOMAM a "ANULAÇÃO POR BAIXA DE SALDO" em vez de subtrair (2025NE000284:
+//    inclusão e baixa de 73.917,60 cada, itens 147.835,20). Quando os dois
+//    concordam, vale; quando não, o valor sai do histórico de cada item
+//    (`itens-de-empenho/historico`): inclusão + reforços − anulações.
+// 2. Empenho de ano anterior às vezes aparece também na lista de um ano
+//    seguinte — é o resto a pagar, e o `valor` ali é o que sobrou depois de
+//    cancelamentos: 2024NE004989 (341.873,00) aparece em 2025 com 177.493,99
+//    e a nota "CANCELAMENTO DE RESTOS A PAGAR"; 2024NE000452, cancelado
+//    inteiro, aparece com 0,00. Nesses casos o saldo é esse valor menos os
+//    pagamentos feitos depois do ano de emissão (a inscrição em restos a
+//    pagar é no começo do ano seguinte — 2023NE000560 foi inscrito em
+//    13/01/2024 e aparece na lista de 2025). O histórico dos itens não mostra
+//    o cancelamento de restos a pagar, então pra saldo vale essa linha.
+// 3. `despesas/documentos-relacionados` de cada empenho traz os pagamentos,
+//    de qualquer ano, com data e estorno negativo.
+// 4. Um pagamento pode quitar mais de um empenho: aí a relação traz o valor
+//    cheio do pagamento em cada empenho, e a divisão vem de
+//    `despesas/empenhos-impactados` (2024OB000219, de 146.968,15, foi
+//    134.582,33 pro 2023NE000559 e 12.385,82 pro 2023NE000560). A divisão é
+//    buscada quando o pagamento aparece em mais de um empenho da lista ou
+//    quando a soma dos pagamentos passa do empenho — o outro empenho pode
+//    não estar na lista. Um pagamento dividido com empenho de fora que não
+//    estoure o valor passa despercebido e reduz o saldo a receber.
+// A CGU não informa o valor liquidado (vem 0,00), então não dá pra separar o
+// que já foi atestado.
+
+interface DocumentoFavorecidoBruto {
+  data?: string;
+  documento?: string;
+  documentoResumido?: string;
+  observacao?: string;
+  orgao?: string;
+  orgaoSuperior?: string;
+  ug?: string;
+  elemento?: string;
+  numeroProcesso?: string;
+  valor?: string;
+  nomeFavorecido?: string;
+}
+
+interface RelacionadoBruto {
+  data?: string;
+  fase?: string;
+  documento?: string;
+  valor?: string;
+}
+
+interface ImpactadoBruto {
+  empenho?: string;
+  valorPago?: string;
+  valorRestoPago?: string;
+}
+
+interface ItemEmpenhoBruto {
+  valorAtual?: string;
+  sequencial?: number;
+}
+
+interface HistoricoItemBruto {
+  operacao?: string;
+  valorTotal?: string;
+}
+
+type LinhaEmpenho = DocumentoFavorecidoBruto & { documento: string };
+
+// Fornecedor grande tem centenas de empenhos por ano (a Dell teve 80 em 2025).
+// Cada um custa uma chamada, e a cota da chave é de 400/min pro app inteiro.
+const MAXIMO_EMPENHOS_ANALISADOS = 120;
+const MAXIMO_PAGAMENTOS_CONFERIDOS = 100;
+const EMPENHOS_EM_PARALELO = 5;
+const ITENS_EM_PARALELO = 3;
+// Empenho com mais itens que isso tem o histórico só dos primeiros (e fica marcado como incompleto).
+const MAXIMO_ITENS_POR_EMPENHO = 30;
+// Resíduo de centavos (ex.: empenho de 69.297,75 pago com 69.297,74) conta como quitado.
+const RESIDUO_MAXIMO = 1;
+
+function anoAtualBrasilia(): number {
+  return new Date(Date.now() - 3 * 60 * 60 * 1000).getUTCFullYear();
+}
+
+function centavos(valor: number): number {
+  return Math.round(valor * 100) / 100;
+}
+
+/** "31/07/2026" → 2026. */
+function anoDaData(data: string | undefined): number {
+  return Number(/(\d{4})$/.exec(data ?? "")?.[1] ?? 0);
+}
+
+export async function buscarEmpenhosFederais(
+  cnpj: string,
+  chave: string,
+  signal?: AbortSignal,
+): Promise<ResultadoEmpenhosFederais> {
+  const opcoes = { cacheSegundos: CACHE_GOVERNO_FEDERAL_SEGUNDOS };
+  const anoAtual = anoAtualBrasilia();
+  const anos = [anoAtual, anoAtual - 1];
+  let completo = true;
+
+  const listas = await Promise.all(
+    anos.map((ano) =>
+      buscarPaginas<DocumentoFavorecidoBruto>(
+        (pagina) => `despesas/documentos-por-favorecido?codigoPessoa=${cnpj}&fase=1&ano=${ano}&pagina=${pagina}`,
+        chave,
+        signal,
+        CACHE_GOVERNO_FEDERAL_SEGUNDOS,
+      ),
+    ),
+  );
+  if (listas.some((l) => !l.completo)) completo = false;
+
+  // Onde cada empenho aparece: na lista do ano de emissão e/ou na de um ano seguinte (resto a pagar).
+  const aparicoes = new Map<string, { linha: LinhaEmpenho; anoLista: number }[]>();
+  listas.forEach((lista, i) => {
+    for (const linha of lista.itens) {
+      if (!linha.documento) continue;
+      aparicoes.set(linha.documento, [...(aparicoes.get(linha.documento) ?? []), { linha: linha as LinhaEmpenho, anoLista: anos[i] }]);
+    }
+  });
+
+  const candidatos = [...aparicoes.values()]
+    .map((lista) => {
+      const anoEmpenho = Number(lista[0].linha.documentoResumido?.slice(0, 4)) || Math.min(...lista.map((a) => a.anoLista));
+      const propria = lista.find((a) => a.anoLista === anoEmpenho)?.linha;
+      const restos = lista.filter((a) => a.anoLista > anoEmpenho).sort((a, b) => b.anoLista - a.anoLista)[0];
+      return { anoEmpenho, propria, restos, principal: propria ?? restos.linha };
+    })
+    .sort((a, b) => chaveData(b.principal.data).localeCompare(chaveData(a.principal.data)));
+  if (candidatos.length > MAXIMO_EMPENHOS_ANALISADOS) completo = false;
+  const analisados = candidatos.slice(0, MAXIMO_EMPENHOS_ANALISADOS);
+
+  const registrarFalha = (parte: string) => (erro: unknown) => {
+    console.error(`[empenhos-federais] ${parte}: ${descreverFalha(erro)}`);
+    return undefined;
+  };
+
+  /** Valor atual do empenho: lista e itens, se concordam; senão, o histórico dos itens (ver comentário do topo). */
+  async function valorAtualDoEmpenho(codigo: string, valorNaLista: number | undefined): Promise<number> {
+    const { itens } = await buscarPaginas<ItemEmpenhoBruto>(
+      (pagina) => `despesas/itens-de-empenho?codigoDocumento=${codigo}&pagina=${pagina}`,
+      chave,
+      signal,
+      CACHE_GOVERNO_FEDERAL_SEGUNDOS,
+      Math.ceil(MAXIMO_ITENS_POR_EMPENHO / TAMANHO_PAGINA),
+    );
+    // Alguns empenhos vêm sem itens (2025NE002012 da Dell, pago em 45.065,12): aí só resta a lista.
+    if (itens.length === 0) return valorNaLista ?? 0;
+    const somaItens = itens.reduce((soma, i) => soma + (paraNumero(i.valorAtual) ?? 0), 0);
+    if (valorNaLista !== undefined && Math.abs(somaItens - valorNaLista) < 0.02) return somaItens;
+
+    const parciais = await emParalelo(
+      itens.filter((i) => i.sequencial !== undefined),
+      ITENS_EM_PARALELO,
+      async (item) => {
+        const historico = await requisitar<HistoricoItemBruto[]>(
+          `despesas/itens-de-empenho/historico?codigoDocumento=${codigo}&sequencial=${item.sequencial}&pagina=1`,
+          chave,
+          signal,
+          opcoes,
+        );
+        return (Array.isArray(historico) ? historico : []).reduce((soma, h) => {
+          const operacao = semAcento(h.operacao ?? "");
+          const v = paraNumero(h.valorTotal) ?? 0;
+          if (operacao.startsWith("inclus") || operacao.startsWith("reforc")) return soma + v;
+          if (operacao.startsWith("anulac") || operacao.includes("cancel")) return soma - v;
+          return soma; // "INSCRICAO EM RP" e outras não mudam o valor.
+        }, 0);
+      },
+    );
+    return parciais.reduce((soma, v) => soma + v, 0);
+  }
+
+  const analises = await emParalelo(analisados, EMPENHOS_EM_PARALELO, async (c) => {
+    const codigo = c.principal.documento;
+    const [empenhado, relacionados] = await Promise.all([
+      valorAtualDoEmpenho(codigo, c.propria ? paraNumero(c.propria.valor) ?? 0 : undefined).catch(registrarFalha("itens")),
+      requisitar<RelacionadoBruto[]>(`despesas/documentos-relacionados?codigoDocumento=${codigo}&fase=1`, chave, signal, opcoes)
+        .then((lista) => (Array.isArray(lista) ? lista : []))
+        .catch(registrarFalha("relacionados")),
+    ]);
+    const pagamentos = (relacionados ?? []).filter(
+      (r): r is RelacionadoBruto & { documento: string } => r.fase === "Pagamento" && Boolean(r.documento),
+    );
+    return { ...c, codigo, empenhado, pagamentos, falhou: empenhado === undefined || relacionados === undefined };
+  });
+
+  // Pagamento que aparece em mais de um empenho: busca a divisão real.
+  const empenhosPorPagamento = new Map<string, Set<string>>();
+  for (const a of analises) {
+    for (const p of a.pagamentos) {
+      empenhosPorPagamento.set(p.documento, (empenhosPorPagamento.get(p.documento) ?? new Set()).add(a.codigo));
+    }
+  }
+  const compartilhados = new Set([...empenhosPorPagamento.entries()].filter(([, e]) => e.size > 1).map(([p]) => p));
+  // Pagos a mais que o empenho: algum pagamento foi dividido com um empenho que não está na lista.
+  for (const a of analises) {
+    const bruto = a.pagamentos.reduce((soma, p) => soma + (paraNumero(p.valor) ?? 0), 0);
+    if (a.empenhado !== undefined && bruto > a.empenhado + 0.01) for (const p of a.pagamentos) compartilhados.add(p.documento);
+  }
+  const aConferir = [...compartilhados].slice(0, MAXIMO_PAGAMENTOS_CONFERIDOS);
+  const divisao = new Map<string, Map<string, number>>();
+  await emParalelo(aConferir, EMPENHOS_EM_PARALELO, async (pagamento) => {
+    const impactados = await requisitar<ImpactadoBruto[]>(
+      `despesas/empenhos-impactados?codigoDocumento=${pagamento}&fase=3&pagina=1`,
+      chave,
+      signal,
+      opcoes,
+    ).catch(registrarFalha("impactados"));
+    if (!Array.isArray(impactados)) return;
+    divisao.set(
+      pagamento,
+      new Map(
+        impactados
+          .filter((i): i is ImpactadoBruto & { empenho: string } => Boolean(i.empenho))
+          .map((i) => [i.empenho, (paraNumero(i.valorPago) ?? 0) + (paraNumero(i.valorRestoPago) ?? 0)]),
+      ),
+    );
+  });
+
+  const empenhos: EmpenhoFederal[] = analises.map((a) => {
+    let completoEmpenho = !a.falhou;
+    const valorDoPagamento = (p: RelacionadoBruto & { documento: string }) => {
+      const parte = divisao.get(p.documento)?.get(a.codigo);
+      if (parte !== undefined) return parte;
+      // Compartilhado sem a divisão: o valor cheio pode estar contado a mais.
+      if (compartilhados.has(p.documento)) completoEmpenho = false;
+      return paraNumero(p.valor) ?? 0;
+    };
+    const empenhado = centavos(a.empenhado ?? 0);
+    const pago = centavos(a.pagamentos.reduce((soma, p) => soma + valorDoPagamento(p), 0));
+
+    let aReceber: number;
+    if (a.restos) {
+      // Resto a pagar: o saldo inscrito (já sem cancelamentos), menos o que foi pago depois do ano de emissão.
+      const saldoInscrito = paraNumero(a.restos.linha.valor) ?? 0;
+      const pagoDepois = a.pagamentos
+        .filter((p) => anoDaData(p.data) > a.anoEmpenho)
+        .reduce((soma, p) => soma + valorDoPagamento(p), 0);
+      aReceber = Math.max(0, centavos(saldoInscrito - pagoDepois));
+    } else {
+      aReceber = Math.max(0, centavos(empenhado - pago));
+    }
+    if (aReceber <= RESIDUO_MAXIMO) aReceber = 0;
+    if (!completoEmpenho) completo = false;
+    const cancelado = Math.max(0, centavos(empenhado - pago - aReceber));
+
+    const notaRestos = a.restos && a.propria ? valor(a.restos.linha.observacao) : undefined;
+    return {
+      codigo: a.codigo,
+      codigoResumido: valor(a.principal.documentoResumido) ?? a.codigo,
+      ano: a.anoEmpenho,
+      data: valor(a.principal.data),
+      orgao: valor(a.principal.orgao),
+      orgaoSuperior: valor(a.principal.orgaoSuperior),
+      ug: valor(a.principal.ug),
+      descricao: valor(a.principal.observacao),
+      notaRestos: notaRestos !== valor(a.principal.observacao) ? notaRestos : undefined,
+      elemento: valor(a.principal.elemento),
+      processo: processoValido(a.principal.numeroProcesso),
+      empenhado,
+      pago,
+      aReceber,
+      // O que não foi pago nem está a receber: cancelado (em geral, resto a pagar cancelado).
+      cancelado: cancelado > RESIDUO_MAXIMO ? cancelado : 0,
+      restoAPagar: a.anoEmpenho < anoAtual,
+      completo: completoEmpenho,
+    };
+  });
+
+  empenhos.sort((a, b) => b.aReceber - a.aReceber || chaveData(b.data).localeCompare(chaveData(a.data)));
+  const soma = (campo: "empenhado" | "pago" | "aReceber" | "cancelado") =>
+    centavos(empenhos.reduce((s, e) => s + e[campo], 0));
+
+  return {
+    favorecido: valor(analisados[0]?.principal.nomeFavorecido),
+    anos,
+    empenhos,
+    totais: { empenhado: soma("empenhado"), pago: soma("pago"), aReceber: soma("aReceber"), cancelado: soma("cancelado") },
+    totalEmpenhos: candidatos.length,
+    completo,
   };
 }

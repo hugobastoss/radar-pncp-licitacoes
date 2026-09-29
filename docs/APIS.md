@@ -38,7 +38,31 @@ ser um contrato público, pode mudar sem aviso.
   que **não existe mais no PNCP** (dá 404). Reconstruímos o link como
   `/app/editais/{cnpj}/{ano}/{seq}`, que funciona.
 - Instável: falha por reset de conexão (`ECONNRESET`) com frequência,
-  independente de enviar `User-Agent` ou não (testado).
+  independente de enviar `User-Agent` ou não (testado). Em 2026-09-29, de
+  casa: 1 de 10 chamadas passou de primeira, 9 de 10 com até 3 tentativas —
+  e não é a palavra buscada (o mesmo termo falha e passa em seguida). A busca
+  de atas tenta até 4 vezes; esta de licitações ainda não tenta de novo.
+
+### PNCP — atas de registro de preço (`/atas`)
+
+| | |
+|---|---|
+| **Base URL** | `https://pncp.gov.br/api/search/?tipos_documento=ata` (a mesma busca interna) |
+| **Autenticação** | Nenhuma |
+| **Arquivo** | [`lib/server/pncp-atas-client.ts`](../lib/server/pncp-atas-client.ts) (rota `/api/atas`) |
+
+- `status=vigente` traz só as atas em vigência (7.070 no AM em 2026-09-29).
+  Sem texto, o status é obrigatório; com texto, dá pra incluir as
+  encerradas.
+- `item_url` vem `/atas/{cnpj}/{ano}/{sequencial}/{sequencialAta}`, que é a
+  rota da página da ata em `pncp.gov.br/app` — lá estão os itens, os
+  fornecedores e os preços registrados. `valor_global` e `permite_adesao`
+  vieram nulos em todas as atas vistas.
+- A API oficial de consulta (`/api/consulta/v1/atas`) não serve de reserva:
+  só filtra por período e devolve todas as atas do país (529 mil num mês),
+  sem texto nem UF.
+- Por causa dos `ECONNRESET`, a rota tenta até 4 vezes (espera 250, 500 e
+  750 ms entre elas) antes de desistir.
 
 ### 2. PNCP — Consulta oficial (fallback 1)
 
@@ -184,7 +208,7 @@ com o código — buscar `search=3004.90.99` devolve vazio. Por isso a rota
 detecta se o termo parece um código (`/v1/{codigo}`, busca exata) ou uma
 palavra-chave (`/v1?search=`, busca por texto) e usa o endpoint certo.
 
-## Portal da Transparência — sanções, governo federal, CPF e emendas (`/sancoes`, `/cnpj`, `/cpf`, `/emendas`)
+## Portal da Transparência — sanções, governo federal, CPF, emendas, convênios e empenhos (`/sancoes`, `/cnpj`, `/cpf`, `/emendas`, `/convenios`, `/empenhos-federal`)
 
 | | |
 |---|---|
@@ -194,7 +218,7 @@ palavra-chave (`/v1?search=`, busca por texto) e usa o endpoint certo.
 | **Arquivo** | [`lib/server/transparencia-client.ts`](../lib/server/transparencia-client.ts) |
 | **Documentação oficial** | Especificação em `api.portaldatransparencia.gov.br/v3/api-docs` (só abre com `User-Agent` de navegador) |
 
-Cinco rotas, todas em São Paulo (ver abaixo):
+Oito rotas, todas em São Paulo (ver abaixo):
 
 - **`/api/sancoes`** — CEIS (empresas inidôneas/suspensas) e CNEP (empresas
   punidas, Lei Anticorrupção), com todos os campos úteis: abrangência ("onde
@@ -210,10 +234,11 @@ Cinco rotas, todas em São Paulo (ver abaixo):
   `despesas/recursos-recebidos` (últimos 12 meses, somados por órgão).
   Contratos e pagamentos só são consultados quando o resumo diz que existem,
   e ficam 6 h no cache do Next. Só Poder Executivo federal — não inclui
-  estados e municípios.
+  estados e municípios. Traz também os benefícios fiscais (abaixo).
 - **`/api/cpf`** (POST) — consulta de pessoa física, detalhada abaixo.
 - **`/api/emendas`** e **`/api/emendas/documentos`** — emendas parlamentares e
   seus documentos, detalhados abaixo.
+- **`/api/convenios`** e **`/api/empenhos-federais`** — detalhados abaixo.
 
 ### Consulta de CPF (`/api/cpf`)
 
@@ -302,6 +327,93 @@ ano (12.599,10) mais os restos a pagar pagos (211.398,90).
   do documento responde 202 (desafio anti-robô) pra `curl`, mas abre
   normalmente num navegador.
 
+### Benefícios fiscais (em `/api/governo-federal`)
+
+| Endpoint | Para quê |
+|---|---|
+| `renuncias-fiscais-empresas-habilitadas-beneficios-fiscais?cnpj=` | Regimes especiais em que a empresa foi habilitada (REIDI, RECAP, PADIS…), com vigência e fundamento legal |
+| `renuncias-fiscais-empresas-imunes-isentas?cnpj=` | Imunidades e isenções (entidades sem fins lucrativos etc.) |
+| `renuncias-valor?cnpj=` | Quanto de tributo federal a empresa deixou de pagar, por ano, tributo e tipo de renúncia |
+
+- O indicador `beneficiadoRenunciaFiscal` do `pessoa-juridica` só cobre os
+  valores: a PECEM ENERGIA é habilitada no REIDI com o indicador `false`. Por
+  isso regimes e imunidades são consultados sempre (2 chamadas) e os
+  valores, só com o indicador `true`.
+- `renuncias-valor` tem muitas linhas por empresa da Zona Franca (Moto
+  Honda: 161 linhas em 11 páginas, de 2015 a 2024; R$ 453,75 milhões em
+  2024). Busca até 20 páginas. Os dados mais recentes eram de 2024 em
+  setembro de 2026.
+- `fruicaoVigente` vem "Sim"/"Não"; datas em DD/MM/AAAA.
+
+### Convênios (`/api/convenios`)
+
+- `convenios` exige um filtro de peso — período de até 1 mês, convenente,
+  órgão ou localidade (`uf` ou `codigoIBGE`); sem isso, 400 com a mensagem
+  "Para usar filtros em convênios, escolha…".
+- **`convenente` não aceita CNPJ** (volta vazio, com ou sem pontuação) e
+  só casa com o **nome completo e exato**: "MUNICIPIO DE MANAUS" acha;
+  "MANAUS", "MUNICIPIO DE MAN" e "SECRETARIA DE ESTADO DE EDUCACAO" (o nome
+  certo continua "…E DESPORTO ESCOLAR") não. Por isso a tela sugere o
+  município.
+- `dataVigenciaInicial`/`dataVigenciaFinal` filtram pelo **fim** da vigência
+  e são obrigatórias em par. De hoje a 31/12/2099 = só os convênios em
+  vigência (é o filtro "Só convênios em vigência" da tela). Sem ele, a CGU
+  mistura convênios de 1997 com os de 2026, sem ordem.
+- No `municipioConvenente.uf`, os campos vêm **trocados**: `sigla` =
+  "AMAZONAS" e `nome` = "AM".
+- A página do convênio no Portal é `portaldatransparencia.gov.br/convenios/{codigo}`,
+  com `dimConvenio.codigo` (ex.: 999870). Com o `id` da API dá 404.
+
+### Empenhos a receber do governo federal (`/api/empenhos-federais`, `/empenhos-federal`)
+
+Não há endpoint com o saldo de um empenho. A rota monta o saldo assim
+(testado em 2026-09-29 com a Dell, 97 empenhos, e com a I F Instalações):
+
+1. `despesas/documentos-por-favorecido` (`fase=1`) lista os empenhos da
+   empresa no ano atual e no anterior.
+2. **Valor atual do empenho:** o `valor` da lista e a soma do `valorAtual`
+   dos itens (`despesas/itens-de-empenho`) costumam bater, mas cada um erra
+   em casos diferentes:
+   - a lista não pega reforços recentes (2026NE000072: 225.239,76 na lista,
+     807.743,76 de fato) nem anulações (2026NE000214, anulado inteiro,
+     segue com 118.943,26);
+   - os itens **somam** a "ANULAÇÃO POR BAIXA DE SALDO" em vez de subtrair
+     (2025NE000284: inclusão e baixa de 73.917,60 cada, itens 147.835,20).
+
+   Quando os dois concordam, vale; quando não, o valor sai do histórico de
+   cada item (`itens-de-empenho/historico`): inclusão + reforços −
+   anulações. Empenho sem itens (2025NE002012) fica com o valor da lista.
+3. **Pagamentos:** `despesas/documentos-relacionados` (`fase=1`) de cada
+   empenho, de qualquer ano, com data e estorno negativo. A liquidação vem
+   com valor 0,00 — a CGU não informa o liquidado.
+4. **Pagamento dividido:** um pagamento pode quitar mais de um empenho, e a
+   relação traz o valor cheio em cada um. A divisão vem de
+   `despesas/empenhos-impactados` (2024OB000219, de 146.968,15, foi
+   134.582,33 pro 2023NE000559 e 12.385,82 pro 2023NE000560). É buscada
+   quando o pagamento aparece em mais de um empenho da lista ou quando os
+   pagamentos passam do valor do empenho.
+5. **Restos a pagar:** empenho de ano anterior às vezes aparece também na
+   lista de um ano seguinte, com o saldo que sobrou depois de cancelamentos
+   (2024NE004989: 341.873,00, aparece em 2025 com 177.493,99 e a nota
+   "CANCELAMENTO DE RESTOS A PAGAR"; 2024NE000452, cancelado inteiro, com
+   0,00). Aí o saldo é esse valor menos os pagamentos feitos depois do ano
+   de emissão. O histórico dos itens não mostra esse cancelamento.
+6. A receber = valor atual − pagamentos (ou a regra do item 5). Resíduo de
+   até R$ 1,00 conta como quitado. O que não foi pago nem está a receber
+   aparece como **cancelado**.
+
+**Limites conhecidos:**
+- Um pagamento dividido com um empenho de fora da lista, que não estoure o
+  valor do empenho, passa despercebido e reduz o saldo a receber.
+- Custo: 2 chamadas por empenho, mais o histórico de cada item quando lista
+  e itens discordam — a Dell passa de 250 chamadas na primeira consulta
+  (~7 s). Por isso: até 120 empenhos analisados, cache de 6 h e limite de
+  3 consultas por minuto por IP (a cota da chave é de 400/min pro app
+  inteiro).
+- Conferido: I F Instalações — 2025NE005117 quitado (209.999,00 empenhado e
+  pago, com estorno), 2025NE000455 com 7.500,43 a receber; Dell — os 9
+  casos acima batem com o histórico de cada empenho.
+
 **Particularidades descobertas testando com uma chave real:**
 - A API **migrou de domínio**: `portaldatransparencia.gov.br` só devolve um
   redirecionamento em texto plano; o domínio certo é
@@ -316,9 +428,10 @@ ano (12.599,10) mais os restos a pagar pagos (211.398,90).
 - **Recusa chamadas vindas dos servidores da Vercel nos EUA** (região
   `iad1`, a padrão): em produção a rota falhava em todas as chamadas,
   enquanto localmente funcionava. Por isso só esta rota roda em São Paulo
-  (`gru1`), configurado em [`vercel.json`](../vercel.json) — vale pras cinco
-  rotas da CGU (`/api/sancoes`, `/api/governo-federal`, `/api/cpf`, `/api/emendas` e
-  `/api/emendas/documentos`). O resto do
+  (`gru1`), configurado em [`vercel.json`](../vercel.json) — vale pras oito
+  rotas da CGU (`/api/sancoes`, `/api/governo-federal`, `/api/cpf`,
+  `/api/emendas`, `/api/emendas/documentos`, `/api/convenios` e
+  `/api/empenhos-federais`). O resto do
   projeto continua na região padrão (`iad1`): mudar tudo pra `gru1` não
   ajudou o PNCP, que em 2026-09-28 falhou a partir da Vercel nas duas regiões
   (`gru1` 11 de 11, `iad1` 5 de 5 logo depois) enquanto respondia normalmente
@@ -349,6 +462,31 @@ ano (12.599,10) mais os restos a pagar pagos (211.398,90).
   Em 130 de 150 contratos da Dell, `compra.numeroProcesso` veio com lixo
   (ex.: `"-3"`) — só exibimos números com 5 dígitos ou mais.
 - Limite de 400 chamadas/minuto no horário comercial (700 de madrugada).
+
+## TCU — Consulta consolidada de pessoa jurídica (`/cnpj`, `/sancoes`)
+
+| | |
+|---|---|
+| **Base URL** | `https://certidoes-apf.apps.tcu.gov.br/api/rest/publico/certidoes/{cnpj}?seEmitirPDF=false` |
+| **Autenticação** | Nenhuma |
+| **Arquivo** | [`lib/server/tcu-client.ts`](../lib/server/tcu-client.ts) (rota `/api/tcu/certidao`) |
+| **Página oficial** | [certidoes-apf.apps.tcu.gov.br](https://certidoes-apf.apps.tcu.gov.br/) |
+
+Numa chamada só, quatro cadastros: Licitantes Inidôneos (TCU), CNIA —
+improbidade administrativa (CNJ), CEIS e CNEP (CGU). É a certidão que os
+órgãos pedem na habilitação.
+
+**Particularidades (testado em 2026-09-29):**
+- `situacao` vem `NADA_CONSTA` ou `CONSTAM_REGISTROS`; quando consta,
+  `observacao` resume o registro ("Impedimento/proibição de contratar com
+  prazo determinado (14/05/2027) - EPA-ESTADO DO PARÁ").
+- A primeira consulta de um CNPJ leva ~6 s (o TCU consulta os cadastros na
+  hora); as seguintes, ~0,2 s — o TCU guarda a certidão emitida.
+- `seEmitirPDF=true` traz o PDF oficial em base64 em `certidaoPDF` (~15 KB).
+  A rota devolve esse PDF com `pdf=1`, pro botão "Baixar certidão".
+- CNPJ com dígito errado volta **412** com `violacoes`.
+- A rota roda em São Paulo por precaução, como as da CGU; não testamos se o
+  TCU recusa IPs dos EUA.
 
 ## ANVISA — Consultas Externas (`/produtos-saude`, `/nome-tecnico`)
 

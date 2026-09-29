@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validarCpf } from "@/lib/cpf";
 import { descreverFalha } from "@/lib/server/erros";
+import { criarLimitePorIp, ipDaRequisicao } from "@/lib/server/limite-ip";
 import { buscarPessoaFisica } from "@/lib/server/transparencia-client";
 
 /**
@@ -18,22 +19,7 @@ import { buscarPessoaFisica } from "@/lib/server/transparencia-client";
 export const dynamic = "force-dynamic";
 
 const CONSULTAS_POR_MINUTO = 10;
-const MAXIMO_IPS = 5000;
-const consultasPorIp = new Map<string, number[]>();
-
-/**
- * Janela deslizante de 1 minuto, na memória da função. Cada instância tem a
- * sua, então não é um limite exato — segura uso automatizado, não um ataque
- * distribuído.
- */
-function excedeuLimite(ip: string): boolean {
-  const agora = Date.now();
-  const recentes = (consultasPorIp.get(ip) ?? []).filter((t) => agora - t < 60_000);
-  if (recentes.length >= CONSULTAS_POR_MINUTO) return true;
-  if (consultasPorIp.size >= MAXIMO_IPS) consultasPorIp.clear();
-  consultasPorIp.set(ip, [...recentes, agora]);
-  return false;
-}
+const excedeuLimite = criarLimitePorIp(CONSULTAS_POR_MINUTO);
 
 export async function POST(request: NextRequest) {
   const corpo = (await request.json().catch(() => ({}))) as { cpf?: unknown };
@@ -48,8 +34,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ erro: "Consulta de CPF ainda não configurada nesta instância." }, { status: 501 });
   }
 
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
-  if (excedeuLimite(ip)) {
+  if (excedeuLimite(ipDaRequisicao(request))) {
     return NextResponse.json(
       { erro: `Limite de ${CONSULTAS_POR_MINUTO} consultas de CPF por minuto atingido. Tente de novo em instantes.` },
       { status: 429, headers: { "Retry-After": "60" } },

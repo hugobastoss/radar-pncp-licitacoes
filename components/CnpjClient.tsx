@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Campo } from "@/components/LicitacaoDetails";
+import { CertidaoTcuSecao } from "@/components/CertidaoTcuSecao";
+import type { EstadoCertidaoTcu } from "@/components/CertidaoTcuSecao";
 import { ContratosAmSecao } from "@/components/ContratosAmSecao";
 import type { EstadoContratosAm } from "@/components/ContratosAmSecao";
 import { GovernoFederalSecao } from "@/components/GovernoFederalSecao";
@@ -17,6 +19,7 @@ import { buscarContratosAm } from "@/lib/api-am";
 import { buscarComplementoCnpj, buscarEmpresa } from "@/lib/api-cnpj";
 import { buscarDadosGovernoFederal } from "@/lib/api-governo-federal";
 import { buscarSancoes } from "@/lib/api-sancoes";
+import { buscarCertidaoTcu } from "@/lib/api-tcu";
 import { validarCnpj } from "@/lib/cnpj";
 import {
   formatarCep,
@@ -214,12 +217,14 @@ function EmpresaCard({
   governoFederal,
   complemento,
   contratosAm,
+  certidaoTcu,
 }: {
   empresa: Empresa;
   sancoes: EstadoSancoes;
   governoFederal: EstadoGovernoFederal;
   complemento: EstadoComplemento;
   contratosAm: EstadoContratosAm;
+  certidaoTcu: EstadoCertidaoTcu;
 }) {
   const ativa = empresa.situacaoCadastral?.toUpperCase() === "ATIVA";
   const telefones = empresa.telefones.map(formatarTelefone).join(" · ");
@@ -360,7 +365,13 @@ function EmpresaCard({
 
       <SecaoSancoes sancoes={sancoes} />
 
-      <GovernoFederalSecao estado={governoFederal} />
+      <CertidaoTcuSecao
+        estado={certidaoTcu}
+        cnpj={empresa.cnpj}
+        className="mt-5 border-t border-ink-100 pt-5 dark:border-ink-800"
+      />
+
+      <GovernoFederalSecao estado={governoFederal} cnpj={empresa.cnpj} />
 
       <ContratosAmSecao estado={contratosAm} cnpj={empresa.cnpj} />
     </div>
@@ -387,6 +398,7 @@ export function CnpjClient() {
   const [governoFederal, setGovernoFederal] = useState<EstadoGovernoFederal>({ status: "carregando" });
   const [complemento, setComplemento] = useState<EstadoComplemento>({ status: "nao_consultado" });
   const [contratosAm, setContratosAm] = useState<EstadoContratosAm>({ status: "carregando" });
+  const [certidaoTcu, setCertidaoTcu] = useState<EstadoCertidaoTcu>({ status: "carregando" });
   const [mensagemErro, setMensagemErro] = useState<string | undefined>();
   const abortRef = useRef<AbortController | null>(null);
 
@@ -401,6 +413,7 @@ export function CnpjClient() {
     setGovernoFederal({ status: "carregando" });
     setComplemento({ status: "nao_consultado" });
     setContratosAm({ status: "carregando" });
+    setCertidaoTcu({ status: "carregando" });
 
     // A varredura de contratos do AM é a consulta mais lenta — começa junto com o cadastro.
     void buscarContratosAm(cnpj, { signal: controller.signal }).then((r) => {
@@ -416,6 +429,11 @@ export function CnpjClient() {
       if (resultado.status === "sucesso") setGovernoFederal(resultado);
       else if (resultado.status === "nao_configurado") setGovernoFederal({ status: "nao_configurado" });
       else if (resultado.status === "erro_servidor") setGovernoFederal({ status: "erro", mensagem: resultado.mensagem });
+    });
+    void buscarCertidaoTcu(cnpj, { signal: controller.signal }).then((r) => {
+      if (controller.signal.aborted) return;
+      if (r.status === "sucesso") setCertidaoTcu(r);
+      else if (r.status !== "cancelado") setCertidaoTcu({ status: "erro", mensagem: "mensagem" in r ? r.mensagem : undefined });
     });
     void buscarSancoes(cnpj, { signal: controller.signal }).then((resultado) => {
       if (controller.signal.aborted) return;
@@ -552,6 +570,7 @@ export function CnpjClient() {
           governoFederal={governoFederal}
           complemento={complemento}
           contratosAm={contratosAm}
+          certidaoTcu={certidaoTcu}
         />
       )}
     </div>

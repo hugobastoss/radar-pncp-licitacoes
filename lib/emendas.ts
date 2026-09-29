@@ -25,11 +25,3 @@ const PORTAL = "https://portaldatransparencia.gov.br";
 export function linkEmenda(codigo: string): string {
   return `${PORTAL}/emendas/detalhe?codigoEmenda=${codigo}`;
 }
-
-const FASES_NO_PORTAL: Record<string, string> = { Empenho: "empenho", Liquidação: "liquidacao", Pagamento: "pagamento" };
-
-/** Página do documento (empenho, liquidação ou pagamento) no Portal; `undefined` pra fase desconhecida. */
-export function linkDocumentoDespesa(fase: string, codigo: string): string | undefined {
-  const caminho = FASES_NO_PORTAL[fase];
-  return caminho ? `${PORTAL}/despesas/documento/${caminho}/${codigo}` : undefined;
-}

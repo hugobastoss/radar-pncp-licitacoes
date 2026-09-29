@@ -10,12 +10,14 @@ Pesquisa rápida de licitações e contratações públicas brasileiras, com dad
 
 - Busca de licitações por texto livre (objeto e nome do órgão), estado, município e número, com acesso aos documentos do edital
 - Filtros avançados por período, modalidade, portal e situação
+- Atas de registro de preço vigentes no PNCP, por texto e estado, com o aviso de vencimento próximo
 - Pesquisas rápidas pré-configuradas para categorias comuns (medicamentos, hospitalar, EPI, vacinas, etc.)
-- Consulta de CNPJ com cadastro da Receita Federal, sanções (CEIS/CNEP), relação com o governo federal (contratos e pagamentos), contratos com o Governo do Amazonas e inscrição SUFRAMA
-- Empenhos a receber do Governo do Amazonas: contratos do fornecedor e quanto de cada nota de empenho já foi liquidado e pago
+- Consulta de CNPJ com cadastro da Receita Federal, sanções (CEIS/CNEP), certidão consolidada do TCU (com PDF), relação com o governo federal (contratos, pagamentos e benefícios fiscais), contratos com o Governo do Amazonas e inscrição SUFRAMA
+- Empenhos a receber do governo federal e do Governo do Amazonas: quanto de cada nota de empenho do fornecedor já foi pago
 - Consulta de CPF: nome, sanções (CEIS, CNEP e CEAF), pessoa politicamente exposta (PEP), vínculo de servidor federal e contratos federais
 - Emendas parlamentares: quanto cada emenda empenhou, liquidou e pagou, com os documentos (empenhos, liquidações e pagamentos) e quem recebeu o dinheiro
-- Consulta de sanções (CEIS/CNEP) com abrangência, fundamentação legal e se a sanção impede contratar
+- Convênios federais com estados, municípios e entidades: objeto, valor, quanto foi liberado e vigência
+- Consulta de sanções (CEIS/CNEP) com abrangência, fundamentação legal e se a sanção impede contratar, junto com a certidão consolidada do TCU
 - Consulta de produtos para saúde na ANVISA (registro, fabricante, modelos, códigos de barras UDI e certificados de boas práticas) e da nomenclatura técnica
 - Consulta de CEP e NCM
 - Indicador de status das fontes de dados no cabeçalho
@@ -27,14 +29,15 @@ Todas as chamadas acontecem no servidor (rotas em `app/api/*`) — o navegador n
 
 | API | Para que serve no app | Autenticação |
 | --- | --- | --- |
-| [PNCP](https://pncp.gov.br) — busca interna (`/api/search`) | Busca de licitações — fonte primária, com texto livre | Nenhuma |
+| [PNCP](https://pncp.gov.br) — busca interna (`/api/search`) | Busca de licitações — fonte primária, com texto livre; atas de registro de preço | Nenhuma |
 | [PNCP](https://pncp.gov.br/api/consulta/swagger-ui/index.html) — consulta oficial (`/api/consulta/v1`) | Busca de licitações — primeira reserva | Nenhuma |
 | [PNCP](https://pncp.gov.br/api/pncp/swagger-ui/index.html) — arquivos (`/api/pncp/v1`) | Documentos do edital de cada licitação | Nenhuma |
 | [Compras.gov.br — Dados Abertos](https://dadosabertos.compras.gov.br) | Busca de licitações — segunda reserva | Nenhuma |
 | [BrasilAPI](https://brasilapi.com.br) — CNPJ | Cadastro da empresa (Receita Federal) | Nenhuma |
 | [Minha Receita](https://minhareceita.org) | Reserva da BrasilAPI no CNPJ (mesmo formato de resposta) | Nenhuma |
 | [CNPJá](https://cnpja.com/api/open) — API aberta | Inscrição SUFRAMA (situação e incentivos fiscais) e e-mail corporativo | Nenhuma (5 consultas/min por IP) |
-| [Portal da Transparência (CGU)](https://portaldatransparencia.gov.br/api-de-dados) | Sanções CEIS/CNEP; resumo, contratos e pagamentos federais da empresa; consulta de CPF (nome, sanções, CEAF, PEP, servidor, contratos); emendas parlamentares e seus documentos | Chave gratuita |
+| [Portal da Transparência (CGU)](https://portaldatransparencia.gov.br/api-de-dados) | Sanções CEIS/CNEP; resumo, contratos e pagamentos federais da empresa; consulta de CPF (nome, sanções, CEAF, PEP, servidor, contratos); emendas parlamentares e seus documentos; convênios; benefícios fiscais; empenhos a receber do governo federal | Chave gratuita |
+| [TCU — Certidões](https://certidoes-apf.apps.tcu.gov.br/) | Certidão consolidada de pessoa jurídica: inidôneos do TCU, improbidade (CNJ), CEIS e CNEP, com PDF | Nenhuma |
 | [SGC — Sistema de Gestão de Contratos (SEFAZ-AM)](https://www.transparencia.am.gov.br/dados-abertos-2/) | Contratos da empresa com o Governo do Amazonas e as notas de empenho de cada contrato | Nenhuma |
 | [Portal da Transparência Fiscal (SEFAZ-AM)](https://sistemas.sefaz.am.gov.br/transpprd/mnt/despesa/execDespAno.do?method=Pesquisar&filter=&anoexercicio=2026&grupo=1&consulta=1&mes=00&detNatureza=N) — sem API, lido do HTML | Empenhado, liquidado e pago de cada nota de empenho (empenhos a receber) | Nenhuma |
 | [BrasilAPI](https://brasilapi.com.br) — CEP | Consulta de CEP | Nenhuma |
@@ -80,7 +83,7 @@ Só as consultas à CGU e à ANVISA precisam delas — o resto funciona sem nenh
 
 | Variável | Obrigatória? | Descrição |
 | --- | --- | --- |
-| `PORTAL_TRANSPARENCIA_API_KEY` | Não (sem ela, `/sancoes`, `/cpf`, `/emendas` e as seções de sanções e governo federal do `/cnpj` mostram "não configurado") | Chave gratuita, cadastro em [portaldatransparencia.gov.br/api-de-dados](https://portaldatransparencia.gov.br/api-de-dados) |
+| `PORTAL_TRANSPARENCIA_API_KEY` | Não (sem ela, `/sancoes`, `/cpf`, `/emendas`, `/convenios`, `/empenhos-federal` e as seções de sanções e governo federal do `/cnpj` mostram "não configurado") | Chave gratuita, cadastro em [portaldatransparencia.gov.br/api-de-dados](https://portaldatransparencia.gov.br/api-de-dados) |
 | `ANVISA_CLIENT_ID` / `ANVISA_CLIENT_SECRET` | Não (sem elas, `/produtos-saude` e `/nome-tecnico` mostram "não configurado") | Registre um app em [api.anvisa.gov.br](https://api.anvisa.gov.br) |
 
 Crie um `.env.local` na raiz do projeto (já está no `.gitignore`) com:
@@ -104,7 +107,7 @@ ANVISA_CLIENT_SECRET=seu-client-secret
 
 O projeto está hospedado na [Vercel](https://vercel.com) e faz deploy automático a partir da branch `main`.
 
-As funções rodam em Washington (`iad1`, o padrão da Vercel), exceto as rotas que consultam o Portal da Transparência (`/api/sancoes`, `/api/governo-federal`, `/api/cpf` e `/api/emendas`) e a SEFAZ-AM (`/api/am/contratos` e `/api/am/empenhos`), que rodam em São Paulo (`gru1`). A CGU recusa chamadas vindas dos servidores da Vercel nos EUA. As consultas à SEFAZ-AM fazem cerca de mil chamadas por CNPJ, e ficam mais rápidas perto do Brasil. A configuração fica em [`vercel.json`](vercel.json).
+As funções rodam em Washington (`iad1`, o padrão da Vercel), exceto as rotas que consultam o Portal da Transparência (`/api/sancoes`, `/api/governo-federal`, `/api/cpf`, `/api/emendas`, `/api/convenios` e `/api/empenhos-federais`), o TCU (`/api/tcu/certidao`) e a SEFAZ-AM (`/api/am/contratos` e `/api/am/empenhos`), que rodam em São Paulo (`gru1`). A CGU recusa chamadas vindas dos servidores da Vercel nos EUA. As consultas à SEFAZ-AM fazem cerca de mil chamadas por CNPJ, e ficam mais rápidas perto do Brasil. A configuração fica em [`vercel.json`](vercel.json).
 
 ## Licença
 

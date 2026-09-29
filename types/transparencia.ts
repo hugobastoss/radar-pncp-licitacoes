@@ -258,9 +258,128 @@ export interface ResultadoDocumentosEmenda {
   pagamentosDetalhados: boolean;
 }
 
+/** Nota de empenho do governo federal em favor de uma empresa, com o que já foi pago dela. */
+export interface EmpenhoFederal {
+  /** Código completo (UG + gestão + número), ex.: "785810000012025NE005117". */
+  codigo: string;
+  /** Ex.: "2025NE005117". */
+  codigoResumido: string;
+  /** Ano de emissão do empenho. */
+  ano: number;
+  /** Como vem da API, DD/MM/AAAA. */
+  data?: string;
+  orgao?: string;
+  orgaoSuperior?: string;
+  ug?: string;
+  /** O que foi empenhado, como o órgão descreveu. */
+  descricao?: string;
+  /** Nota do resto a pagar, quando difere da descrição — ex.: "CANCELAMENTO DE RESTOS A PAGAR DO EMPENHO…". */
+  notaRestos?: string;
+  /** Ex.: "39 - Outros Serviços de Terceiros - Pessoa Jurídica". */
+  elemento?: string;
+  processo?: string;
+  /** Valor atual do empenho, já com reforços e anulações. */
+  empenhado: number;
+  /** Soma dos pagamentos (estornos descontados), inclusive de restos a pagar em anos seguintes. */
+  pago: number;
+  aReceber: number;
+  /** Nem pago nem a receber: em geral, resto a pagar cancelado. */
+  cancelado: number;
+  /** Empenho de ano anterior — o saldo é resto a pagar. */
+  restoAPagar: boolean;
+  /** `false` quando os pagamentos dele não puderam ser consultados — pago e a receber podem estar errados. */
+  completo: boolean;
+}
+
+export interface ResultadoEmpenhosFederais {
+  favorecido?: string;
+  /** Anos das listas de empenhos consultadas, ex.: [2026, 2025]. */
+  anos: number[];
+  /** Maior saldo primeiro. */
+  empenhos: EmpenhoFederal[];
+  totais: { empenhado: number; pago: number; aReceber: number; cancelado: number };
+  /** Quantos empenhos a empresa tem nos anos consultados; só os mais recentes são analisados. */
+  totalEmpenhos: number;
+  /** `false` quando algo ficou de fora: limite de páginas ou de empenhos, ou consulta que falhou. */
+  completo: boolean;
+}
+
+/** Convênio (ou contrato de repasse, termo de fomento…) do governo federal com estado, município ou entidade. */
+export interface ConvenioFederal {
+  id: number;
+  /** Código do convênio no Portal (ex.: "999870") — é o que vai na URL da página dele. */
+  codigo?: string;
+  /** Ex.: "07021/2026". */
+  numero?: string;
+  objeto?: string;
+  /** Ex.: "EM EXECUÇÃO", "CONCLUÍDO", "NORMAL". */
+  situacao?: string;
+  convenente: { nome: string; documento?: string; tipo?: string };
+  municipio?: string;
+  /** Sigla, ex.: "AM". */
+  uf?: string;
+  /** Quem repassa: ministério ou órgão federal. */
+  concedente?: string;
+  /** Unidade que opera o repasse (ex.: "CAIXA ECONOMICA FEDERAL - PROGRAMAS SOCIAIS"). */
+  unidadeGestora?: string;
+  valor: number;
+  valorLiberado: number;
+  valorContrapartida: number;
+  /** Datas em AAAA-MM-DD. */
+  inicioVigencia?: string;
+  fimVigencia?: string;
+  ultimaLiberacao?: string;
+  valorUltimaLiberacao?: number;
+}
+
+export interface ResultadoConvenios {
+  itens: ConvenioFederal[];
+  pagina: number;
+  /** A CGU não informa o total: há mais quando a página veio cheia (15). */
+  temMais: boolean;
+}
+
+/** Regime especial de tributação em que a empresa foi habilitada pela Receita (ex.: REIDI, RECAP, PADIS). */
+export interface RegimeFiscalHabilitado {
+  /** Ex.: "Reidi". */
+  beneficio: string;
+  /** Ex.: "Regime Especial de Incentivos para o Desenvolvimento da Infraestrutura." */
+  descricao?: string;
+  vigente: boolean;
+  /** Como vêm da API, DD/MM/AAAA. */
+  inicio?: string;
+  fim?: string;
+  fundamentoLegal?: string;
+}
+
+/** Imunidade ou isenção (entidades sem fins lucrativos, templos, partidos…). */
+export interface ImunidadeIsencao {
+  beneficio: string;
+  tipoEntidade?: string;
+}
+
+export interface RenunciaAnual {
+  ano: number;
+  total: number;
+  /** Maior primeiro. */
+  porTributo: { tributo: string; valor: number }[];
+}
+
+/** Benefícios fiscais federais da empresa, pelos dados de renúncia da Receita que a CGU publica. */
+export interface BeneficiosFiscais {
+  regimes: RegimeFiscalHabilitado[];
+  imunidades: ImunidadeIsencao[];
+  /** Quanto a empresa deixou de pagar de tributos federais por ano — mais recente primeiro. */
+  renunciasPorAno: RenunciaAnual[];
+  /** `false` quando havia mais páginas de renúncia do que o limite buscado — totais subestimados. */
+  completo: boolean;
+}
+
 export interface DadosGovernoFederal {
   /** `null` quando a consulta falhou. */
   resumo: ResumoPessoaJuridica | null;
+  /** `null` quando a consulta falhou. */
+  beneficiosFiscais: BeneficiosFiscais | null;
   /**
    * `null` quando a consulta falhou. Vem vazio sem consultar quando o resumo
    * diz que não há contratação — economiza chamadas à CGU.

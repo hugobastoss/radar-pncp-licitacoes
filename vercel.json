@@ -22,6 +22,15 @@
     },
     "app/api/emendas/documentos/route.ts": {
       "regions": ["gru1"]
+    },
+    "app/api/convenios/route.ts": {
+      "regions": ["gru1"]
+    },
+    "app/api/empenhos-federais/route.ts": {
+      "regions": ["gru1"]
+    },
+    "app/api/tcu/certidao/route.ts": {
+      "regions": ["gru1"]
     }
   }
 }

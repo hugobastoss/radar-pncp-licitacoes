@@ -24,9 +24,9 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Cada parte falha sozinha (vem `null`) — só é erro se as três falharem.
+  // Cada parte falha sozinha (vem `null`) — só é erro se todas falharem.
   const dados = await buscarDadosGovernoFederal(validacao.cnpj, chave, request.signal);
-  if (!dados.resumo && !dados.contratos && !dados.pagamentos) {
+  if (!dados.resumo && !dados.contratos && !dados.pagamentos && !dados.beneficiosFiscais) {
     return NextResponse.json(
       { erro: "Não foi possível consultar o Portal da Transparência neste momento." },
       { status: 502 },

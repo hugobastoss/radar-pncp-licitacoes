@@ -10,7 +10,8 @@ import { Badge } from "@/components/ui/Badge";
 import { LinkCnpj } from "@/components/LinkCnpj";
 import { buscarDocumentosEmenda, buscarEmendas } from "@/lib/api-emendas";
 import type { FiltrosBuscaEmendas } from "@/lib/api-emendas";
-import { linkDocumentoDespesa, linkEmenda, PRIMEIRO_ANO_EMENDAS, TIPOS_EMENDA } from "@/lib/emendas";
+import { linkEmenda, PRIMEIRO_ANO_EMENDAS, TIPOS_EMENDA } from "@/lib/emendas";
+import { linkDocumentoDespesa } from "@/lib/portal-transparencia";
 import { cn } from "@/lib/cn";
 import { formatarMoeda } from "@/lib/formatters";
 import type {
