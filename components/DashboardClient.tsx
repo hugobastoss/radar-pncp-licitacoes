@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { SearchPanel } from "@/components/SearchPanel";
 import { FiltrosAtivosBar, listarFiltrosAtivos } from "@/components/FiltrosAtivosBar";
-import { SummaryCards } from "@/components/SummaryCards";
 import { TableFilters } from "@/components/TableFilters";
 import { ResultsTable } from "@/components/ResultsTable";
 import { ResultCard } from "@/components/ResultCard";
@@ -18,7 +17,7 @@ import { Drawer } from "@/components/ui/Drawer";
 import { LicitacaoDetails } from "@/components/LicitacaoDetails";
 import { buscarLicitacoes } from "@/lib/api";
 import { ESTADO_TODOS } from "@/lib/data/estados";
-import { chaveMunicipio, grupoDaModalidade, normalizarTexto, ordenar } from "@/lib/data/dominio";
+import { chaveMunicipio, normalizarTexto, ordenar } from "@/lib/data/dominio";
 import { cn } from "@/lib/cn";
 import type { PesquisaRapida } from "@/lib/data/dominio";
 import type { FiltrosLicitacao, Licitacao, LicitacoesResponse, OrdenacaoOpcao } from "@/types/licitacao";
@@ -106,6 +105,18 @@ export function DashboardClient() {
 
     return () => cancelAnimationFrame(primeiroFrame);
   }, [filtrosAplicados]);
+
+  // Trocar de página (ou de tamanho de página) leva pro topo da lista. Rola no
+  // quadro seguinte ao da troca, com a página nova já pintada — mesmo motivo do
+  // duplo rAF acima.
+  function irParaPagina(proxima: number) {
+    setPagina(proxima);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        resultadoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+  }
 
   const executarBusca = useCallback(async (filtros: FiltrosLicitacao) => {
     abortRef.current?.abort();
@@ -271,13 +282,6 @@ export function DashboardClient() {
     return true;
   });
 
-  const summaryRefinado = {
-    total: itensRefinados.length,
-    pregoes: itensRefinados.filter((i) => grupoDaModalidade(i.modalidade) === "pregao").length,
-    dispensas: itensRefinados.filter((i) => grupoDaModalidade(i.modalidade) === "dispensa").length,
-    outras: itensRefinados.filter((i) => grupoDaModalidade(i.modalidade) === "outra").length,
-  };
-
   // Ordenação ("Ordenar por"): também local, pelo mesmo motivo dos
   // refinamentos rápidos — nenhuma fonte aceita esse parâmetro, então é só
   // reordenar em memória o que já foi buscado (ver lib/data/dominio.ts).
@@ -317,7 +321,9 @@ export function DashboardClient() {
 
       <FiltrosAtivosBar filtros={filtrosAplicados} onLimpar={limparFiltros} />
 
-      <div ref={resultadoRef} className="scroll-mt-20 flex flex-col">
+      {/* A margem de rolagem deixa o topo da lista abaixo do cabeçalho (56 px) e, com
+          filtros aplicados, também da barra de filtros congelada (+48 px). */}
+      <div ref={resultadoRef} className={cn(temFiltrosAtivos ? "scroll-mt-28" : "scroll-mt-16", "flex flex-col")}>
         <div
           className={cn(
             // Sem `overflow-hidden` de propósito (mesmo motivo da paginação
@@ -353,10 +359,6 @@ export function DashboardClient() {
                 // aos filtros), o que não faz sentido pro usuário.
                 parcial={resultado.meta.parcial && resultado.total > 0}
               />
-
-              <div className="px-4 py-4 sm:px-6">
-                <SummaryCards resumo={summaryRefinado} />
-              </div>
 
               {itensRefinados.length > 0 ? (
                 <>
@@ -406,10 +408,10 @@ export function DashboardClient() {
             pageSize={tamanhoPagina}
             total={itensRefinados.length}
             totalPages={totalPaginasCliente}
-            onChangePage={setPagina}
+            onChangePage={irParaPagina}
             onChangePageSize={(size) => {
               setTamanhoPagina(size);
-              setPagina(1);
+              irParaPagina(1);
             }}
           />
         )}

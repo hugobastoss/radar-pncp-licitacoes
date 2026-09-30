@@ -1,4 +1,5 @@
 import { ExternalLink, FileSearch } from "lucide-react";
+import { BotaoCopiar } from "@/components/ui/BotaoCopiar";
 import { Button } from "@/components/ui/Button";
 import { PortalBadge } from "@/components/PortalBadge";
 import { PrazoIndicador } from "@/components/PrazoIndicador";
@@ -9,6 +10,7 @@ import {
   formatarLocal,
   formatarMoeda,
   formatarNumeroLicitacao,
+  objetoEmMaiusculas,
 } from "@/lib/formatters";
 import { rotuloSituacao } from "@/lib/data/dominio";
 import { isLinkExternoSeguro } from "@/lib/portal";
@@ -52,9 +54,12 @@ export function LicitacaoDetails({ item }: { item: Licitacao }) {
       </dl>
 
       <div>
-        <dt className="text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">Objeto completo</dt>
+        <dt className="flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">
+          Objeto completo
+          {item.objeto && <BotaoCopiar texto={objetoEmMaiusculas(item.objeto)} rotulo="Copiar objeto" />}
+        </dt>
         <dd className="mt-1 whitespace-pre-line text-sm leading-relaxed text-ink-700 dark:text-ink-200">
-          {item.objeto ?? "Objeto não informado"}
+          {item.objeto ? objetoEmMaiusculas(item.objeto) : "Objeto não informado"}
         </dd>
       </div>
 

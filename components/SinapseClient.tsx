@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { Core, CoseLayoutOptions, StylesheetJson } from "cytoscape";
@@ -9,15 +9,21 @@ import {
   ArrowUpRight,
   BadgePercent,
   BriefcaseBusiness,
+  ChevronDown,
   Building2,
+  Expand,
   Factory,
   Landmark,
   Loader2,
   Maximize2,
+  Minus,
   Network,
+  PanelRightClose,
+  PanelRightOpen,
   Plus,
   ScrollText,
   ShieldAlert,
+  Shrink,
   Trash2,
   TriangleAlert,
   UserRound,
@@ -40,6 +46,7 @@ import { buscarSancoes } from "@/lib/api-sancoes";
 import { buscarCertidaoTcu } from "@/lib/api-tcu";
 import { validarCnpj } from "@/lib/cnpj";
 import { validarCpf } from "@/lib/cpf";
+import { arrastarParaRolar } from "@/lib/arrastar-para-rolar";
 import { cn } from "@/lib/cn";
 import { dominioDoEmail } from "@/lib/dominio-email";
 import { FORMATO_CODIGO_EMENDA } from "@/lib/emendas";
@@ -376,27 +383,110 @@ const LEGENDA: [string, TipoNo, string][] = [
   ["Cargo público (PEP)", "cargo", "bg-warning-600 text-white"],
 ];
 
-function Legenda() {
+/**
+ * Um ícone da legenda. O nome só aparece ao passar o mouse, ao clicar (é o
+ * que funciona no toque) ou ao chegar pelo teclado. Perto das bordas da tela
+ * a dica abre pra dentro, em vez de centrada no ícone.
+ */
+function ItemLegenda({
+  rotulo,
+  aberto,
+  onAlternar,
+  children,
+}: {
+  rotulo: string;
+  aberto: boolean;
+  onAlternar: () => void;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLLIElement>(null);
+  const [lado, setLado] = useState<"esquerda" | "centro" | "direita">("centro");
+
+  function posicionar() {
+    const caixa = ref.current?.getBoundingClientRect();
+    if (!caixa) return;
+    const meio = caixa.left + caixa.width / 2;
+    setLado(meio < 140 ? "esquerda" : meio > window.innerWidth - 140 ? "direita" : "centro");
+  }
+
   return (
-    <ul className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-ink-600 dark:text-ink-300">
-      {LEGENDA.map(([rotulo, tipo, classe]) => (
-        <li key={rotulo} className="inline-flex items-center gap-1.5">
-          <Marcador tipo={tipo} classe={classe} />
-          {rotulo}
-        </li>
+    <li ref={ref} className="group relative" onPointerEnter={posicionar} onFocus={posicionar}>
+      <button
+        type="button"
+        aria-label={rotulo}
+        onClick={() => {
+          posicionar();
+          onAlternar();
+        }}
+        className="peer inline-flex h-7 min-w-7 items-center justify-center rounded-md px-1 hover:bg-ink-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:hover:bg-ink-800"
+      >
+        {children}
+      </button>
+      {/* O nome acessível já está no botão: a dica é só visual. */}
+      <span
+        role="tooltip"
+        aria-hidden
+        className={cn(
+          "pointer-events-none absolute bottom-full z-20 mb-1.5 w-max max-w-64 rounded-md bg-ink-900 px-2 py-1 text-xs text-white shadow-popover dark:bg-ink-100 dark:text-ink-900",
+          lado === "esquerda" ? "left-0" : lado === "direita" ? "right-0" : "left-1/2 -translate-x-1/2",
+          aberto ? "block" : "hidden group-hover:block peer-focus-visible:block",
+        )}
+      >
+        {rotulo}
+      </span>
+    </li>
+  );
+}
+
+function Legenda() {
+  // O item aberto por clique; passar o mouse e o foco do teclado abrem sem estado.
+  const [aberto, setAberto] = useState<string | null>(null);
+  const ref = useRef<HTMLUListElement>(null);
+
+  useEffect(() => {
+    if (!aberto) return;
+    function aoTocarFora(e: PointerEvent) {
+      if (!ref.current?.contains(e.target as Node)) setAberto(null);
+    }
+    function aoTeclar(e: KeyboardEvent) {
+      if (e.key === "Escape") setAberto(null);
+    }
+    document.addEventListener("pointerdown", aoTocarFora);
+    document.addEventListener("keydown", aoTeclar);
+    return () => {
+      document.removeEventListener("pointerdown", aoTocarFora);
+      document.removeEventListener("keydown", aoTeclar);
+    };
+  }, [aberto]);
+
+  const itens: { rotulo: string; amostra: ReactNode }[] = [
+    ...LEGENDA.map(([rotulo, tipo, classe]) => ({ rotulo, amostra: <Marcador tipo={tipo} classe={classe} /> })),
+    {
+      rotulo: "Empenho a receber",
+      amostra: <span className="inline-block w-5 border-t-2 border-dotted border-primary-400" aria-hidden />,
+    },
+    {
+      rotulo: "Dono do domínio do e-mail",
+      amostra: <span className="inline-block w-5 border-t-2 border-dashed border-ink-300 dark:border-ink-600" aria-hidden />,
+    },
+    {
+      rotulo: "Contorno vermelho: sanção · âmbar: atenção (inativa, PEP)",
+      amostra: <Marcador tipo="empresa" classe="border-2 border-danger-600 bg-primary-600 text-white" />,
+    },
+  ];
+
+  return (
+    <ul ref={ref} aria-label="Legenda do mapa" className="flex flex-wrap items-center gap-1">
+      {itens.map(({ rotulo, amostra }) => (
+        <ItemLegenda
+          key={rotulo}
+          rotulo={rotulo}
+          aberto={aberto === rotulo}
+          onAlternar={() => setAberto((atual) => (atual === rotulo ? null : rotulo))}
+        >
+          {amostra}
+        </ItemLegenda>
       ))}
-      <li className="inline-flex items-center gap-1.5">
-        <span className="inline-block w-4 border-t-2 border-dotted border-primary-400" aria-hidden />
-        Empenho a receber
-      </li>
-      <li className="inline-flex items-center gap-1.5">
-        <span className="inline-block w-4 border-t-2 border-dashed border-ink-300 dark:border-ink-600" aria-hidden />
-        Dono do domínio do e-mail
-      </li>
-      <li className="inline-flex items-center gap-1.5">
-        <Marcador tipo="empresa" classe="border-2 border-danger-600 bg-primary-600 text-white" />
-        Contorno vermelho: sanção · âmbar: atenção (inativa, PEP)
-      </li>
     </ul>
   );
 }
@@ -415,10 +505,53 @@ const ROTULO_CRUZAMENTO: Record<Cruzamento["tipo"], string> = {
   "mesmo-dono-dominio": "Domínio",
 };
 
-function ListaCruzamentos({ cruzamentos, onFocar, pontos }: { cruzamentos: Cruzamento[]; onFocar: (id: string) => void; pontos: number }) {
+/**
+ * Os cruzamentos lado a lado, numa faixa que rola na horizontal. Fora da tela
+ * cheia é um card abaixo do mapa; na tela cheia (`flutuante`), uma faixa por
+ * cima do mapa, com botão de recolher.
+ */
+function ListaCruzamentos({
+  cruzamentos,
+  onFocar,
+  pontos,
+  flutuante = false,
+  onRecolher,
+  className,
+}: {
+  cruzamentos: Cruzamento[];
+  onFocar: (id: string) => void;
+  pontos: number;
+  flutuante?: boolean;
+  onRecolher?: () => void;
+  className?: string;
+}) {
   return (
-    <div>
-      <p className="text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">Cruzamentos encontrados</p>
+    <section
+      aria-labelledby="titulo-cruzamentos"
+      className={cn(
+        "min-w-0 border border-ink-200 dark:border-ink-700",
+        flutuante
+          ? "rounded-xl bg-white/95 p-3 shadow-popover backdrop-blur dark:bg-ink-900/95"
+          : "rounded-2xl bg-white p-5 shadow-card dark:bg-ink-900",
+        className,
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <h2 id="titulo-cruzamentos" className="text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">
+          Cruzamentos encontrados
+        </h2>
+        {onRecolher && (
+          <button
+            type="button"
+            onClick={onRecolher}
+            aria-label="Recolher cruzamentos"
+            title="Recolher cruzamentos"
+            className="rounded-lg p-1 text-ink-400 hover:bg-ink-100 hover:text-ink-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-ink-500 dark:hover:bg-ink-800 dark:hover:text-ink-200"
+          >
+            <ChevronDown className="h-4 w-4" aria-hidden />
+          </button>
+        )}
+      </div>
       {cruzamentos.length === 0 ? (
         <p className="mt-1.5 text-sm text-ink-500 dark:text-ink-400">
           {pontos < 2
@@ -426,13 +559,20 @@ function ListaCruzamentos({ cruzamentos, onFocar, pontos }: { cruzamentos: Cruza
             : "Nenhum cruzamento no mapa até agora."}
         </p>
       ) : (
-        <ul className="mt-2 space-y-2">
+        // Uma linha só, que se arrasta na horizontal com o mouse (ou com o dedo, no celular).
+        <ul
+          ref={arrastarParaRolar}
+          className={cn(
+            "scrollbar-fina flex cursor-grab gap-3 overflow-x-auto pb-2 data-[arrastando=true]:cursor-grabbing data-[arrastando=true]:select-none",
+            flutuante ? "mt-2" : "mt-3",
+          )}
+        >
           {cruzamentos.map((c) => (
-            <li key={c.id}>
+            <li key={c.id} className="w-72 shrink-0">
               <button
                 type="button"
                 onClick={() => onFocar(c.foco)}
-                className="w-full rounded-lg border border-ink-200 p-2.5 text-left hover:bg-ink-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:border-ink-700 dark:hover:bg-ink-800"
+                className="h-full w-full cursor-[inherit] rounded-lg border border-ink-200 p-2.5 text-left hover:bg-ink-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:border-ink-700 dark:hover:bg-ink-800"
               >
                 <span className="flex items-center gap-1.5">
                   <Badge tone={TOM_CRUZAMENTO[c.gravidade]}>{ROTULO_CRUZAMENTO[c.tipo]}</Badge>
@@ -444,7 +584,7 @@ function ListaCruzamentos({ cruzamentos, onFocar, pontos }: { cruzamentos: Cruza
           ))}
         </ul>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -549,7 +689,8 @@ function PainelNo({
 
   return (
     <div className="space-y-4">
-      <div>
+      {/* pr-8: espaço do botão de recolher o painel, no canto. */}
+      <div className="pr-8">
         <p className="flex flex-wrap items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">
           {ROTULO_TIPO[no.tipo]}
           {no.alerta === "perigo" && <Badge tone="danger">Atenção</Badge>}
@@ -559,11 +700,12 @@ function PainelNo({
         {no.detalhe && <p className="mt-0.5 text-xs text-ink-500 dark:text-ink-400">{no.detalhe}</p>}
       </div>
 
-      <dl className="space-y-1 text-sm">
+      {/* Uma coluna só: rótulo em cima, valor embaixo — o painel é estreito demais pra lado a lado. */}
+      <dl className="space-y-2.5 text-sm">
         {no.info.map(([rotulo, valor]) => (
-          <div key={rotulo} className="flex gap-2">
-            <dt className="w-28 shrink-0 text-xs text-ink-500 dark:text-ink-400">{rotulo}</dt>
-            <dd className="min-w-0 break-words text-ink-700 dark:text-ink-200">{valor}</dd>
+          <div key={rotulo}>
+            <dt className="text-xs text-ink-500 dark:text-ink-400">{rotulo}</dt>
+            <dd className="mt-0.5 break-words text-ink-700 dark:text-ink-200">{valor}</dd>
           </div>
         ))}
       </dl>
@@ -664,6 +806,28 @@ export function SinapseClient() {
   const [fontes, setFontes] = useState<Record<string, Partial<Record<Fonte, EstadoFonte>>>>({});
   const [consultasCpf, setConsultasCpf] = useState<Record<string, EstadoCpf>>({});
   const [selecionado, setSelecionado] = useState<string | null>(null);
+  // O painel lateral pode ser recolhido pra dar a largura toda ao mapa. Escolher um
+  // ponto (no mapa ou num cruzamento) o abre de novo: é lá que ficam os detalhes.
+  const [painelAberto, setPainelAberto] = useState(true);
+  // Tela cheia: o mapa cobre o site inteiro, com o painel e os cruzamentos flutuando
+  // dentro dele. Fora dela, o painel fica ao lado e os cruzamentos embaixo.
+  const [telaCheia, setTelaCheia] = useState(false);
+  const [cruzamentosAbertos, setCruzamentosAbertos] = useState(true);
+
+  useEffect(() => {
+    if (!telaCheia) return;
+    // A página de trás não rola, e Esc sai — como numa janela.
+    const overflowAnterior = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    function aoTeclar(e: KeyboardEvent) {
+      if (e.key === "Escape") setTelaCheia(false);
+    }
+    document.addEventListener("keydown", aoTeclar);
+    return () => {
+      document.body.style.overflow = overflowAnterior;
+      document.removeEventListener("keydown", aoTeclar);
+    };
+  }, [telaCheia]);
   const [modo, setModo] = useState<"cnpj" | "emenda">("cnpj");
   const [valor, setValor] = useState("");
   const [incluirAm, setIncluirAm] = useState(true);
@@ -690,7 +854,10 @@ export function SinapseClient() {
         maxZoom: 3,
         boxSelectionEnabled: false,
       });
-      cy.on("tap", "node", (e) => setSelecionado(e.target.id()));
+      cy.on("tap", "node", (e) => {
+        setSelecionado(e.target.id());
+        setPainelAberto(true);
+      });
       cy.on("tap", (e) => {
         if (e.target === cy) setSelecionado(null);
       });
@@ -1010,6 +1177,14 @@ export function SinapseClient() {
     setErroForm(undefined);
   }
 
+  // Aproxima ou afasta mantendo o meio do mapa no lugar.
+  function mudarZoom(fator: number) {
+    const cy = cyRef.current;
+    if (!cy) return;
+    const nivel = Math.min(cy.maxZoom(), Math.max(cy.minZoom(), cy.zoom() * fator));
+    cy.animate({ zoom: { level: nivel, renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 } } }, { duration: 200 });
+  }
+
   function centralizar(id: string) {
     const cy = cyRef.current;
     const el = cy?.getElementById(id);
@@ -1018,6 +1193,7 @@ export function SinapseClient() {
 
   function focar(id: string) {
     setSelecionado(id);
+    setPainelAberto(true);
     centralizar(id);
   }
 
@@ -1029,6 +1205,39 @@ export function SinapseClient() {
     : noSelecionado?.tipo === "emenda"
       ? fontes[noSelecionado.id]
       : undefined;
+
+  // O mesmo conteúdo do painel, ao lado do mapa ou flutuando nele na tela cheia.
+  const conteudoPainel = (
+    <>
+      <button
+        type="button"
+        onClick={() => setPainelAberto(false)}
+        aria-label="Recolher painel"
+        title="Recolher o painel e dar a largura toda ao mapa"
+        className="absolute right-3 top-3 z-10 rounded-lg p-1.5 text-ink-400 hover:bg-ink-100 hover:text-ink-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-ink-500 dark:hover:bg-ink-800 dark:hover:text-ink-200"
+      >
+        <PanelRightClose className="h-4 w-4" aria-hidden />
+      </button>
+      {noSelecionado ? (
+        <PainelNo
+          key={noSelecionado.id}
+          no={noSelecionado}
+          modelo={modelo}
+          fontes={fontesDoSelecionado}
+          estadoCpf={consultasCpf[noSelecionado.id]}
+          onSelecionar={focar}
+          onAbrir={abrirEmpresa}
+          onCentralizar={centralizar}
+          onCarregar={carregarSobDemanda}
+          onConsultarCpf={consultarCpfDoSocio}
+        />
+      ) : (
+        <p className="pr-8 text-sm text-ink-500 dark:text-ink-400">
+          Clique num ponto do mapa para ver os detalhes e as ligações dele.
+        </p>
+      )}
+    </>
+  );
 
   return (
     <div className="flex flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
@@ -1100,13 +1309,24 @@ export function SinapseClient() {
         </div>
       </form>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="relative min-w-0 self-start overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-card dark:border-ink-700 dark:bg-ink-900">
+      <div className={cn("grid grid-cols-1 gap-4", painelAberto && !telaCheia && "lg:grid-cols-[minmax(0,1fr)_22rem]")}>
+        {/* O mesmo elemento nos dois modos (o Cytoscape está preso ao div do mapa): só as classes mudam. */}
+        <div
+          role={telaCheia ? "dialog" : undefined}
+          aria-modal={telaCheia || undefined}
+          aria-label={telaCheia ? "Sinapse em tela cheia" : undefined}
+          className={cn(
+            "min-w-0 overflow-hidden bg-white dark:bg-ink-900",
+            telaCheia
+              ? "fixed inset-0 z-50"
+              : "relative self-start rounded-2xl border border-ink-200 shadow-card dark:border-ink-700",
+          )}
+        >
           <div
             ref={containerRef}
             role="img"
-            aria-label={`Mapa de relações com ${totalNos} pontos e ${totalArestas} ligações. Os cruzamentos e os detalhes de cada ponto estão no painel ao lado.`}
-            className="h-[420px] w-full lg:h-[600px]"
+            aria-label={`Mapa de relações com ${totalNos} pontos e ${totalArestas} ligações. Os detalhes de cada ponto ficam no painel e os cruzamentos, na lista de cruzamentos.`}
+            className={cn("w-full", telaCheia ? "h-dvh" : "h-[420px] lg:h-[600px]")}
           />
           {totalNos === 0 && (
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 px-6 text-center">
@@ -1117,53 +1337,133 @@ export function SinapseClient() {
               </p>
             </div>
           )}
+          {(totalNos > 0 || !painelAberto || telaCheia) && (
+            <div className="absolute right-3 top-3 z-30 flex flex-wrap justify-end gap-2">
+              {totalNos > 0 && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    leftIcon={<Maximize2 className="h-4 w-4" aria-hidden />}
+                    onClick={() => cyRef.current?.animate({ fit: { eles: cyRef.current.elements(), padding: 40 } }, { duration: 300 })}
+                  >
+                    Ajustar
+                  </Button>
+                  <Button size="sm" variant="secondary" leftIcon={<Trash2 className="h-4 w-4" aria-hidden />} onClick={limpar}>
+                    Limpar
+                  </Button>
+                </>
+              )}
+              {!painelAberto && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  aria-label="Mostrar painel"
+                  title="Mostrar o painel de detalhes"
+                  leftIcon={<PanelRightOpen className="h-4 w-4" aria-hidden />}
+                  onClick={() => setPainelAberto(true)}
+                >
+                  Painel
+                </Button>
+              )}
+              {(totalNos > 0 || telaCheia) && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  aria-label={telaCheia ? "Sair da tela cheia" : "Tela cheia"}
+                  title={telaCheia ? "Sair da tela cheia (Esc)" : "Ver o mapa na tela toda"}
+                  leftIcon={
+                    telaCheia ? <Shrink className="h-4 w-4" aria-hidden /> : <Expand className="h-4 w-4" aria-hidden />
+                  }
+                  onClick={() => setTelaCheia((v) => !v)}
+                >
+                  {telaCheia ? "Sair" : "Tela cheia"}
+                </Button>
+              )}
+            </div>
+          )}
           {totalNos > 0 && (
-            <div className="absolute right-3 top-3 flex gap-2">
-              <Button
-                size="sm"
-                variant="secondary"
-                leftIcon={<Maximize2 className="h-4 w-4" aria-hidden />}
-                onClick={() => cyRef.current?.animate({ fit: { eles: cyRef.current.elements(), padding: 40 } }, { duration: 300 })}
-              >
-                Ajustar
-              </Button>
-              <Button size="sm" variant="secondary" leftIcon={<Trash2 className="h-4 w-4" aria-hidden />} onClick={limpar}>
-                Limpar
-              </Button>
+            <div
+              className={cn(
+                "absolute z-10 flex flex-col overflow-hidden rounded-lg border border-ink-200 bg-white shadow-card dark:border-ink-700 dark:bg-ink-900",
+                telaCheia && painelAberto ? "right-3 sm:right-[23.25rem]" : "right-3",
+                telaCheia ? "top-14" : "bottom-3",
+              )}
+            >
+              {(
+                [
+                  ["Aproximar", 1.4, Plus],
+                  ["Afastar", 1 / 1.4, Minus],
+                ] as const
+              ).map(([rotulo, fator, Icone], i) => (
+                <button
+                  key={rotulo}
+                  type="button"
+                  onClick={() => mudarZoom(fator)}
+                  aria-label={rotulo}
+                  title={rotulo}
+                  className={cn(
+                    "inline-flex h-9 w-9 items-center justify-center text-ink-600 hover:bg-ink-50 hover:text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500 dark:text-ink-300 dark:hover:bg-ink-800 dark:hover:text-ink-50",
+                    i > 0 && "border-t border-ink-200 dark:border-ink-700",
+                  )}
+                >
+                  <Icone className="h-4 w-4" aria-hidden />
+                </button>
+              ))}
             </div>
           )}
           {consultando > 0 && (
-            <p className="absolute bottom-3 left-3 flex items-center gap-1.5 rounded-lg bg-white/95 px-2.5 py-1.5 text-xs text-ink-600 shadow-card dark:bg-ink-900/95 dark:text-ink-300">
+            <p
+              className={cn(
+                "absolute left-3 z-10 flex items-center gap-1.5 rounded-lg bg-white/95 px-2.5 py-1.5 text-xs text-ink-600 shadow-card dark:bg-ink-900/95 dark:text-ink-300",
+                telaCheia ? "top-3" : "bottom-3",
+              )}
+            >
               <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
               Consultando {consultando} {consultando === 1 ? "fonte" : "fontes"}…
             </p>
           )}
+
+          {telaCheia && painelAberto && (
+            <aside className="scrollbar-fina absolute bottom-3 right-3 top-14 z-20 flex w-[calc(100%-1.5rem)] flex-col gap-5 overflow-y-auto rounded-xl border border-ink-200 bg-white/95 p-5 shadow-popover backdrop-blur dark:border-ink-700 dark:bg-ink-900/95 sm:w-[22rem]">
+              {conteudoPainel}
+            </aside>
+          )}
+
+          {telaCheia &&
+            (cruzamentosAbertos ? (
+              <ListaCruzamentos
+                cruzamentos={cruzamentos}
+                onFocar={focar}
+                pontos={abertas.length + emendas.length}
+                flutuante
+                onRecolher={() => setCruzamentosAbertos(false)}
+                className={cn(
+                  "absolute bottom-3 left-3 z-10",
+                  painelAberto ? "right-3 sm:right-[23.25rem]" : "right-3",
+                )}
+              />
+            ) : (
+              <Button
+                size="sm"
+                variant="secondary"
+                className="absolute bottom-3 left-3 z-10"
+                aria-label={`Mostrar cruzamentos (${cruzamentos.length})`}
+                onClick={() => setCruzamentosAbertos(true)}
+              >
+                Cruzamentos ({cruzamentos.length})
+              </Button>
+            ))}
         </div>
 
-        <aside className="flex min-w-0 flex-col gap-5 rounded-2xl border border-ink-200 bg-white p-5 shadow-card scrollbar-fina dark:border-ink-700 dark:bg-ink-900 lg:max-h-[600px] lg:overflow-y-auto">
-          {noSelecionado ? (
-            <PainelNo
-              key={noSelecionado.id}
-              no={noSelecionado}
-              modelo={modelo}
-              fontes={fontesDoSelecionado}
-              estadoCpf={consultasCpf[noSelecionado.id]}
-              onSelecionar={focar}
-              onAbrir={abrirEmpresa}
-              onCentralizar={centralizar}
-              onCarregar={carregarSobDemanda}
-              onConsultarCpf={consultarCpfDoSocio}
-            />
-          ) : (
-            <p className="text-sm text-ink-500 dark:text-ink-400">
-              Clique num ponto do mapa para ver os detalhes e as ligações dele.
-            </p>
-          )}
-          <div className="border-t border-ink-100 pt-5 dark:border-ink-800">
-            <ListaCruzamentos cruzamentos={cruzamentos} onFocar={focar} pontos={abertas.length + emendas.length} />
-          </div>
-        </aside>
+        {painelAberto && !telaCheia && (
+          <aside className="relative flex min-w-0 flex-col gap-5 rounded-2xl border border-ink-200 bg-white p-5 shadow-card scrollbar-fina dark:border-ink-700 dark:bg-ink-900 lg:max-h-[600px] lg:overflow-y-auto">
+            {conteudoPainel}
+          </aside>
+        )}
       </div>
+
+      {!telaCheia && <ListaCruzamentos cruzamentos={cruzamentos} onFocar={focar} pontos={abertas.length + emendas.length} />}
 
       <div className="flex flex-col gap-3">
         <Legenda />

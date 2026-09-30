@@ -32,12 +32,12 @@ export function DominioEmailLinha({ estado, cnpjEmpresa }: { estado: EstadoDomin
     <p className="mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm text-ink-600 dark:text-ink-300">
       <Globe className="h-3.5 w-3.5 shrink-0 text-ink-400 dark:text-ink-500" aria-hidden />
       <span>
-        Domínio <span className="font-medium text-ink-800 dark:text-ink-100">{dominio}</span> registrado por{" "}
+        Domínio <span className="font-medium text-ink-800 dark:text-ink-100">{dominio}</span> registrado{" "}
         {daPropriaEmpresa ? (
-          <>a própria empresa{desde}.</>
+          <>pela própria empresa{desde}.</>
         ) : titular.cnpj ? (
           <>
-            <span className="font-medium text-ink-800 dark:text-ink-100">{titular.nome ?? "outra empresa"}</span> (
+            por <span className="font-medium text-ink-800 dark:text-ink-100">{titular.nome ?? "outra empresa"}</span> (
             <Link
               href={`/cnpj?cnpj=${titular.cnpj}`}
               className="font-medium tabular-nums text-primary-600 hover:underline dark:text-primary-400"
@@ -48,6 +48,7 @@ export function DominioEmailLinha({ estado, cnpjEmpresa }: { estado: EstadoDomin
           </>
         ) : (
           <>
+            por{" "}
             <span className="font-medium text-ink-800 dark:text-ink-100">
               {titular.nome ?? (titular.tipo === "cpf" ? "uma pessoa física" : "titular não informado")}
             </span>

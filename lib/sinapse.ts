@@ -1,4 +1,4 @@
-import { formatarCnpj, formatarMoeda } from "@/lib/formatters";
+import { formatarCnpj, formatarMoeda, formatarTelefone } from "@/lib/formatters";
 import type { ComplementoCnpj, Empresa } from "@/types/cnpj";
 import type { ContratoEstadual, ResultadoEmpenhosAm } from "@/types/am";
 import type { RegistroDominio, RegistroListaSuja } from "@/types/fontes-publicas";
@@ -81,6 +81,8 @@ export interface ArestaSinapse {
   rotulo: string;
   /** Dinheiro envolvido, pra espessura da linha. */
   valor?: number;
+  /** Nas coincidências (mesmo telefone, e-mail ou endereço): o valor repetido, que vira o título do cruzamento. */
+  comum?: string;
 }
 
 export interface ModeloSinapse {
@@ -657,11 +659,11 @@ export function comDominio(modelo: ModeloSinapse, cnpj: string, registro: Regist
   // Matriz e filiais dividem a raiz do CNPJ (os 8 primeiros dígitos): é a mesma empresa.
   const daPropriaEmpresa = dono?.slice(0, 8) === cnpj.slice(0, 8);
   const quem = daPropriaEmpresa
-    ? "a própria empresa"
-    : [titular.nome ?? (titular.tipo === "cpf" ? "pessoa física" : "titular não informado"), dono && `(${formatarCnpj(dono) ?? dono})`]
+    ? "pela própria empresa"
+    : `por ${[titular.nome ?? (titular.tipo === "cpf" ? "pessoa física" : "titular não informado"), dono && `(${formatarCnpj(dono) ?? dono})`]
         .filter(Boolean)
-        .join(" ");
-  let m = comInfo(modelo, idE, "Domínio", `${registro.dominio} — registrado por ${quem}`);
+        .join(" ")}`;
+  let m = comInfo(modelo, idE, "Domínio", `${registro.dominio} — registrado ${quem}`);
   if (!dono || daPropriaEmpresa) return m;
 
   m = comNo(m, {
@@ -692,14 +694,17 @@ export function comCoincidencias(modelo: ModeloSinapse): ModeloSinapse {
       const telefones = (n: NoSinapse) => new Set((valorInfo(n, "Telefone") ?? "").split(" · ").map((t) => t.replace(/\D/g, "")).filter((t) => t.length >= 8));
       const ta = telefones(a);
       const comum = [...telefones(b)].find((t) => ta.has(t));
-      if (comum) m = comAresta(m, { id: `mesmo-telefone:${a.id}|${b.id}`, origem: a.id, destino: b.id, tipo: "mesmo-telefone", rotulo: "mesmo telefone" });
+      if (comum) {
+        const telefone = formatarTelefone(comum) ?? comum;
+        m = comAresta(m, { id: `mesmo-telefone:${a.id}|${b.id}`, origem: a.id, destino: b.id, tipo: "mesmo-telefone", rotulo: `mesmo telefone (${telefone})`, comum: telefone });
+      }
       const emails = (n: NoSinapse) => new Set((valorInfo(n, "E-mail") ?? "").split(" · ").map((e) => e.trim().toLowerCase()).filter((e) => e.includes("@")));
       const eaEmails = emails(a);
       const emailComum = [...emails(b)].find((e) => eaEmails.has(e));
-      if (emailComum) m = comAresta(m, { id: `mesmo-email:${a.id}|${b.id}`, origem: a.id, destino: b.id, tipo: "mesmo-email", rotulo: `mesmo e-mail (${emailComum})` });
+      if (emailComum) m = comAresta(m, { id: `mesmo-email:${a.id}|${b.id}`, origem: a.id, destino: b.id, tipo: "mesmo-email", rotulo: `mesmo e-mail (${emailComum})`, comum: emailComum });
       const ea = normalizar(valorInfo(a, "Endereço") ?? "");
       if (ea && ea !== "—" && ea === normalizar(valorInfo(b, "Endereço") ?? "")) {
-        m = comAresta(m, { id: `mesmo-endereco:${a.id}|${b.id}`, origem: a.id, destino: b.id, tipo: "mesmo-endereco", rotulo: "mesmo endereço" });
+        m = comAresta(m, { id: `mesmo-endereco:${a.id}|${b.id}`, origem: a.id, destino: b.id, tipo: "mesmo-endereco", rotulo: "mesmo endereço", comum: valorInfo(a, "Endereço") });
       }
     }
   }
@@ -726,7 +731,12 @@ export interface Cruzamento {
   gravidade: "perigo" | "atencao" | "info";
 }
 
-/** O que o mapa mostra que nenhuma tela isolada mostra. */
+/**
+ * O que o mapa mostra que nenhuma tela isolada mostra. Nos cruzamentos "em
+ * comum" (sócio, órgão, benefício, telefone, e-mail, endereço, dono de
+ * domínio), o tipo vai no badge da tela e o título é só o que se repete — o
+ * nome, o órgão, o telefone —, sem "em comum:" na frente.
+ */
 export function encontrarCruzamentos(modelo: ModeloSinapse): Cruzamento[] {
   const arestas = Object.values(modelo.arestas);
   const nome = (id: string) => modelo.nos[id]?.rotulo ?? id;
@@ -739,7 +749,7 @@ export function encontrarCruzamentos(modelo: ModeloSinapse): Cruzamento[] {
     if (no.tipo === "pessoa" || (no.tipo === "empresa" && !no.expandida)) {
       const empresas = empresasLigadas(no.id, ["socio"]);
       if (empresas.length >= 2) {
-        lista.push({ id: `socio:${no.id}`, tipo: "socio-comum", titulo: `Sócio em comum: ${no.rotulo}`, descricao: empresas.map(nome).join(" · "), foco: no.id, gravidade: "atencao" });
+        lista.push({ id: `socio:${no.id}`, tipo: "socio-comum", titulo: no.rotulo, descricao: empresas.map(nome).join(" · "), foco: no.id, gravidade: "atencao" });
       }
     }
     if (no.tipo === "pessoa" && no.alerta) {
@@ -768,7 +778,7 @@ export function encontrarCruzamentos(modelo: ModeloSinapse): Cruzamento[] {
         lista.push({
           id: `dominio:${no.id}`,
           tipo: "mesmo-dono-dominio",
-          titulo: `${clientes.length >= 2 ? "Mesmo dono de domínio" : "Domínio registrado por"}: ${no.rotulo}`,
+          titulo: no.rotulo,
           descricao: `E-mail de ${clientes.map(nome).join(" · ")}`,
           foco: no.id,
           gravidade: "info",
@@ -778,7 +788,7 @@ export function encontrarCruzamentos(modelo: ModeloSinapse): Cruzamento[] {
     if (no.tipo === "beneficio") {
       const empresas = empresasLigadas(no.id, ["beneficio"]);
       if (empresas.length >= 2) {
-        lista.push({ id: `beneficio:${no.id}`, tipo: "beneficio-comum", titulo: `Benefício fiscal em comum: ${no.rotulo}`, descricao: empresas.map(nome).join(" · "), foco: no.id, gravidade: "info" });
+        lista.push({ id: `beneficio:${no.id}`, tipo: "beneficio-comum", titulo: no.rotulo, descricao: empresas.map(nome).join(" · "), foco: no.id, gravidade: "info" });
       }
     }
     if (no.tipo === "emenda") {
@@ -797,7 +807,7 @@ export function encontrarCruzamentos(modelo: ModeloSinapse): Cruzamento[] {
     if (no.tipo === "orgao-federal" || no.tipo === "orgao-am") {
       const empresas = empresasLigadas(no.id, ["federal", "am", "a-receber", "convenio"]);
       if (empresas.length >= 2) {
-        lista.push({ id: `orgao:${no.id}`, tipo: "orgao-comum", titulo: `Órgão em comum: ${no.rotulo}`, descricao: empresas.map(nome).join(" · "), foco: no.id, gravidade: "info" });
+        lista.push({ id: `orgao:${no.id}`, tipo: "orgao-comum", titulo: no.rotulo, descricao: empresas.map(nome).join(" · "), foco: no.id, gravidade: "info" });
       }
     }
     if (no.tipo === "empresa" && no.alerta === "perigo") {
@@ -819,7 +829,7 @@ export function encontrarCruzamentos(modelo: ModeloSinapse): Cruzamento[] {
       lista.push({
         id: a.id,
         tipo: a.tipo,
-        titulo: { "mesmo-endereco": "Mesmo endereço", "mesmo-telefone": "Mesmo telefone", "mesmo-email": "Mesmo e-mail" }[a.tipo],
+        titulo: a.comum ?? { "mesmo-endereco": "Mesmo endereço", "mesmo-telefone": "Mesmo telefone", "mesmo-email": "Mesmo e-mail" }[a.tipo],
         descricao: `${nome(a.origem)} · ${nome(a.destino)}`,
         foco: a.origem,
         gravidade: "atencao",

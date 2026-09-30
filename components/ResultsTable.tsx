@@ -4,12 +4,13 @@ import { useRef, useState } from "react";
 import { Calendar, ChevronDown, ChevronsDownUp, ChevronsUpDown, ChevronUp, ExternalLink, FileSearch } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { BotaoCopiar } from "@/components/ui/BotaoCopiar";
 import { Campo } from "@/components/LicitacaoDetails";
 import { DocumentosLicitacao } from "@/components/DocumentosLicitacao";
 import { LinkCnpj } from "@/components/LinkCnpj";
 import { cn } from "@/lib/cn";
 import { grupoDaModalidade, rotuloSituacao, tonalidadeDaSituacao } from "@/lib/data/dominio";
-import { formatarDataHora, formatarDataHoraCurta, formatarLocal, formatarMoeda } from "@/lib/formatters";
+import { formatarDataHora, formatarDataHoraCurta, formatarLocal, formatarMoeda, objetoEmMaiusculas } from "@/lib/formatters";
 import { identificarPortal, isLinkExternoSeguro } from "@/lib/portal";
 import type { Licitacao } from "@/types/licitacao";
 
@@ -37,9 +38,12 @@ function PainelExpandido({ item }: { item: Licitacao }) {
       <div>
         <Campo rotulo="Órgão" valor={item.orgao ?? "Órgão não informado"} />
         <div className="mt-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">Objeto completo</p>
+          <p className="flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">
+            Objeto completo
+            {item.objeto && <BotaoCopiar texto={objetoEmMaiusculas(item.objeto)} rotulo="Copiar objeto" />}
+          </p>
           <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-ink-700 dark:text-ink-200">
-            {item.objeto ?? "Objeto não informado"}
+            {item.objeto ? objetoEmMaiusculas(item.objeto) : "Objeto não informado"}
           </p>
         </div>
 

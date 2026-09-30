@@ -221,3 +221,8 @@ export function calcularUrgenciaPrazo(
 export function formatarQuantidade(valor: number): string {
   return new Intl.NumberFormat("pt-BR").format(valor);
 }
+
+/** O objeto da licitação sempre em maiúsculas, na tela e ao copiar. */
+export function objetoEmMaiusculas(objeto: string): string {
+  return objeto.toLocaleUpperCase("pt-BR");
+}
