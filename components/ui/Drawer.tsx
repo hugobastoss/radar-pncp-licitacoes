@@ -22,6 +22,15 @@ export function Drawer({ aberto, onFechar, titulo, children, rodape, lado = "dir
   const painelRef = useRef<HTMLDivElement>(null);
   const tituloId = useId();
 
+  // Ao fechar, o foco volta pra quem abriu (o botão ☰, o "Ver detalhes"). Fica num
+  // efeito só dele, que depende só de `aberto`: o de baixo refaz quando `onFechar` muda.
+  // Roda antes do painel receber o foco, que é num setTimeout.
+  useEffect(() => {
+    if (!aberto) return;
+    const focoAnterior = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    return () => focoAnterior?.focus({ preventScroll: true });
+  }, [aberto]);
+
   useEffect(() => {
     if (!aberto) return;
 

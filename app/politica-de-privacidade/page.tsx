@@ -63,8 +63,12 @@ export default function PoliticaDePrivacidadePage() {
 
       <SecaoLegal titulo="6. Dados exibidos nos resultados de pesquisa">
         <p>
-          As informações de licitações, órgãos e CNPJs exibidas nos resultados são dados públicos obtidos
-          diretamente do PNCP. Não são dados pessoais coletados de quem visita o site.
+          As informações exibidas nos resultados — licitações, empresas, sócios, sanções, emendas e as demais —
+          são dados públicos obtidos de fontes oficiais no momento da consulta: PNCP, Receita Federal, Portal da
+          Transparência (CGU), TCU, Ministério do Trabalho e Emprego, ANS, TransfereGov e registro.br, entre
+          outras. Algumas dessas fontes publicam dados de pessoas físicas, como os cadastros de sanções e o
+          cadastro de empregadores do Ministério do Trabalho; o site os exibe como publicados e não os guarda.
+          Não são dados coletados de quem visita o site.
         </p>
       </SecaoLegal>
 

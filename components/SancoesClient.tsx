@@ -8,10 +8,13 @@ import { Button } from "@/components/ui/Button";
 import { descreverResumoSancoes, SancaoItem } from "@/components/SancaoItem";
 import { CertidaoTcuSecao } from "@/components/CertidaoTcuSecao";
 import type { EstadoCertidaoTcu } from "@/components/CertidaoTcuSecao";
+import { ListaSujaAlerta } from "@/components/ListaSujaAlerta";
+import { buscarListaSuja } from "@/lib/api-fontes-publicas";
 import { buscarSancoes } from "@/lib/api-sancoes";
 import { buscarCertidaoTcu } from "@/lib/api-tcu";
 import { normalizarCnpj } from "@/lib/cnpj";
 import { mascararCnpj } from "@/lib/formatters";
+import type { RegistroListaSuja } from "@/types/fontes-publicas";
 import type { Sancao } from "@/types/transparencia";
 
 type Status = "idle" | "carregando" | "sucesso" | "invalido" | "nao_configurado" | "erro";
@@ -23,6 +26,8 @@ export function SancoesClient() {
   const [mensagemErro, setMensagemErro] = useState<string | undefined>();
   const [certidaoTcu, setCertidaoTcu] = useState<EstadoCertidaoTcu>({ status: "carregando" });
   const [cnpjConsultado, setCnpjConsultado] = useState("");
+  // `undefined`: ainda consultando; `null`: a lista suja não pôde ser conferida.
+  const [listaSuja, setListaSuja] = useState<RegistroListaSuja[] | null | undefined>(undefined);
   const abortRef = useRef<AbortController | null>(null);
 
   async function pesquisar(evento: FormEvent) {
@@ -37,6 +42,14 @@ export function SancoesClient() {
     setMensagemErro(undefined);
     setCertidaoTcu({ status: "carregando" });
     setCnpjConsultado(normalizarCnpj(valor));
+    setListaSuja(undefined);
+
+    // A lista suja do trabalho escravo é de outra fonte (MTE): chega à parte e falha sozinha.
+    void buscarListaSuja(normalizarCnpj(valor), { signal: controller.signal }).then((r) => {
+      if (controller.signal.aborted) return;
+      if (r.status === "sucesso") setListaSuja(r.registros);
+      else if (r.status !== "cancelado") setListaSuja(null);
+    });
 
     // O TCU é mais lento (~6 s na primeira consulta) — aparece quando chegar, sem segurar as sanções.
     void buscarCertidaoTcu(valor, { signal: controller.signal }).then((r) => {
@@ -148,6 +161,16 @@ export function SancoesClient() {
           )}
 
           <p className="mt-3 text-xs text-ink-400 dark:text-ink-500">Fonte: Portal da Transparência (CGU).</p>
+
+          {listaSuja !== undefined &&
+            (listaSuja?.length === 0 ? (
+              <p className="mt-4 flex items-center gap-1.5 text-sm text-success-700 dark:text-success-300">
+                <ShieldCheck className="h-4 w-4" aria-hidden />
+                Não consta na lista suja do trabalho escravo (MTE).
+              </p>
+            ) : (
+              <ListaSujaAlerta registros={listaSuja} className="mt-4" />
+            ))}
 
           <CertidaoTcuSecao
             estado={certidaoTcu}

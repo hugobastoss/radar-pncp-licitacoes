@@ -66,8 +66,18 @@ function gravar(lista: EmpresaRecente[]) {
   window.dispatchEvent(new Event(EVENTO));
 }
 
+/**
+ * A razão social de MEI antigo costuma terminar com o CPF do dono
+ * ("FULANO DE TAL 12345678909"). É dado público da Receita e a ficha o
+ * mostra, mas aqui ele ficaria guardado no navegador — então sai do nome.
+ */
+function semCpfNoFim(nome: string): string {
+  // Só quando o número está separado do resto: 11 dígitos no fim de um CNPJ de 14 não são um CPF.
+  return nome.replace(/(?:^|\s+)\d{3}\.?\d{3}\.?\d{3}-?\d{2}$/, "").trim();
+}
+
 export function registrarEmpresaRecente(empresa: EmpresaRecente) {
-  const nova = { cnpj: empresa.cnpj.replace(/\D/g, ""), nome: empresa.nome.trim() };
+  const nova = { cnpj: empresa.cnpj.replace(/\D/g, ""), nome: semCpfNoFim(empresa.nome.trim()) };
   if (!valida(nova)) return;
   const resto = lerEmpresasRecentes().filter((e) => e.cnpj !== nova.cnpj);
   gravar([nova, ...resto].slice(0, MAXIMO_EMPRESAS_RECENTES));

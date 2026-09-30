@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { descreverResumoSancoes, Linha, SancaoItem } from "@/components/SancaoItem";
 import { ItemContrato } from "@/components/GovernoFederalSecao";
+import { ListaSujaAlerta } from "@/components/ListaSujaAlerta";
 import { consultarCpf } from "@/lib/api-cpf";
 import { mascararCpf } from "@/lib/formatters";
 import type {
@@ -112,6 +113,7 @@ function Sancoes({ pessoa }: { pessoa: DadosPessoaFisica }) {
           Não foi possível consultar o {falhas.join(" nem o ")} agora.
         </p>
       )}
+      {pessoa.listaSuja !== undefined && <ListaSujaAlerta registros={pessoa.listaSuja} className="mt-3" />}
       <p className="mt-2 text-xs text-ink-400 dark:text-ink-500">
         CEIS e CNEP: impedidos ou punidos de contratar com a administração pública. CEAF: expulsos da administração
         federal (demissão, destituição, cassação de aposentadoria).
@@ -269,6 +271,7 @@ function Resultado({ pessoa }: { pessoa: DadosPessoaFisica }) {
   const sancionado =
     (pessoa.sancoes && pessoa.sancoes.ceis.length + pessoa.sancoes.cnep.length > 0) || (pessoa.ceaf?.length ?? 0) > 0;
   const pep = (pessoa.peps?.length ?? 0) > 0;
+  const naListaSuja = (pessoa.listaSuja?.length ?? 0) > 0;
 
   return (
     <div className="flex flex-col gap-5 rounded-2xl border border-ink-200 bg-white p-5 shadow-card dark:border-ink-700 dark:bg-ink-900 sm:p-6">
@@ -280,6 +283,7 @@ function Resultado({ pessoa }: { pessoa: DadosPessoaFisica }) {
           </p>
           {sancionado && <Badge tone="danger">Sancionado</Badge>}
           {pep && <Badge tone="warning">PEP</Badge>}
+          {naListaSuja && <Badge tone="warning">Lista suja do trabalho escravo</Badge>}
         </div>
         {pessoa.cpfMascarado && (
           <p className="mt-0.5 text-xs tabular-nums text-ink-500 dark:text-ink-400">CPF {pessoa.cpfMascarado}</p>

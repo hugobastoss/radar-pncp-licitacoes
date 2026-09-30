@@ -133,12 +133,14 @@ export function MenuFerramentas({ recolhido = false, onNavegar }: MenuFerramenta
       {recentes.length > 0 && (
         <section aria-labelledby={`${id}-recentes`} className="menu-recolhido:hidden">
           <div className="flex items-center justify-between px-3">
-            <h2 id={`${id}-recentes`} className="text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">
+            {/* Um <p>, não um título: o menu vem antes do <h1> de cada tela. */}
+            <p id={`${id}-recentes`} className="text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">
               Consultas recentes
-            </h2>
+            </p>
             <button
               type="button"
               onClick={limparEmpresasRecentes}
+              aria-label="Limpar consultas recentes"
               className="rounded text-xs font-medium text-ink-500 hover:text-ink-900 dark:text-ink-400 dark:hover:text-ink-50"
             >
               Limpar

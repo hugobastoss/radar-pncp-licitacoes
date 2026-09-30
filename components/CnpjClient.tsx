@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { BadgePercent, Building2, Loader2, Network, Search, ShieldAlert, ShieldCheck, TriangleAlert, Users } from "lucide-react";
+import { BadgePercent, Building2, HeartPulse, Loader2, Network, Search, ShieldAlert, ShieldCheck, TriangleAlert, Users } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -12,17 +12,32 @@ import { Campo } from "@/components/LicitacaoDetails";
 import { CertidaoTcuSecao } from "@/components/CertidaoTcuSecao";
 import type { EstadoCertidaoTcu } from "@/components/CertidaoTcuSecao";
 import { ContratosAmSecao } from "@/components/ContratosAmSecao";
+import { DominioEmailLinha } from "@/components/DominioEmailLinha";
+import type { EstadoDominio } from "@/components/DominioEmailLinha";
 import type { EstadoContratosAm } from "@/components/ContratosAmSecao";
 import { GovernoFederalSecao } from "@/components/GovernoFederalSecao";
+import { InscricoesEstaduaisSecao } from "@/components/InscricoesEstaduaisSecao";
+import { ListaSujaAlerta } from "@/components/ListaSujaAlerta";
+import { TransferenciasEspeciaisSecao } from "@/components/TransferenciasEspeciaisSecao";
+import type { EstadoTransferencias } from "@/components/TransferenciasEspeciaisSecao";
 import type { EstadoGovernoFederal } from "@/components/GovernoFederalSecao";
 import { descreverResumoSancoes, resumirSancoes, SancaoItem } from "@/components/SancaoItem";
 import { buscarContratosAm } from "@/lib/api-am";
 import { buscarComplementoCnpj, buscarEmpresa } from "@/lib/api-cnpj";
+import {
+  buscarListaSuja,
+  buscarOperadoraAns,
+  buscarRegistroDominio,
+  buscarTransferenciasEspeciais,
+} from "@/lib/api-fontes-publicas";
+import type { ResultadoListaSuja, ResultadoOperadoraAns } from "@/lib/api-fontes-publicas";
 import { buscarDadosGovernoFederal } from "@/lib/api-governo-federal";
 import { buscarSancoes } from "@/lib/api-sancoes";
 import { buscarCertidaoTcu } from "@/lib/api-tcu";
 import { validarCnpj } from "@/lib/cnpj";
+import { dominioDoEmail } from "@/lib/dominio-email";
 import { registrarEmpresaRecente } from "@/lib/empresas-recentes";
+import { useConsulta } from "@/lib/hooks/useConsulta";
 import {
   formatarCep,
   formatarCnpj,
@@ -42,6 +57,10 @@ type EstadoComplemento =
   | { status: "carregando" }
   | { status: "sucesso"; complemento: ComplementoCnpj }
   | { status: "indisponivel"; mensagem?: string };
+
+type Pendente = { status: "carregando" } | { status: "nao_consultado" };
+type EstadoListaSuja = ResultadoListaSuja | Pendente;
+type EstadoAns = ResultadoOperadoraAns | Pendente;
 
 type EstadoSancoes =
   | { status: "carregando" }
@@ -220,6 +239,10 @@ function EmpresaCard({
   complemento,
   contratosAm,
   certidaoTcu,
+  listaSuja,
+  dominio,
+  transferencias,
+  ans,
 }: {
   empresa: Empresa;
   sancoes: EstadoSancoes;
@@ -227,6 +250,10 @@ function EmpresaCard({
   complemento: EstadoComplemento;
   contratosAm: EstadoContratosAm;
   certidaoTcu: EstadoCertidaoTcu;
+  listaSuja: EstadoListaSuja;
+  dominio: EstadoDominio;
+  transferencias: EstadoTransferencias;
+  ans: EstadoAns;
 }) {
   const ativa = empresa.situacaoCadastral?.toUpperCase() === "ATIVA";
   const telefones = empresa.telefones.map(formatarTelefone).join(" · ");
@@ -271,6 +298,19 @@ function EmpresaCard({
                 Sanção sem impedimento
               </Badge>
             ))}
+          {listaSuja.status === "sucesso" && listaSuja.registros.length > 0 && (
+            <Badge tone="warning" icon={<TriangleAlert className="h-3.5 w-3.5" aria-hidden />}>
+              Lista suja do trabalho escravo
+            </Badge>
+          )}
+          {ans.status === "sucesso" && ans.operadora && (
+            <Badge
+              tone={ans.operadora.ativa ? "success" : "neutral"}
+              icon={<HeartPulse className="h-3.5 w-3.5" aria-hidden />}
+            >
+              Operadora ANS nº {ans.operadora.registro} · {ans.operadora.ativa ? "ativa" : "inativa"}
+            </Badge>
+          )}
         </div>
       </div>
 
@@ -281,6 +321,9 @@ function EmpresaCard({
           {empresa.dataSituacaoCadastral && ` em ${formatarDataSimples(empresa.dataSituacaoCadastral)}`}
         </p>
       )}
+
+      {listaSuja.status === "sucesso" && <ListaSujaAlerta registros={listaSuja.registros} className="mt-4" />}
+      {listaSuja.status === "erro_servidor" && <ListaSujaAlerta registros={null} className="mt-3" />}
 
       <dl className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3">
         <Campo rotulo="Natureza jurídica" valor={empresa.naturezaJuridica ?? "Não informada"} />
@@ -314,6 +357,8 @@ function EmpresaCard({
           }
         />
       </dl>
+
+      <DominioEmailLinha estado={dominio} cnpjEmpresa={empresa.cnpj} />
 
       <div className="mt-5">
         <Campo
@@ -355,6 +400,8 @@ function EmpresaCard({
 
       <SecaoSuframa empresa={empresa} complemento={complemento} />
 
+      <InscricoesEstaduaisSecao key={empresa.cnpj} cnpj={empresa.cnpj} />
+
       {empresa.socios.length > 0 && (
         <div className="mt-5 border-t border-ink-100 pt-5 dark:border-ink-800">
           <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">
@@ -381,6 +428,8 @@ function EmpresaCard({
       />
 
       <GovernoFederalSecao estado={governoFederal} cnpj={empresa.cnpj} />
+
+      <TransferenciasEspeciaisSecao estado={transferencias} />
 
       <ContratosAmSecao estado={contratosAm} cnpj={empresa.cnpj} />
     </div>
@@ -410,10 +459,29 @@ export function CnpjClient() {
   const [certidaoTcu, setCertidaoTcu] = useState<EstadoCertidaoTcu>({ status: "carregando" });
   const [mensagemErro, setMensagemErro] = useState<string | undefined>();
   const abortRef = useRef<AbortController | null>(null);
+
+  // Fontes que complementam a ficha (ver lib/api-fontes-publicas.ts): cada uma
+  // acompanha a empresa exibida e falha sozinha, sem afetar o resto.
+  const cnpjExibido = status === "sucesso" && empresa ? empresa.cnpj : undefined;
+  const listaSuja = useConsulta(cnpjExibido, buscarListaSuja);
+  const transferencias = useConsulta(cnpjExibido, buscarTransferenciasEspeciais);
+  const ans = useConsulta(cnpjExibido, buscarOperadoraAns);
+  // O e-mail da Receita; na falta, o corporativo que a CNPJá tiver.
+  const emailExibido = cnpjExibido
+    ? (empresa?.email ?? (complemento.status === "sucesso" ? complemento.complemento.emails[0] : undefined))
+    : undefined;
+  const dominio = useConsulta(dominioDoEmail(emailExibido), buscarRegistroDominio);
   // Último CNPJ (14 dígitos) consultado, pra distinguir a URL que a própria tela
   // atualizou de um link para outra empresa com a tela já aberta.
   const ultimoConsultadoRef = useRef<string | null>(null);
   const cnpjDaUrl = searchParams.get("cnpj");
+
+  // A consulta não deu certo: a URL deixa de apontar pro CNPJ, pra que um novo clique
+  // no mesmo link (as Consultas recentes do menu) volte a consultar.
+  const esquecerConsulta = useCallback(() => {
+    ultimoConsultadoRef.current = null;
+    router.replace(pathname, { scroll: false });
+  }, [pathname, router]);
 
   const executarConsulta = useCallback(async (cnpj: string) => {
     abortRef.current?.abort();
@@ -470,7 +538,7 @@ export function CnpjClient() {
       // Pro menu lateral (Consultas recentes). Fica só no navegador; CPF nunca vai pra lá.
       registrarEmpresaRecente({
         cnpj: resultado.empresa.cnpj,
-        nome: resultado.empresa.nomeFantasia || resultado.empresa.razaoSocial,
+        nome: resultado.empresa.nomeFantasia?.trim() || resultado.empresa.razaoSocial,
       });
 
       // Depois do cadastro, não em paralelo: é o cadastro (UF e e-mail) que
@@ -490,14 +558,17 @@ export function CnpjClient() {
     } else if (resultado.status === "invalido") {
       setStatus("invalido");
       setMensagemErro(resultado.mensagem);
+      esquecerConsulta();
     } else if (resultado.status === "nao_encontrado") {
       setEmpresa(null);
       setStatus("nao_encontrado");
+      esquecerConsulta();
     } else if (resultado.status === "erro_servidor") {
       setStatus("erro");
       setMensagemErro(resultado.mensagem);
+      esquecerConsulta();
     }
-  }, []);
+  }, [esquecerConsulta]);
 
   useEffect(() => {
     if (!consulta) return;
@@ -602,6 +673,10 @@ export function CnpjClient() {
           complemento={complemento}
           contratosAm={contratosAm}
           certidaoTcu={certidaoTcu}
+          listaSuja={listaSuja}
+          dominio={dominio}
+          transferencias={transferencias}
+          ans={ans}
         />
       )}
     </div>

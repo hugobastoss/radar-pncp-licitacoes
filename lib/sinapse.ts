@@ -1,6 +1,7 @@
 import { formatarCnpj, formatarMoeda } from "@/lib/formatters";
 import type { ComplementoCnpj, Empresa } from "@/types/cnpj";
 import type { ContratoEstadual, ResultadoEmpenhosAm } from "@/types/am";
+import type { RegistroDominio, RegistroListaSuja } from "@/types/fontes-publicas";
 import type { CertidaoTcu } from "@/types/tcu";
 import type {
   BeneficiosFiscais,
@@ -47,6 +48,7 @@ export type TipoAresta =
   | "emenda-pagamento"
   | "pep"
   | "servidor"
+  | "dominio"
   | "mesmo-endereco"
   | "mesmo-telefone"
   | "mesmo-email";
@@ -570,6 +572,7 @@ export function comPessoaFisica(modelo: ModeloSinapse, idPessoa: string, dados: 
     m = comAresta(m, { id: `sancao:${idPessoa}>${id}`, origem: idPessoa, destino: id, tipo: "sancao", rotulo: p.tipo });
   }
   if (sancoes.length || dados.ceaf?.length) m = comAlerta(m, idPessoa, "perigo");
+  if (dados.listaSuja?.length) m = comListaSujaDe(m, idPessoa, dados.listaSuja);
 
   (dados.peps ?? []).forEach((p, i) => {
     const id = `pep:${idPessoa}:${i}`;
@@ -602,6 +605,80 @@ export function comPessoaFisica(modelo: ModeloSinapse, idPessoa: string, dados: 
     dados.peps?.length && "PEP",
   ].filter(Boolean);
   return comInfo(m, idPessoa, "Na CGU", r.semRegistro ? "sem registro" : marcas.join(" · ") || "sem vínculo federal registrado");
+}
+
+// ---------------------------------------------------------------------------
+// Lista suja do trabalho escravo (MTE). Âmbar, não vermelho: estar na lista
+// não impede contratar por lei.
+// ---------------------------------------------------------------------------
+const PREFIXO_LISTA_SUJA = "lista-suja:";
+
+/** `origem` é o ponto que está na lista: uma empresa ou uma pessoa com o CPF consultado. */
+function comListaSujaDe(modelo: ModeloSinapse, origem: string, registros: RegistroListaSuja[]): ModeloSinapse {
+  if (registros.length === 0 || !modelo.nos[origem]) return modelo;
+  const id = `${PREFIXO_LISTA_SUJA}${origem}`;
+  const trabalhadores = registros.reduce((soma, r) => soma + (r.trabalhadores ?? 0), 0);
+  let m = comNo(modelo, {
+    id,
+    tipo: "sancao",
+    rotulo: "Lista suja do trabalho escravo",
+    detalhe: registros.length === 1 ? "1 registro no cadastro do MTE" : `${registros.length} registros no cadastro do MTE`,
+    alerta: "atencao",
+    info: [
+      ["Cadastro", "Empregadores que submeteram trabalhadores a condições análogas à de escravo (MTE)"],
+      ["Ações fiscais", registros.map((r) => [r.anoAcaoFiscal, r.uf].filter(Boolean).join("/")).filter(Boolean).join(" · ") || "—"],
+      ["Trabalhadores", trabalhadores ? String(trabalhadores) : "—"],
+      ["Incluído em", registros.map((r) => r.inclusaoEm).filter(Boolean).join(" · ") || "—"],
+      ["Impede contratar", "Não por lei"],
+    ],
+  });
+  m = comAresta(m, { id: `sancao:${origem}>${id}`, origem, destino: id, tipo: "sancao", rotulo: "na lista suja do trabalho escravo" });
+  return comAlerta(m, origem, "atencao");
+}
+
+export function comListaSuja(modelo: ModeloSinapse, cnpj: string, registros: RegistroListaSuja[]): ModeloSinapse {
+  return comListaSujaDe(modelo, idEmpresa(cnpj), registros);
+}
+
+function estaNaListaSuja(modelo: ModeloSinapse, id: string): boolean {
+  return Boolean(modelo.nos[`${PREFIXO_LISTA_SUJA}${id}`]);
+}
+
+// ---------------------------------------------------------------------------
+// Dono do domínio do e-mail (registro.br). Quando é outro CNPJ, vira uma
+// ligação até ele — sem alerta: é comum a empresa cadastrar o e-mail do contador.
+// ---------------------------------------------------------------------------
+export function comDominio(modelo: ModeloSinapse, cnpj: string, registro: RegistroDominio): ModeloSinapse {
+  const idE = idEmpresa(cnpj);
+  const titular = registro.titular;
+  if (!titular || !modelo.nos[idE]) return modelo;
+
+  const dono = titular.cnpj;
+  // Matriz e filiais dividem a raiz do CNPJ (os 8 primeiros dígitos): é a mesma empresa.
+  const daPropriaEmpresa = dono?.slice(0, 8) === cnpj.slice(0, 8);
+  const quem = daPropriaEmpresa
+    ? "a própria empresa"
+    : [titular.nome ?? (titular.tipo === "cpf" ? "pessoa física" : "titular não informado"), dono && `(${formatarCnpj(dono) ?? dono})`]
+        .filter(Boolean)
+        .join(" ");
+  let m = comInfo(modelo, idE, "Domínio", `${registro.dominio} — registrado por ${quem}`);
+  if (!dono || daPropriaEmpresa) return m;
+
+  m = comNo(m, {
+    id: idEmpresa(dono),
+    tipo: "empresa",
+    rotulo: titular.nome ?? formatarCnpj(dono) ?? dono,
+    detalhe: "Dona de domínio — clique para abrir",
+    cnpj: dono,
+    info: [["Razão social", titular.nome ?? "—"], ["CNPJ", formatarCnpj(dono) ?? dono]],
+  });
+  return comAresta(m, {
+    id: `dominio:${cnpj}>${dono}`,
+    origem: idE,
+    destino: idEmpresa(dono),
+    tipo: "dominio",
+    rotulo: `domínio ${registro.dominio} registrado por`,
+  });
 }
 
 /** Liga empresas do mapa que dividem telefone, e-mail ou endereço — ninguém declara isso, o mapa acha. */
@@ -640,7 +717,8 @@ export interface Cruzamento {
     | "mesmo-email"
     | "sancionada-com-contratos"
     | "emenda-para-sancionada"
-    | "socio-com-alerta";
+    | "socio-com-alerta"
+    | "mesmo-dono-dominio";
   titulo: string;
   descricao: string;
   /** Ponto pra focar ao clicar. */
@@ -670,10 +748,30 @@ export function encontrarCruzamentos(modelo: ModeloSinapse): Cruzamento[] {
         lista.push({
           id: `alerta-socio:${no.id}`,
           tipo: "socio-com-alerta",
-          titulo: `${no.alerta === "perigo" ? "Sócio com sanção" : "Sócio é pessoa politicamente exposta"}: ${no.rotulo}`,
+          titulo: `${
+            no.alerta === "perigo"
+              ? "Sócio com sanção"
+              : estaNaListaSuja(modelo, no.id)
+                ? "Sócio na lista suja do trabalho escravo"
+                : "Sócio é pessoa politicamente exposta"
+          }: ${no.rotulo}`,
           descricao: `Sócio de ${empresas.map(nome).join(" · ")}`,
           foco: no.id,
           gravidade: no.alerta,
+        });
+      }
+    }
+    if (no.tipo === "empresa") {
+      // Empresas cujo e-mail usa um domínio registrado por este ponto.
+      const clientes = [...new Set(arestas.filter((a) => a.tipo === "dominio" && a.destino === no.id).map((a) => a.origem))];
+      if (clientes.length >= 2 || (clientes.length === 1 && no.expandida)) {
+        lista.push({
+          id: `dominio:${no.id}`,
+          tipo: "mesmo-dono-dominio",
+          titulo: `${clientes.length >= 2 ? "Mesmo dono de domínio" : "Domínio registrado por"}: ${no.rotulo}`,
+          descricao: `E-mail de ${clientes.map(nome).join(" · ")}`,
+          foco: no.id,
+          gravidade: "info",
         });
       }
     }

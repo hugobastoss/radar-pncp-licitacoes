@@ -37,7 +37,7 @@ interface ThemeToggleProps {
 }
 
 /**
- * Todas as instâncias (header desktop, menu mobile, popover de configurações)
+ * Todas as instâncias (barra do topo e gaveta do menu, ver components/Header.tsx)
  * compartilham o mesmo estado via useSyncExternalStore, então alternar em
  * uma atualiza as demais. No servidor sempre reporta "claro" (getServerSnapshot);
  * o React corrige para o valor real do DOM logo após montar, sem o

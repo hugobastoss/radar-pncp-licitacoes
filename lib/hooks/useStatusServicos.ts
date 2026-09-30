@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import type { NivelServico, StatusServicos } from "@/lib/server/status-servicos";
 
 export type { NivelServico, StatusServicos };
@@ -15,35 +15,54 @@ const TUDO_INDISPONIVEL: StatusServicos = {
   anvisa: "indisponivel",
 };
 
+// Uma checagem só pro site inteiro, dividida por todos os indicadores na tela
+// (o da barra do topo e o da gaveta do menu). Cada checagem faz o servidor
+// consultar as fontes — inclusive a CGU, que tem cota —, então abrir a gaveta
+// não pode disparar outra.
+let statusAtual: StatusServicos | null = null;
+let intervalo: ReturnType<typeof setInterval> | undefined;
+const ouvintes = new Set<() => void>();
+
+async function verificar() {
+  try {
+    const resposta = await fetch("/api/status", { cache: "no-store" });
+    if (!resposta.ok) throw new Error("status não-ok");
+    statusAtual = (await resposta.json()) as StatusServicos;
+  } catch {
+    statusAtual = TUDO_INDISPONIVEL;
+  }
+  for (const ouvinte of ouvintes) ouvinte();
+}
+
+function inscrever(callback: () => void) {
+  ouvintes.add(callback);
+  if (ouvintes.size === 1) {
+    void verificar();
+    intervalo = setInterval(verificar, INTERVALO_MS);
+  }
+  return () => {
+    ouvintes.delete(callback);
+    if (ouvintes.size === 0) {
+      clearInterval(intervalo);
+      intervalo = undefined;
+    }
+  };
+}
+
+function lerStatus() {
+  return statusAtual;
+}
+
+function lerStatusNoServidor() {
+  return null;
+}
+
 /**
- * Consulta /api/status ao montar e a cada 90s, enquanto o componente estiver
- * na tela. Devolve `null` até a primeira checagem responder — o consumidor
- * decide como exibir esse estado de "verificando" transitório.
+ * Status das fontes externas: consulta /api/status quando o primeiro
+ * indicador aparece na tela e a cada 90 s enquanto houver algum. Devolve
+ * `null` até a primeira checagem responder — o consumidor decide como exibir
+ * esse estado de "verificando" transitório.
  */
 export function useStatusServicos(): StatusServicos | null {
-  const [status, setStatus] = useState<StatusServicos | null>(null);
-
-  useEffect(() => {
-    let cancelado = false;
-
-    async function verificar() {
-      try {
-        const resposta = await fetch("/api/status", { cache: "no-store" });
-        if (!resposta.ok) throw new Error("status não-ok");
-        const dados = (await resposta.json()) as StatusServicos;
-        if (!cancelado) setStatus(dados);
-      } catch {
-        if (!cancelado) setStatus(TUDO_INDISPONIVEL);
-      }
-    }
-
-    verificar();
-    const intervalo = setInterval(verificar, INTERVALO_MS);
-    return () => {
-      cancelado = true;
-      clearInterval(intervalo);
-    };
-  }, []);
-
-  return status;
+  return useSyncExternalStore(inscrever, lerStatus, lerStatusNoServidor);
 }

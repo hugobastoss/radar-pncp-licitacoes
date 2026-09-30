@@ -94,6 +94,8 @@ Das 20 fontes avaliadas:
 
 ## Ordem sugerida
 
+> **Situação (30/09/2026):** os cinco itens abaixo estão implementados — ver a seção "Fontes públicas que complementam a ficha do CNPJ" em [APIS.md](APIS.md).
+
 1. **Lista suja do MTE** — arquivo minúsculo que vira alerta na ficha do CNPJ e no Sinapse.
 2. **registro.br** — dono do domínio do e-mail.
 3. **Inscrições estaduais** (CNPJ.ws) — ficha do CNPJ, respeitando 3 por minuto.

@@ -1,5 +1,7 @@
 /** Dados do Portal da Transparência (CGU) — ver lib/server/transparencia-client.ts. */
 
+import type { RegistroListaSuja } from "@/types/fontes-publicas";
+
 export interface OrgaoSancionador {
   nome: string;
   uf?: string;
@@ -182,6 +184,12 @@ export interface DadosPessoaFisica {
   vinculos: VinculoServidor[] | null;
   /** Vem vazio sem consultar quando o resumo diz que não há contrato. */
   contratos: { itens: ContratoFederal[]; completo: boolean } | null;
+  /**
+   * Registros do CPF na "lista suja" do trabalho escravo (MTE), que a rota
+   * /api/cpf confere à parte da CGU. `null` quando a lista não pôde ser
+   * conferida — não quer dizer que a pessoa está fora dela.
+   */
+  listaSuja?: RegistroListaSuja[] | null;
 }
 
 /** Emenda parlamentar ao orçamento federal. Valores em reais. */

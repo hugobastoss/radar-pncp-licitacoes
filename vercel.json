@@ -1,36 +1,83 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "regions": ["iad1"],
+  "regions": [
+    "iad1"
+  ],
   "functions": {
     "app/api/sancoes/route.ts": {
-      "regions": ["gru1"]
+      "regions": [
+        "gru1"
+      ]
     },
     "app/api/governo-federal/route.ts": {
-      "regions": ["gru1"]
+      "regions": [
+        "gru1"
+      ]
     },
     "app/api/am/contratos/route.ts": {
-      "regions": ["gru1"]
+      "regions": [
+        "gru1"
+      ]
     },
     "app/api/am/empenhos/route.ts": {
-      "regions": ["gru1"]
+      "regions": [
+        "gru1"
+      ]
     },
     "app/api/cpf/route.ts": {
-      "regions": ["gru1"]
+      "regions": [
+        "gru1"
+      ]
     },
     "app/api/emendas/route.ts": {
-      "regions": ["gru1"]
+      "regions": [
+        "gru1"
+      ]
     },
     "app/api/emendas/documentos/route.ts": {
-      "regions": ["gru1"]
+      "regions": [
+        "gru1"
+      ]
     },
     "app/api/convenios/route.ts": {
-      "regions": ["gru1"]
+      "regions": [
+        "gru1"
+      ]
     },
     "app/api/empenhos-federais/route.ts": {
-      "regions": ["gru1"]
+      "regions": [
+        "gru1"
+      ]
     },
     "app/api/tcu/certidao/route.ts": {
-      "regions": ["gru1"]
+      "regions": [
+        "gru1"
+      ]
+    },
+    "app/api/lista-suja/route.ts": {
+      "regions": [
+        "gru1"
+      ]
+    },
+    "app/api/dominio/route.ts": {
+      "regions": [
+        "gru1"
+      ]
+    },
+    "app/api/cnpj/inscricoes-estaduais/route.ts": {
+      "regions": [
+        "gru1"
+      ]
+    },
+    "app/api/transferencias-especiais/route.ts": {
+      "regions": [
+        "gru1"
+      ]
+    },
+    "app/api/ans/route.ts": {
+      "regions": [
+        "gru1"
+      ]
     }
   }
 }

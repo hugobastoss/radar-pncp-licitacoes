@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import Link from "next/link";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ExternalLink, Landmark, Loader2, Network, Search, TriangleAlert } from "lucide-react";
@@ -331,7 +331,7 @@ function CartaoEmenda({ emenda: e }: { emenda: EmendaParlamentar }) {
   );
 }
 
-export function EmendasClient() {
+export function EmendasClient({ codigoInicial }: { codigoInicial?: string }) {
   const [autor, setAutor] = useState("");
   const [ano, setAno] = useState(String(ANO_ATUAL));
   const [tipo, setTipo] = useState("");
@@ -368,6 +368,14 @@ export function EmendasClient() {
     evento.preventDefault();
     consultar({ autor, ano, tipo, numero, pagina: 1 });
   }
+
+  // Link direto (/emendas?codigo=...): consulta ao abrir. A página remonta a
+  // tela quando o código muda, então basta uma vez.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (codigoInicial) consultar({ codigo: codigoInicial, pagina: 1 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function irParaPagina(pagina: number) {
     if (!filtrosAtuais) return;

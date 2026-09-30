@@ -12,14 +12,15 @@ Consulta inteligente de dados públicos brasileiros — licitações, empresas, 
 - Filtros avançados por período, modalidade, portal e situação
 - Atas de registro de preço vigentes no PNCP, por texto e estado, com o aviso de vencimento próximo
 - Pesquisas rápidas pré-configuradas para categorias comuns (medicamentos, hospitalar, EPI, vacinas, etc.)
-- Consulta de CNPJ com cadastro da Receita Federal, sanções (CEIS/CNEP), certidão consolidada do TCU (com PDF), relação com o governo federal (contratos, pagamentos e benefícios fiscais), contratos com o Governo do Amazonas e inscrição SUFRAMA
+- Consulta de CNPJ com cadastro da Receita Federal, sanções (CEIS/CNEP), certidão consolidada do TCU (com PDF), relação com o governo federal (contratos, pagamentos e benefícios fiscais), contratos com o Governo do Amazonas, inscrição SUFRAMA, inscrições estaduais, registro de operadora na ANS, emendas PIX recebidas (TransfereGov) e o dono do domínio do e-mail (registro.br)
+- Lista suja do trabalho escravo (MTE) na consulta de CNPJ, de sanções e de CPF
 - Empenhos a receber do governo federal e do Governo do Amazonas: quanto de cada nota de empenho do fornecedor já foi pago
 - Consulta de CPF: nome, sanções (CEIS, CNEP e CEAF), pessoa politicamente exposta (PEP), vínculo de servidor federal e contratos federais
 - Emendas parlamentares: quanto cada emenda empenhou, liquidou e pagou, com os documentos (empenhos, liquidações e pagamentos) e quem recebeu o dinheiro
 - Convênios federais com estados, municípios e entidades: objeto, valor, quanto foi liberado e vigência
 - Consulta de sanções (CEIS/CNEP) com abrangência, fundamentação legal e se a sanção impede contratar, junto com a certidão consolidada do TCU
 - Consulta de produtos para saúde na ANVISA (registro, fabricante, modelos, códigos de barras UDI e certificados de boas práticas) e da nomenclatura técnica
-- Sinapse (beta): mapa de relações entre empresas, sócios, órgãos que contratam, sanções (CGU e certidão do TCU), benefícios fiscais, SUFRAMA e emendas parlamentares, com os cruzamentos entre eles (sócio, órgão, benefício, endereço, telefone ou e-mail em comum; empresa sancionada com contratos ou com dinheiro de emenda; sócio sancionado ou PEP). Empenhos a receber e convênios entram sob demanda; o CPF de um sócio pode ser consultado digitando o número completo, conferido com os dígitos que a Receita mostra
+- Sinapse (beta): mapa de relações entre empresas, sócios, órgãos que contratam, sanções (CGU, certidão do TCU e lista suja do MTE), benefícios fiscais, SUFRAMA e emendas parlamentares, com os cruzamentos entre eles (sócio, órgão, benefício, endereço, telefone, e-mail ou dono de domínio em comum; empresa sancionada com contratos ou com dinheiro de emenda; sócio sancionado ou PEP). Empenhos a receber e convênios entram sob demanda; o CPF de um sócio pode ser consultado digitando o número completo, conferido com os dígitos que a Receita mostra
 - Consulta de CEP e NCM
 - Indicador de status das fontes de dados no cabeçalho
 - Modo claro/escuro com preferência salva no navegador
@@ -39,6 +40,11 @@ Todas as chamadas acontecem no servidor (rotas em `app/api/*`) — o navegador n
 | [Minha Receita](https://minhareceita.org) | Reserva da BrasilAPI no CNPJ (mesmo formato de resposta) | Nenhuma |
 | [CNPJá](https://cnpja.com/api/open) — API aberta | Inscrição SUFRAMA (situação e incentivos fiscais) e e-mail corporativo | Nenhuma (5 consultas/min por IP) |
 | [Portal da Transparência (CGU)](https://portaldatransparencia.gov.br/api-de-dados) | Sanções CEIS/CNEP; resumo, contratos e pagamentos federais da empresa; consulta de CPF (nome, sanções, CEAF, PEP, servidor, contratos); emendas parlamentares e seus documentos; convênios; benefícios fiscais; empenhos a receber do governo federal | Chave gratuita |
+| [MTE — Cadastro de Empregadores](https://www.gov.br/trabalho-e-emprego/pt-br/assuntos/inspecao-do-trabalho/areas-de-atuacao/combate-ao-trabalho-escravo-e-analogo-ao-de-escravo) — arquivo CSV | Lista suja do trabalho escravo, conferida por CNPJ e CPF | Nenhuma |
+| [registro.br — RDAP](https://registro.br/tecnologia/ferramentas/rdap/) | Quem registrou o domínio `.br` do e-mail da empresa | Nenhuma |
+| [CNPJ.ws](https://www.cnpj.ws/docs/intro) — API pública | Inscrições estaduais da empresa | Nenhuma (3 consultas/min por IP) |
+| [TransfereGov](https://api.transferegov.gestao.gov.br/transferenciasespeciais/) — dados abertos | Transferências especiais ("emendas PIX") recebidas por um CNPJ | Nenhuma |
+| [ANS](https://www.ans.gov.br/operadoras-entity/v1/operadoras) — operadoras | Se o CNPJ é de operadora de plano de saúde e se está ativa | Nenhuma |
 | [TCU — Certidões](https://certidoes-apf.apps.tcu.gov.br/) | Certidão consolidada de pessoa jurídica: inidôneos do TCU, improbidade (CNJ), CEIS e CNEP, com PDF | Nenhuma |
 | [SGC — Sistema de Gestão de Contratos (SEFAZ-AM)](https://www.transparencia.am.gov.br/dados-abertos-2/) | Contratos da empresa com o Governo do Amazonas e as notas de empenho de cada contrato | Nenhuma |
 | [Portal da Transparência Fiscal (SEFAZ-AM)](https://sistemas.sefaz.am.gov.br/transpprd/mnt/despesa/execDespAno.do?method=Pesquisar&filter=&anoexercicio=2026&grupo=1&consulta=1&mes=00&detNatureza=N) — sem API, lido do HTML | Empenhado, liquidado e pago de cada nota de empenho (empenhos a receber) | Nenhuma |

@@ -15,7 +15,7 @@ import { inscreverRelogio, lerAgora, lerAgoraNoServidor } from "@/lib/relogio";
 const DICAS_AJUDA = [
   "Digite o que procura e escolha estado e município na pesquisa rápida.",
   "Use a pesquisa avançada para refinar por período, modalidade, portal e valor.",
-  "Os resultados vêm diretamente do PNCP no momento da consulta. Nada fica salvo.",
+  "Os resultados vêm diretamente das fontes oficiais no momento da consulta. Nada fica salvo no servidor.",
 ];
 
 function PopoverAjuda() {
@@ -126,7 +126,12 @@ export function Header() {
               className="-ml-2 rounded-lg p-2 text-ink-600 hover:bg-ink-100 dark:text-ink-300 dark:hover:bg-ink-800 lg:hidden"
               aria-label="Abrir menu"
               aria-expanded={gavetaAberta}
-              onClick={() => setGavetaAberta(true)}
+              onClick={(e) => {
+                // O Safari não dá foco a um botão no clique. Com o foco aqui, a gaveta sabe
+                // pra quem devolvê-lo ao fechar (ver components/ui/Drawer.tsx).
+                e.currentTarget.focus();
+                setGavetaAberta(true);
+              }}
             >
               <Menu className="h-5 w-5" aria-hidden />
             </button>
@@ -136,7 +141,7 @@ export function Header() {
                 <p className="truncate text-base font-semibold tracking-tight text-ink-900 dark:text-ink-50">
                   QBuscado
                 </p>
-                <p className="hidden truncate text-xs text-ink-500 dark:text-ink-400 sm:block">
+                <p className="truncate text-xs text-ink-500 dark:text-ink-400">
                   Consulta inteligente de dados públicos
                 </p>
               </div>

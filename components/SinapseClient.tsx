@@ -34,12 +34,14 @@ import { buscarConvenios } from "@/lib/api-convenios";
 import { consultarCpf } from "@/lib/api-cpf";
 import { buscarDocumentosEmenda, buscarEmendas } from "@/lib/api-emendas";
 import { buscarEmpenhosFederais } from "@/lib/api-empenhos-federais";
+import { buscarListaSuja, buscarRegistroDominio } from "@/lib/api-fontes-publicas";
 import { buscarDadosGovernoFederal } from "@/lib/api-governo-federal";
 import { buscarSancoes } from "@/lib/api-sancoes";
 import { buscarCertidaoTcu } from "@/lib/api-tcu";
 import { validarCnpj } from "@/lib/cnpj";
 import { validarCpf } from "@/lib/cpf";
 import { cn } from "@/lib/cn";
+import { dominioDoEmail } from "@/lib/dominio-email";
 import { FORMATO_CODIGO_EMENDA } from "@/lib/emendas";
 import { formatarCnpj, mascararCnpj, mascararCpf } from "@/lib/formatters";
 import {
@@ -49,11 +51,13 @@ import {
   comComplemento,
   comContratosAm,
   comConvenios,
+  comDominio,
   comEmenda,
   comEmpenhosAm,
   comEmpenhosFederais,
   comEmpresaPendente,
   comGovernoFederal,
+  comListaSuja,
   comPessoaFisica,
   comSancoes,
   cpfBateComMascara,
@@ -82,8 +86,10 @@ type Fonte =
   | "cadastro"
   | "sancoes"
   | "tcu"
+  | "listaSuja"
   | "federal"
   | "complemento"
+  | "dominio"
   | "am"
   | "empenhosFederais"
   | "empenhosAm"
@@ -96,8 +102,10 @@ const ROTULO_FONTE: Record<Fonte, string> = {
   cadastro: "Cadastro (Receita)",
   sancoes: "Sanções (CGU)",
   tcu: "Certidão do TCU",
+  listaSuja: "Lista suja do trabalho escravo (MTE)",
   federal: "Governo federal e benefícios fiscais (CGU)",
   complemento: "SUFRAMA e e-mail (CNPJá)",
+  dominio: "Dono do domínio do e-mail (registro.br)",
   am: "Contratos do Governo do Amazonas",
   empenhosFederais: "Empenhos a receber — federal",
   empenhosAm: "Empenhos a receber — Amazonas",
@@ -305,7 +313,7 @@ function estilos(c: ReturnType<typeof cores>, icones: Icones): StylesheetJson {
     { selector: 'edge[tipo = "sancao"]', style: { "line-color": c.linhaSancao } },
     { selector: 'edge[tipo = "a-receber"]', style: { "line-style": "dotted", "line-color": c.receber } },
     { selector: 'edge[tipo = "emenda-pagamento"]', style: { "line-color": c.emenda } },
-    { selector: 'edge[tipo = "pep"], edge[tipo = "servidor"]', style: { "line-style": "dashed" } },
+    { selector: 'edge[tipo = "pep"], edge[tipo = "servidor"], edge[tipo = "dominio"]', style: { "line-style": "dashed" } },
     {
       selector: 'edge[tipo = "mesmo-endereco"], edge[tipo = "mesmo-telefone"], edge[tipo = "mesmo-email"]',
       style: { "line-style": "dashed", "line-color": c.atencao, width: 2 },
@@ -382,6 +390,10 @@ function Legenda() {
         Empenho a receber
       </li>
       <li className="inline-flex items-center gap-1.5">
+        <span className="inline-block w-4 border-t-2 border-dashed border-ink-300 dark:border-ink-600" aria-hidden />
+        Dono do domínio do e-mail
+      </li>
+      <li className="inline-flex items-center gap-1.5">
         <Marcador tipo="empresa" classe="border-2 border-danger-600 bg-primary-600 text-white" />
         Contorno vermelho: sanção · âmbar: atenção (inativa, PEP)
       </li>
@@ -400,6 +412,7 @@ const ROTULO_CRUZAMENTO: Record<Cruzamento["tipo"], string> = {
   "sancionada-com-contratos": "Sanção",
   "emenda-para-sancionada": "Emenda",
   "socio-com-alerta": "Sócio",
+  "mesmo-dono-dominio": "Domínio",
 };
 
 function ListaCruzamentos({ cruzamentos, onFocar, pontos }: { cruzamentos: Cruzamento[]; onFocar: (id: string) => void; pontos: number }) {
@@ -802,20 +815,42 @@ export function SinapseClient() {
       setAbertas(abertasRef.current);
       setModelo((m) => comEmpresaPendente(m, cnpj));
 
+      // Quem registrou o domínio do e-mail (só .br e só domínio próprio, ver lib/dominio-email.ts).
+      const consultarDominio = (email: string | undefined) => {
+        const dominio = dominioDoEmail(email);
+        if (!dominio) return;
+        consultarFonte(cnpj, "dominio", buscarRegistroDominio(dominio), (rd) => {
+          if (rd.status === "limite") return "limite";
+          if (rd.status !== "sucesso") throw new Error("domínio");
+          const registro = rd.registro;
+          if (!registro?.titular) return "vazio";
+          setModelo((m) => comDominio(m, cnpj, registro));
+          return "ok";
+        });
+      };
+
       consultarFonte(cnpj, "cadastro", buscarEmpresa(cnpj), (r) => {
         if (r.status === "erro_servidor") throw new Error("cadastro");
         if (r.status !== "sucesso") return "vazio";
         setModelo((m) => comCadastro(m, r.empresa));
+        consultarDominio(r.empresa.email);
         if (precisaComplemento(r.empresa)) {
           consultarFonte(cnpj, "complemento", buscarComplementoCnpj(cnpj), (rc) => {
             if (rc.status === "limite") return "limite";
             if (rc.status === "erro_servidor") throw new Error("complemento");
             if (rc.status !== "sucesso") return "vazio";
             setModelo((m) => comComplemento(m, cnpj, rc.complemento));
+            // Sem e-mail na Receita, vale o corporativo que a CNPJá tiver.
+            if (!r.empresa.email) consultarDominio(rc.complemento.emails[0]);
             return rc.complemento.suframa.length || rc.complemento.emails.length ? "ok" : "vazio";
           });
         }
         return "ok";
+      });
+      consultarFonte(cnpj, "listaSuja", buscarListaSuja(cnpj), (r) => {
+        if (r.status !== "sucesso") throw new Error("lista suja");
+        setModelo((m) => comListaSuja(m, cnpj, r.registros));
+        return r.registros.length ? "ok" : "vazio";
       });
       consultarFonte(cnpj, "sancoes", buscarSancoes(cnpj), (r) => {
         if (r.status === "erro_servidor") throw new Error("sanções");
@@ -1134,7 +1169,8 @@ export function SinapseClient() {
         <Legenda />
         <p className="flex items-start gap-1.5 text-xs text-ink-400 dark:text-ink-500">
           <TriangleAlert className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
-          Versão beta. Fontes: Receita Federal (BrasilAPI), CNPJá, Portal da Transparência (CGU), TCU e SEFAZ-AM. O CPF dos
+          Versão beta. Fontes: Receita Federal (BrasilAPI), CNPJá, Portal da Transparência (CGU), TCU, MTE, registro.br e
+          SEFAZ-AM. O CPF dos
           sócios vem mascarado da Receita, então o mapa liga pessoas pelo nome e pelos dígitos visíveis do CPF — só entre
           pontos que estão no mapa. Cada empresa mostra até 20 órgãos, os de maior valor.
           {abertas.length > 0 && ` Empresas abertas: ${abertas.map((c) => formatarCnpj(c)).join(", ")}.`}

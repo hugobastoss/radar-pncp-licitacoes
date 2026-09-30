@@ -2,12 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { validarCpf } from "@/lib/cpf";
 import { descreverFalha } from "@/lib/server/erros";
 import { criarLimitePorIp, ipDaRequisicao } from "@/lib/server/limite-ip";
+import { buscarNaListaSuja } from "@/lib/server/lista-suja-client";
 import { buscarPessoaFisica } from "@/lib/server/transparencia-client";
 
 /**
  * Consulta de CPF no Portal da Transparência (CGU): nome, sanções, PEP,
  * vínculo de servidor e contratos federais. Mesma chave das sanções
- * (PORTAL_TRANSPARENCIA_API_KEY) — sem ela, 501.
+ * (PORTAL_TRANSPARENCIA_API_KEY) — sem ela, 501. Confere também a "lista
+ * suja" do trabalho escravo (MTE), que é consultada na memória do servidor:
+ * o CPF não sai daqui pra essa fonte.
  *
  * CPF é dado pessoal (LGPD), então:
  * - vai no corpo de um POST, não na URL — a URL fica nos logs da Vercel;
@@ -42,8 +45,16 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const pessoa = await buscarPessoaFisica(validacao.cpf, chave, request.signal);
-    return NextResponse.json({ pessoa }, { headers: { "Cache-Control": "no-store" } });
+    // A lista suja é outra fonte (MTE): se ela falhar, a consulta da CGU segue valendo e
+    // `listaSuja: null` diz à tela que a lista não pôde ser conferida.
+    const [pessoa, listaSuja] = await Promise.all([
+      buscarPessoaFisica(validacao.cpf, chave, request.signal),
+      buscarNaListaSuja(validacao.cpf).catch((erro) => {
+        console.error(`[cpf] lista suja: ${descreverFalha(erro)}`);
+        return null;
+      }),
+    ]);
+    return NextResponse.json({ pessoa: { ...pessoa, listaSuja } }, { headers: { "Cache-Control": "no-store" } });
   } catch (erro) {
     // `descreverFalha` só tem o endpoint e o status ("Portal da Transparência (pessoa-fisica) respondeu 403"), nunca o CPF.
     const detalhe = descreverFalha(erro);

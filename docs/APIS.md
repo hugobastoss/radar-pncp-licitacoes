@@ -1,6 +1,6 @@
 # APIs externas utilizadas
 
-Este documento lista todas as APIs de terceiros que o Radar Licitações consome, o
+Este documento lista todas as APIs de terceiros que o QBuscado consome, o
 que cada uma faz no app, e as particularidades (nem sempre documentadas) que
 descobrimos integrando com elas. Todas as chamadas acontecem no **backend**
 (rotas em `app/api/*`) — o navegador nunca fala diretamente com essas APIs.
@@ -133,7 +133,7 @@ necessariamente da origem dos dados.
 **Particularidades:**
 - A BrasilAPI bloqueia (403) requisições sem header `User-Agent` — o `fetch`
   do Node, ao contrário do navegador, não manda um por padrão. Todos os
-  clientes da BrasilAPI neste projeto mandam `User-Agent: RadarLicitacoes/1.0`
+  clientes da BrasilAPI neste projeto mandam `User-Agent: QBuscado/1.0`
   por causa disso.
 - As duas fontes validam o dígito verificador: CNPJ inválido volta **400**,
   inexistente volta **404**. Os dois são respostas definitivas — não caem pro
@@ -184,7 +184,8 @@ e-mail; e-mails marcados como pessoais pela CNPJá ficam de fora).
 | SintegraWS, Infosimples, Netrin | Tempo real, mas pagas (token) |
 
 A API pública da CNPJws (`GET publica.cnpj.ws/cnpj/{cnpj}`, 3/min) traz
-**inscrições estaduais** (IE, com situação) — não usada ainda.
+**inscrições estaduais** (IE, com situação) — usada para isso: ver
+"Inscrições estaduais — CNPJ.ws" mais abaixo.
 
 ## Consulta de CEP (`/cep`)
 
@@ -577,7 +578,8 @@ Um único gateway autenticado, usado por duas telas:
 - Datas (`dataVencimento` etc.) vêm como **epoch milissegundos**, não string
   ISO — convertidas com `new Date(ms).toISOString()`.
 - O Swagger e a especificação ficam atrás do Cloudflare e só respondem com
-  `User-Agent` de navegador (403 com `RadarLicitacoes/1.0`). O portal
+  `User-Agent` de navegador (403 com o `User-Agent` do app, que na época era
+  `RadarLicitacoes/1.0`). O portal
   `consultas.anvisa.gov.br` bloqueia navegador automatizado — por isso não
   conferimos o formato do link público de um registro e a tela não o oferece.
 - Sem as variáveis de ambiente configuradas, as rotas devolvem **501**, mesmo
@@ -758,6 +760,126 @@ página de LGPD da OAB é o único indício encontrado). As únicas integraçõe
 em JSON encontradas são de revendedores pagos (DirectD, Infosimples), que
 raspam o site oficial — mesmo padrão já descartado pra SUFRAMA (ver acima).
 Sem uma fonte oficial e gratuita, ficou de fora por ora.
+
+## Fontes públicas que complementam a ficha do CNPJ (`/cnpj`, `/sancoes`, `/cpf`, `/sinapse`)
+
+Cinco fontes gratuitas, sem chave e sem banco de dados, escolhidas no
+levantamento de [FONTES-PUBLICAS.md](FONTES-PUBLICAS.md). Cada uma tem a sua
+rota (todas em `gru1`, ver `vercel.json`), então uma fora do ar não afeta as
+outras nem o cadastro. A conversão das respostas fica em
+[`lib/fontes-publicas.ts`](../lib/fontes-publicas.ts), sem nada do Next, e o
+lado do navegador em [`lib/api-fontes-publicas.ts`](../lib/api-fontes-publicas.ts).
+
+### Lista suja do trabalho escravo (MTE)
+
+| | |
+|---|---|
+| **Arquivo publicado** | `https://www.gov.br/trabalho-e-emprego/pt-br/assuntos/inspecao-do-trabalho/areas-de-atuacao/cadastro_de_empregadores.csv` |
+| **Autenticação** | Nenhuma |
+| **Arquivos** | [`lib/lista-suja.ts`](../lib/lista-suja.ts) (leitor), [`lib/server/lista-suja-client.ts`](../lib/server/lista-suja-client.ts) (rota `/api/lista-suja`; o CPF é conferido dentro de `/api/cpf`) |
+
+O Cadastro de Empregadores que submeteram trabalhadores a condições análogas
+à de escravo. Aparece como alerta âmbar na ficha do CNPJ, na tela de Sanções,
+na de CPF e como ponto de sanção no Sinapse. Âmbar e não vermelho: estar na
+lista não impede contratar por lei.
+
+**Particularidades:**
+- **Não há consulta por documento:** a fonte publica o CSV inteiro (~90 KB,
+  ~580 linhas em 30/09/2026, sendo ~390 CPFs e ~190 CNPJs), atualizado a cada
+  semestre. O servidor baixa, monta um índice por CNPJ/CPF e consulta na memória.
+- **Latin-1** e separador `;`. Um endereço pode vir entre aspas com `;` dentro.
+- O índice vale **24 h**. Se a renovação falhar, a lista vencida continua
+  valendo; sem lista nenhuma, a rota devolve 502 — nunca "fora da lista" sem
+  ter conferido. Pelo mesmo motivo, arquivo sem a coluna `CNPJ/CPF` (um HTML
+  de erro, um formato novo) é erro.
+- A lista tem pessoas físicas com **CPF completo**. É uma lista oficial
+  pública; o site a exibe como publicada e não cruza além disso. Na consulta
+  de CPF o documento continua indo só no corpo do POST.
+
+### Dono do domínio — registro.br (RDAP)
+
+| | |
+|---|---|
+| **Base URL** | `https://rdap.registro.br/domain/{dominio}` |
+| **Autenticação** | Nenhuma |
+| **Arquivos** | [`lib/dominio-email.ts`](../lib/dominio-email.ts), [`lib/server/registro-br-client.ts`](../lib/server/registro-br-client.ts) (rota `/api/dominio`) |
+
+Quem registrou o domínio do e-mail da empresa. Na ficha do CNPJ vira uma
+linha; no Sinapse, uma ligação até o dono quando ele é outro CNPJ, e o
+cruzamento "Mesmo dono de domínio" (tom informativo: é comum a empresa
+cadastrar o e-mail do contador).
+
+**Particularidades:**
+- Só domínios **`.br`**. E-mail de provedor (`uol.com.br`, `terra.com.br`…)
+  não é consultado: a lista está em `lib/dominio-email.ts`.
+- O titular vem em `entities[]` com `roles: ["registrant"]`; o nome, no
+  jCard (`vcardArray`, campo `fn`); o documento, em `publicIds`. Titular
+  pessoa física: o nome segue, o **CPF não sai do servidor**.
+- O registro.br **resolve subdomínio** (`mail.bb.com.br` responde como
+  `bb.com.br`) e devolve **404** para domínio inexistente.
+- O **limite não é publicado** e a resposta não traz cabeçalhos de limite:
+  cache de 24 h e limite de 20 consultas por minuto por visitante na rota.
+- Matriz e filiais dividem a raiz do CNPJ (8 dígitos): titular com a mesma
+  raiz conta como "a própria empresa".
+
+### Inscrições estaduais — CNPJ.ws
+
+| | |
+|---|---|
+| **Base URL** | `https://publica.cnpj.ws/cnpj/{cnpj}` |
+| **Autenticação** | Nenhuma |
+| **Arquivo** | [`lib/server/cnpjws-client.ts`](../lib/server/cnpjws-client.ts) (rota `/api/cnpj/inscricoes-estaduais`) |
+
+As inscrições estaduais de todos os estados, com ativa ou inativa
+(`estabelecimento.inscricoes_estaduais[]`). É o que o Sintegra de cada
+estado informa, sem o captcha.
+
+**Particularidades:**
+- **3 consultas por minuto por IP**, e a Vercel sai por IPs compartilhados.
+  Por isso a ficha **só consulta no botão**, o 429 vira "tente de novo" e a
+  rota limita a 6 por minuto por visitante.
+- A via oficial (Cadastro Centralizado de Contribuintes) exige certificado
+  digital e-CNPJ; a API aberta da CNPJá não devolve inscrições estaduais.
+
+### Transferências especiais ("emendas PIX") — TransfereGov
+
+| | |
+|---|---|
+| **Base URL** | `https://api.transferegov.gestao.gov.br/transferenciasespeciais/plano_acao_especial` |
+| **Autenticação** | Nenhuma |
+| **Arquivo** | [`lib/server/transferegov-client.ts`](../lib/server/transferegov-client.ts) (rota `/api/transferencias-especiais`) |
+
+Os planos de ação de transferências especiais que um CNPJ recebeu: ano,
+parlamentar, área, valor e situação. O número da emenda vem no mesmo formato
+de 12 dígitos da tela de Emendas, então cada linha leva a `/emendas?codigo=`
+e a `/sinapse?emenda=`. Na ficha, a seção só aparece quando há resultado —
+na prática, prefeituras, estados e entidades.
+
+**Particularidades:**
+- É um **PostgREST**: filtro na URL (`cnpj_beneficiario_plano_acao=eq.{cnpj}`),
+  ordenação em `order=` e o total no cabeçalho `Content-Range` quando se
+  manda `Prefer: count=exact` (`0-49/36`, ou `*/0` sem resultado).
+- A fonte devolve **banco, agência e conta** do beneficiário. Pedimos só as
+  colunas que a tela mostra (`select=`), então esses dados nem chegam ao
+  servidor. Há um teste garantindo isso.
+- Situações vistas: `CIENTE`, `IMPEDIDO` e `IMPEDIDO_REJEICAO_PLANO_TRABALHO`;
+  o porquê do impedimento vem em `motivo_impedimento_plano_acao`.
+- Outras tabelas do mesmo módulo (empenhos, ordens bancárias, relatórios de
+  gestão) não são usadas.
+
+### Operadora de plano de saúde — ANS
+
+| | |
+|---|---|
+| **Base URL** | `https://www.ans.gov.br/operadoras-entity/v1/operadoras` |
+| **Autenticação** | Nenhuma |
+| **Arquivo** | [`lib/server/ans-client.ts`](../lib/server/ans-client.ts) (rota `/api/ans`) |
+
+Diz se o CNPJ é de operadora registrada na ANS e se está ativa — vira um selo
+na ficha do CNPJ. `?cnpj=` devolve o registro e a situação; o nome da
+classificação ("Medicina de Grupo") só vem no detalhe (`/operadoras/{registro}`),
+consultado só quando o CNPJ é de operadora. Não ser operadora é o caso normal:
+a rota responde `{ operadora: null }`, não 404.
 
 ## IBGE — Localidades (só geração de dados, não roda em produção)
 
