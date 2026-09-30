@@ -101,7 +101,7 @@ async function statusBrasilApi(): Promise<NivelServico> {
  * vercel.json). Chamar a CGU daqui dava "indisponível" com a consulta
  * funcionando; em vez disso, testamos a própria rota de sanções, que é o
  * caminho que o usuário usa de verdade. `origem` é o endereço deste app
- * (ex.: https://qbuscado.com).
+ * (ex.: https://qbuscado.vercel.app).
  */
 async function statusPortalTransparencia(origem: string): Promise<NivelServico> {
   if (!process.env.PORTAL_TRANSPARENCIA_API_KEY) return "nao_configurado";

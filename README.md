@@ -2,9 +2,9 @@
 
 Consulta inteligente de dados públicos brasileiros — licitações, empresas, sanções, emendas parlamentares, convênios e mais —, com dados consultados em tempo real nas fontes oficiais: [PNCP](https://pncp.gov.br) (Portal Nacional de Contratações Públicas), Receita Federal, Portal da Transparência, TCU e outras.
 
-**Site:** [qbuscado.com](https://qbuscado.com/)
+**Site:** [qbuscado.vercel.app](https://qbuscado.vercel.app/) (o domínio definitivo será qbuscado.com)
 
-> Projeto independente, sem vínculo oficial com o governo. Veja o [aviso legal](https://qbuscado.com/termos-de-uso) para mais detalhes.
+> Projeto independente, sem vínculo oficial com o governo. Veja o [aviso legal](https://qbuscado.vercel.app/termos-de-uso) para mais detalhes.
 
 ## Funcionalidades
 
