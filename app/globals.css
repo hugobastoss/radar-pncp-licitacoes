@@ -9,7 +9,14 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * Design tokens do RADAR PNCP.
+ * Menu lateral recolhido: o <html> ganha data-menu="recolhido" (lib/menu-lateral.ts).
+ * Só vale dentro do menu lateral ([data-lateral]), então a gaveta do celular,
+ * que usa o mesmo menu, nunca fica recolhida.
+ */
+@custom-variant menu-recolhido (&:where([data-menu="recolhido"] [data-lateral], [data-menu="recolhido"] [data-lateral] *));
+
+/*
+ * Design tokens do QBuscado.
  *
  * Paleta pensada para transmitir tecnologia, confiabilidade e organização:
  * fundo claro, cards brancos, azul como cor de marca, verde para sinais
@@ -89,6 +96,7 @@
   --shadow-card-hover: 0 2px 6px 0 rgb(15 23 42 / 0.06), 0 4px 12px -2px rgb(15 23 42 / 0.08);
   --shadow-popover: 0 8px 24px -4px rgb(15 23 42 / 0.12), 0 2px 8px -2px rgb(15 23 42 / 0.06);
   --shadow-drawer: -8px 0 32px -8px rgb(15 23 42 / 0.18);
+  --shadow-drawer-esquerda: 8px 0 32px -8px rgb(15 23 42 / 0.18);
 }
 
 :root {

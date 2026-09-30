@@ -22,7 +22,7 @@ import type { AditivoEstadual, ContratoEstadual, ResultadoContratosAm } from "@/
 
 const BASE_URL = "https://sistemas.sefaz.am.gov.br/sgc-am/api/v1";
 const TIMEOUT_MS = 20000;
-const USER_AGENT = "Mozilla/5.0 (compatible; RadarLicitacoes/1.0)";
+const USER_AGENT = "Mozilla/5.0 (compatible; QBuscado/1.0)";
 const PARALELO = 12;
 
 // Contratos mudam pouco ao longo do dia; a varredura de todas as UGs é cara

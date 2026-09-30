@@ -13,7 +13,7 @@ import type { ItemNcm } from "@/types/ncm";
 
 const BASE_URL = "https://brasilapi.com.br/api/ncm/v1";
 const TIMEOUT_MS = 8000;
-const USER_AGENT = "RadarLicitacoes/1.0";
+const USER_AGENT = "QBuscado/1.0";
 
 interface ItemNcmBrasilApi {
   codigo?: string;

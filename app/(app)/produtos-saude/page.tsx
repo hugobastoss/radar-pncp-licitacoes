@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { ProdutosSaudeClient } from "@/components/ProdutosSaudeClient";
 
 export const metadata: Metadata = {
-  title: "Consultar Produtos para Saúde | Radar Licitações",
+  title: "Consultar Produtos para Saúde | QBuscado",
   description: "Verifique o registro de dispositivos médicos e materiais hospitalares na ANVISA.",
 };
 

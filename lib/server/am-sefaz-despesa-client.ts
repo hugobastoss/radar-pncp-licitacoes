@@ -79,7 +79,7 @@ async function baixarNotas(ug: string, anoExercicio: number): Promise<Map<string
   });
   const resposta = await fetch(`${BASE_URL}/execDespAnoPoderUg.do?${params}`, {
     signal: AbortSignal.timeout(TIMEOUT_MS),
-    headers: { "User-Agent": "Mozilla/5.0 (compatible; RadarLicitacoes/1.0)", "Accept-Language": "pt-BR" },
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; QBuscado/1.0)", "Accept-Language": "pt-BR" },
   });
   if (!resposta.ok) throw new Error(`SEFAZ-AM (notas da UG ${ug}) respondeu ${resposta.status}`);
 

@@ -702,6 +702,63 @@ fora porque:
 
 Pela Lei 14.133, as licitações do estado também devem ser publicadas no PNCP, que o app já consulta.
 
+## CNJ — DataJud, metadados de processos judiciais (`/processos`)
+
+| | |
+|---|---|
+| **Base URL** | `https://api-publica.datajud.cnj.jus.br/api_publica_{alias}/_search` |
+| **Autenticação** | "Chave pública" no header `Authorization: APIKey ...` — não é secreta, é a mesma divulgada pelo CNJ pra qualquer consumidor |
+| **Arquivo** | [`lib/server/datajud-client.ts`](../lib/server/datajud-client.ts), aliases em [`lib/data/tribunais.ts`](../lib/data/tribunais.ts) |
+| **Documentação oficial** | [datajud-wiki.cnj.jus.br/api-publica](https://datajud-wiki.cnj.jus.br/api-publica/acesso) |
+
+Metadados públicos de processos judiciais (classe, assuntos, órgão julgador,
+andamentos), a partir da Base Nacional de Dados do Poder Judiciário. **Não
+existe busca por nome de parte, CPF/CNPJ ou advogado** — só por
+`numeroProcesso` — porque a API só expõe o que já é público por lei
+(princípio da publicidade processual), nunca os dados das partes. Por isso
+não é um risco de LGPD: é o mesmo domínio de "dado público por design" das
+sanções e do CNPJ.
+
+Um índice Elasticsearch por tribunal (`api_publica_tjam`, `api_publica_trf1`,
+`api_publica_tre-sp`…), 91 no total — todos exceto o STF, que não integra o
+DataJud. A tela pede o tribunal (busca por nome, `Combobox`) porque não dá
+pra descobrir o tribunal certo só pelo número do processo sem uma tabela
+oficial de códigos que não conferimos ao vivo — arriscaria "não encontrado"
+silencioso por ter escolhido o tribunal errado, não por o processo não
+existir.
+
+**Particularidades (testado em 2026-09-30, contra TJAM e TJSP):**
+- `query: {match: {numeroProcesso}}` devolve exatamente 1 resultado pro
+  número exato (`hits.total: {value: 1, relation: "eq"}`) — não tokeniza o
+  número em pedaços soltos, então não precisa de `term` numa `keyword`.
+  Processo inexistente volta **200 com `hits.total.value: 0`**, não 404.
+- **Latência bem variável e sem relação óbvia com o tribunal ou o tamanho do
+  índice**: da mesma consulta, ~3 s numa vez e mais de 30 s noutra. Por isso
+  o timeout no servidor é 35 s e no cliente, 40 s.
+- `dataAjuizamento` vem como `"AAAAMMDDHHmmss"` (sem separadores);
+  `dataHoraUltimaAtualizacao` já vem ISO 8601 normal — os dois formatos no
+  mesmo registro.
+- `movimentos[].complementosTabelados` é uma lista de códigos tabelados
+  (ex.: `tipo_de_distribuicao_redistribuicao: sorteio`); a tela só mostra o
+  `nome` de cada um, concatenado, como detalhe do andamento.
+- `nivelSigilo` (`0` = público) existe no schema pra registrar processos sob
+  segredo de justiça. Não teste nenhum caso assim ao vivo (não é algo que
+  se busca de propósito) — por precaução, quando vier diferente de `0`, a
+  tela esconde assuntos, órgão julgador e andamentos e mostra só que o
+  processo está sob sigilo.
+- A chave pública é trocada pelo CNJ de tempos em tempos — se a consulta
+  passar a devolver 401, a chave atual está na Wiki do DataJud, na página
+  linkada acima.
+
+**OAB — avaliada e não implementada:** o Cadastro Nacional dos Advogados
+(`cna.oab.org.br`) não tem API pública documentada — é uma SPA Angular cujo
+endpoint real de busca não aparece nos chunks carregados de início (fica
+atrás de navegação client-side, possivelmente com proteção anti-robô; a
+página de LGPD da OAB é o único indício encontrado). As únicas integrações
+em JSON encontradas são de revendedores pagos (DirectD, Infosimples), que
+raspam o site oficial — mesmo padrão já descartado pra SUFRAMA (ver acima).
+Sem uma fonte oficial e gratuita, ficou de fora por ora.
+
 ## IBGE — Localidades (só geração de dados, não roda em produção)
 
 | | |

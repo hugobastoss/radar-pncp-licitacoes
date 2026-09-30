@@ -46,7 +46,7 @@ import type {
 
 const BASE_URL = "https://api.portaldatransparencia.gov.br/api-de-dados";
 const TIMEOUT_MS = 10000;
-const USER_AGENT = "Mozilla/5.0 (compatible; RadarLicitacoes/1.0)";
+const USER_AGENT = "Mozilla/5.0 (compatible; QBuscado/1.0)";
 const TAMANHO_PAGINA = 15;
 
 // A CGU atualiza os dados uma vez por dia e limita a 400 chamadas por minuto

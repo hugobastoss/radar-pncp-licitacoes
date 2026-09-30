@@ -11,12 +11,14 @@ interface DrawerProps {
   titulo: string;
   children: ReactNode;
   rodape?: ReactNode;
+  /** De que lado o painel entra. Detalhes abrem pela direita; o menu do celular, pela esquerda. */
+  lado?: "direita" | "esquerda";
 }
 
 const SELETOR_FOCAVEIS =
   'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
 
-export function Drawer({ aberto, onFechar, titulo, children, rodape }: DrawerProps) {
+export function Drawer({ aberto, onFechar, titulo, children, rodape, lado = "direita" }: DrawerProps) {
   const painelRef = useRef<HTMLDivElement>(null);
   const tituloId = useId();
 
@@ -59,7 +61,7 @@ export function Drawer({ aberto, onFechar, titulo, children, rodape }: DrawerPro
   if (!aberto) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
+    <div className={cn("fixed inset-0 z-50 flex", lado === "esquerda" ? "justify-start" : "justify-end")}>
       <button
         type="button"
         aria-label={`Fechar ${titulo.toLowerCase()}`}
@@ -73,8 +75,8 @@ export function Drawer({ aberto, onFechar, titulo, children, rodape }: DrawerPro
         aria-labelledby={tituloId}
         tabIndex={-1}
         className={cn(
-          "relative flex h-full w-full flex-col bg-white shadow-drawer outline-none dark:bg-ink-900",
-          "sm:max-w-lg",
+          "relative flex h-full w-full flex-col bg-white outline-none dark:bg-ink-900",
+          lado === "esquerda" ? "max-w-xs shadow-drawer-esquerda" : "shadow-drawer sm:max-w-lg",
         )}
       >
         <div className="flex items-center justify-between border-b border-ink-200 px-5 py-4 dark:border-ink-700">

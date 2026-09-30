@@ -73,7 +73,7 @@ export async function buscarComplementoCnpj(cnpj: string, signal?: AbortSignal):
 
   const resposta = await fetch(`${BASE_URL}/${cnpj}`, {
     signal: AbortSignal.any(sinaisAbortar),
-    headers: { Accept: "application/json", "User-Agent": "RadarLicitacoes/1.0" },
+    headers: { Accept: "application/json", "User-Agent": "QBuscado/1.0" },
     next: { revalidate: CACHE_SEGUNDOS },
   });
 

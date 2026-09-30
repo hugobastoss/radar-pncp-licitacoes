@@ -128,7 +128,7 @@ export function ResultsTable({ itens, temFiltrosAtivos }: ResultsTableProps) {
         onScroll={sincronizarDoCabecalho}
         className={cn(
           "sticky z-20 overflow-x-auto scrollbar-fina border-b border-ink-200 bg-white px-4 dark:border-ink-700 dark:bg-ink-900",
-          temFiltrosAtivos ? "top-28" : "top-16",
+          temFiltrosAtivos ? "top-26" : "top-14",
         )}
       >
         <div

@@ -2,18 +2,18 @@ import type { Metadata } from "next";
 import { PaginaLegal, SecaoLegal } from "@/components/PaginaLegal";
 
 export const metadata: Metadata = {
-  title: "Termos de Uso | Radar Licitações",
-  description: "Condições de uso do Radar Licitações, ferramenta independente de pesquisa de licitações públicas do PNCP.",
+  title: "Termos de Uso | QBuscado",
+  description: "Condições de uso do QBuscado, ferramenta independente de pesquisa de licitações públicas do PNCP.",
 };
 
-const ATUALIZADO_EM = "22 de setembro de 2026";
+const ATUALIZADO_EM = "30 de setembro de 2026";
 
 export default function TermosDeUsoPage() {
   return (
     <PaginaLegal titulo="Termos de Uso" atualizadoEm={ATUALIZADO_EM}>
-      <SecaoLegal titulo="1. Sobre o Radar Licitações">
+      <SecaoLegal titulo="1. Sobre o QBuscado">
         <p>
-          O Radar Licitações é uma ferramenta gratuita e independente para pesquisa de licitações e
+          O QBuscado é uma ferramenta gratuita e independente para pesquisa de licitações e
           contratações públicas. Ele não é um serviço oficial do governo brasileiro e não possui qualquer
           vínculo institucional com o Portal Nacional de Contratações Públicas (PNCP) ou com qualquer órgão
           público.
@@ -44,7 +44,7 @@ export default function TermosDeUsoPage() {
 
       <SecaoLegal titulo="4. Isenção de responsabilidade">
         <p>
-          O Radar Licitações é fornecido &quot;como está&quot;, sem garantias de qualquer tipo, incluindo
+          O QBuscado é fornecido &quot;como está&quot;, sem garantias de qualquer tipo, incluindo
           disponibilidade contínua, ausência de erros ou adequação a uma finalidade específica. Não nos
           responsabilizamos por decisões tomadas, prazos perdidos ou prejuízos de qualquer natureza
           decorrentes do uso das informações exibidas neste site.
@@ -53,7 +53,7 @@ export default function TermosDeUsoPage() {
 
       <SecaoLegal titulo="5. Propriedade">
         <p>
-          A interface, o design e o código do Radar Licitações pertencem ao projeto. Os dados de licitações,
+          A interface, o design e o código do QBuscado pertencem ao projeto. Os dados de licitações,
           órgãos e contratações são informações públicas de titularidade da administração pública,
           disponibilizadas por meio do PNCP.
         </p>

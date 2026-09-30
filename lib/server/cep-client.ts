@@ -11,7 +11,7 @@ const TIMEOUT_MS = 8000;
 // A BrasilAPI bloqueia (403) requisições sem User-Agent — o fetch do Node,
 // ao contrário do navegador, não manda um por padrão (mesma pegadinha já
 // descoberta em lib/server/cnpj-client.ts).
-const USER_AGENT = "RadarLicitacoes/1.0";
+const USER_AGENT = "QBuscado/1.0";
 
 export class CepNaoEncontradoError extends Error {}
 

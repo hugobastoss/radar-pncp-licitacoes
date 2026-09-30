@@ -19,7 +19,7 @@ import type { CertidaoTcu, ItemCertidaoTcu } from "@/types/tcu";
 
 const BASE_URL = "https://certidoes-apf.apps.tcu.gov.br/api/rest/publico/certidoes";
 const TIMEOUT_MS = 20000;
-const USER_AGENT = "Mozilla/5.0 (compatible; RadarLicitacoes/1.0)";
+const USER_AGENT = "Mozilla/5.0 (compatible; QBuscado/1.0)";
 
 interface CertidaoBruta {
   razaoSocial?: string | null;

@@ -1,12 +1,16 @@
 "use client";
 
-import { useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 import Image from "next/image";
-import { ChevronDown, ChevronUp, CircleHelp, Clock, Menu, X } from "lucide-react";
+import Link from "next/link";
+import { ChevronDown, ChevronUp, CircleHelp, Clock, Menu } from "lucide-react";
 import { useClickOutside } from "@/lib/hooks/useClickOutside";
+import { MenuFerramentas } from "@/components/MenuFerramentas";
+import { Drawer } from "@/components/ui/Drawer";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { StatusServicos } from "@/components/ui/StatusServicos";
 import { formatarDataHoraCurta } from "@/lib/formatters";
+import { inscreverRelogio, lerAgora, lerAgoraNoServidor } from "@/lib/relogio";
 
 const DICAS_AJUDA = [
   "Digite o que procura e escolha estado e município na pesquisa rápida.",
@@ -32,7 +36,7 @@ function PopoverAjuda() {
       </button>
       {aberto && (
         <div className="absolute right-0 z-40 mt-2 w-72 rounded-lg border border-ink-200 bg-white p-4 shadow-popover dark:border-ink-700 dark:bg-ink-900">
-          <h3 className="text-sm font-semibold text-ink-900 dark:text-ink-50">Como usar o Radar Licitações</h3>
+          <h3 className="text-sm font-semibold text-ink-900 dark:text-ink-50">Como usar o QBuscado</h3>
           <ul className="mt-2 space-y-2 text-sm text-ink-600 dark:text-ink-300">
             {DICAS_AJUDA.map((dica) => (
               <li key={dica}>{dica}</li>
@@ -42,19 +46,6 @@ function PopoverAjuda() {
       )}
     </div>
   );
-}
-
-function inscreverRelogio(callback: () => void) {
-  const intervalo = setInterval(callback, 10000);
-  return () => clearInterval(intervalo);
-}
-
-function lerAgora() {
-  return Date.now();
-}
-
-function lerAgoraNoServidor() {
-  return null;
 }
 
 /**
@@ -79,76 +70,97 @@ function RelogioBrasilia() {
   );
 }
 
-export function Header() {
-  const [menuMobileAberto, setMenuMobileAberto] = useState(false);
-  const [ajudaMobileAberta, setAjudaMobileAberta] = useState(false);
+/** O pé da gaveta: o que no computador fica à direita da barra do topo. */
+function RodapeGaveta() {
+  const [ajudaAberta, setAjudaAberta] = useState(false);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-ink-200 bg-white/95 backdrop-blur dark:border-ink-700 dark:bg-ink-900/95">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <div className="flex min-w-0 items-center gap-3">
-          <Image src="/logo.png" alt="" width={36} height={36} className="h-9 w-9 shrink-0" priority />
-          <div className="min-w-0 leading-tight">
-            <p className="truncate text-base font-semibold tracking-tight text-ink-900 dark:text-ink-50">
-              Radar Licitações
-            </p>
-            <p className="truncate text-xs text-ink-500 dark:text-ink-400">
-              Pesquisa inteligente de licitações públicas
-            </p>
-          </div>
-        </div>
-
-        <div className="hidden items-center gap-2 sm:flex">
-          <StatusServicos />
-          <RelogioBrasilia />
-          <PopoverAjuda />
-          <ThemeToggle />
-        </div>
-
+    <div className="space-y-3">
+      <StatusServicos variante="linha" />
+      <div className="border-t border-ink-100 pt-3 dark:border-ink-800">
         <button
           type="button"
-          className="rounded-lg p-2 text-ink-600 hover:bg-ink-100 dark:text-ink-300 dark:hover:bg-ink-800 sm:hidden"
-          aria-label="Abrir menu"
-          aria-expanded={menuMobileAberto}
-          onClick={() => setMenuMobileAberto((v) => !v)}
+          onClick={() => setAjudaAberta((v) => !v)}
+          aria-expanded={ajudaAberta}
+          className="flex w-full items-center justify-between text-sm font-medium text-ink-700 dark:text-ink-200"
         >
-          {menuMobileAberto ? <X className="h-5 w-5" aria-hidden /> : <Menu className="h-5 w-5" aria-hidden />}
+          <span className="inline-flex items-center gap-2">
+            <CircleHelp className="h-5 w-5 text-ink-500 dark:text-ink-400" aria-hidden />
+            Ajuda
+          </span>
+          {ajudaAberta ? (
+            <ChevronUp className="h-4 w-4 text-ink-400 dark:text-ink-500" aria-hidden />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-ink-400 dark:text-ink-500" aria-hidden />
+          )}
         </button>
+        {ajudaAberta && (
+          <ul className="mt-2 space-y-2 text-sm text-ink-600 dark:text-ink-300">
+            {DICAS_AJUDA.map((dica) => (
+              <li key={dica}>{dica}</li>
+            ))}
+          </ul>
+        )}
       </div>
+      <div className="border-t border-ink-100 pt-3 dark:border-ink-800">
+        <ThemeToggle variante="linha" />
+      </div>
+    </div>
+  );
+}
 
-      {menuMobileAberto && (
-        <div className="border-t border-ink-200 bg-white px-4 py-3 dark:border-ink-700 dark:bg-ink-900 sm:hidden">
-          <StatusServicos variante="linha" />
-          <div className="mt-3 border-t border-ink-100 pt-3 dark:border-ink-800">
+export function Header() {
+  const [gavetaAberta, setGavetaAberta] = useState(false);
+  // Estável entre renderizações: o Drawer refaz o efeito de foco quando `onFechar` muda.
+  const fecharGaveta = useCallback(() => setGavetaAberta(false), []);
+
+  return (
+    <>
+      <header className="sticky top-0 z-40 border-b border-ink-200 bg-white/95 backdrop-blur dark:border-ink-700 dark:bg-ink-900/95">
+        {/* 56 px (h-14). Quem gruda embaixo dela conta com essa altura: o menu lateral
+            (Sidebar), a barra de filtros (FiltrosAtivosBar) e o cabeçalho da tabela (ResultsTable). */}
+        <div className="flex h-14 items-center justify-between gap-3 px-4 sm:px-6">
+          <div className="flex min-w-0 items-center gap-1">
             <button
               type="button"
-              onClick={() => setAjudaMobileAberta((v) => !v)}
-              aria-expanded={ajudaMobileAberta}
-              className="flex w-full items-center justify-between text-sm font-medium text-ink-700 dark:text-ink-200"
+              className="-ml-2 rounded-lg p-2 text-ink-600 hover:bg-ink-100 dark:text-ink-300 dark:hover:bg-ink-800 lg:hidden"
+              aria-label="Abrir menu"
+              aria-expanded={gavetaAberta}
+              onClick={() => setGavetaAberta(true)}
             >
-              <span className="inline-flex items-center gap-2">
-                <CircleHelp className="h-5 w-5 text-ink-500 dark:text-ink-400" aria-hidden />
-                Ajuda
-              </span>
-              {ajudaMobileAberta ? (
-                <ChevronUp className="h-4 w-4 text-ink-400 dark:text-ink-500" aria-hidden />
-              ) : (
-                <ChevronDown className="h-4 w-4 text-ink-400 dark:text-ink-500" aria-hidden />
-              )}
+              <Menu className="h-5 w-5" aria-hidden />
             </button>
-            {ajudaMobileAberta && (
-              <ul className="mt-2 space-y-2 text-sm text-ink-600 dark:text-ink-300">
-                {DICAS_AJUDA.map((dica) => (
-                  <li key={dica}>{dica}</li>
-                ))}
-              </ul>
-            )}
+            <Link href="/" className="flex min-w-0 items-center gap-3 rounded-lg">
+              <Image src="/logo.png" alt="" width={32} height={32} className="h-8 w-8 shrink-0" priority />
+              <div className="min-w-0 leading-tight">
+                <p className="truncate text-base font-semibold tracking-tight text-ink-900 dark:text-ink-50">
+                  QBuscado
+                </p>
+                <p className="hidden truncate text-xs text-ink-500 dark:text-ink-400 sm:block">
+                  Consulta inteligente de dados públicos
+                </p>
+              </div>
+            </Link>
           </div>
-          <div className="mt-3 flex items-center justify-between border-t border-ink-100 pt-3 dark:border-ink-800">
-            <ThemeToggle variante="linha" />
+
+          <div className="hidden items-center gap-2 sm:flex">
+            <StatusServicos />
+            <RelogioBrasilia />
+            <PopoverAjuda />
+            <ThemeToggle />
           </div>
         </div>
-      )}
-    </header>
+      </header>
+
+      {/* Fora do <header>: o backdrop-blur dele prenderia o position: fixed da gaveta dentro dos 56 px da barra. */}
+      {/* Status, ajuda e tema rolam junto com o menu: num rodapé fixo, em tela baixa
+          (celular deitado), eles tomariam a altura toda e o menu sumiria. */}
+      <Drawer aberto={gavetaAberta} onFechar={fecharGaveta} titulo="Menu" lado="esquerda">
+        <MenuFerramentas onNavegar={fecharGaveta} />
+        <div className="mt-6 border-t border-ink-200 pt-4 dark:border-ink-700">
+          <RodapeGaveta />
+        </div>
+      </Drawer>
+    </>
   );
 }

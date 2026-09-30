@@ -5,7 +5,25 @@ import type { FormEvent } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { Core, CoseLayoutOptions, StylesheetJson } from "cytoscape";
-import { ArrowUpRight, Building2, Landmark, Loader2, Maximize2, Network, Plus, Trash2, TriangleAlert, UserRound } from "lucide-react";
+import {
+  ArrowUpRight,
+  BadgePercent,
+  BriefcaseBusiness,
+  Building2,
+  Factory,
+  Landmark,
+  Loader2,
+  Maximize2,
+  Network,
+  Plus,
+  ScrollText,
+  ShieldAlert,
+  Trash2,
+  TriangleAlert,
+  UserRound,
+  Vote,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
@@ -114,6 +132,22 @@ const ROTULO_TIPO: Record<TipoNo, string> = {
   cargo: "Cargo público (PEP)",
 };
 
+/** Os mesmos ícones das telas do app: empresa como na de CNPJ, pessoa como na de CPF, sanção como na de Sanções. */
+const ICONE_TIPO: Record<TipoNo, LucideIcon> = {
+  empresa: Building2,
+  pessoa: UserRound,
+  "orgao-federal": Landmark,
+  "orgao-am": Landmark,
+  sancao: ShieldAlert,
+  beneficio: BadgePercent,
+  registro: Factory,
+  parlamentar: Vote,
+  emenda: ScrollText,
+  cargo: BriefcaseBusiness,
+};
+
+const TIPOS = Object.keys(ICONE_TIPO) as TipoNo[];
+
 type EstadoCpf = { status: "carregando" } | { status: "ok" } | { status: "erro"; mensagem: string };
 
 /** "***455835**" → "***.455.835-**", como a tela de CPF mostra. */
@@ -131,30 +165,87 @@ function ehEscuro(): boolean {
   return document.documentElement.classList.contains("dark");
 }
 
+/** Como cada tipo de ponto aparece: fundo do círculo, cor do ícone e, nos pontos de apoio, um contorno. */
+type Visual = { fundo: string; icone: string; borda?: string };
+
 function cores(escuro: boolean) {
   const estilo = getComputedStyle(document.documentElement);
   const v = (nome: string, reserva: string) => estilo.getPropertyValue(`--color-${nome}`).trim() || reserva;
+  const branco = "#ffffff";
+  const empresa = v("primary-600", "#2563eb");
+  const roxo = v("accent-600", "#7c3aed");
+  const perigo = v("danger-600", "#dc2626");
+  const atencao = v("warning-600", "#d97706");
+  const emenda = v("success-600", "#059669");
+  const tipos: Record<TipoNo, Visual> = {
+    empresa: { fundo: empresa, icone: branco },
+    pessoa: { fundo: v("ink-500", "#64748b"), icone: branco },
+    "orgao-federal": { fundo: roxo, icone: branco },
+    "orgao-am": escuro
+      ? { fundo: v("accent-900", "#4c1d95"), icone: v("accent-300", "#c4b5fd"), borda: roxo }
+      : { fundo: v("accent-100", "#ede9fe"), icone: v("accent-700", "#6d28d9"), borda: roxo },
+    sancao: { fundo: perigo, icone: branco },
+    beneficio: escuro
+      ? { fundo: v("primary-900", "#1e3a8a"), icone: v("primary-200", "#bfdbfe"), borda: v("primary-500", "#3b82f6") }
+      : { fundo: v("primary-100", "#dbeafe"), icone: v("primary-700", "#1d4ed8"), borda: v("primary-500", "#3b82f6") },
+    registro: escuro
+      ? { fundo: v("ink-800", "#1e293b"), icone: v("ink-300", "#cbd5e1"), borda: v("ink-500", "#64748b") }
+      : { fundo: v("ink-100", "#f1f5f9"), icone: v("ink-600", "#475569"), borda: v("ink-400", "#94a3b8") },
+    parlamentar: escuro ? { fundo: v("ink-200", "#e2e8f0"), icone: v("ink-900", "#0f172a") } : { fundo: v("ink-800", "#1e293b"), icone: branco },
+    emenda: { fundo: emenda, icone: branco },
+    cargo: { fundo: atencao, icone: branco },
+  };
   return {
+    tipos,
     texto: escuro ? v("ink-200", "#e2e8f0") : v("ink-700", "#334155"),
-    fundo: escuro ? v("ink-900", "#0f172a") : "#ffffff",
-    empresa: v("primary-600", "#2563eb"),
-    pessoa: escuro ? v("ink-400", "#94a3b8") : v("ink-500", "#64748b"),
-    orgaoFederal: v("accent-600", "#7c3aed"),
-    orgaoAm: escuro ? v("accent-900", "#4c1d95") : v("accent-100", "#ede9fe"),
-    beneficio: v("primary-300", "#93c5fd"),
-    registro: escuro ? v("ink-500", "#64748b") : v("ink-400", "#94a3b8"),
-    parlamentar: escuro ? v("ink-200", "#e2e8f0") : v("ink-800", "#1e293b"),
-    emenda: v("success-600", "#059669"),
+    fundo: escuro ? v("ink-900", "#0f172a") : branco,
+    empresa,
+    emenda,
+    perigo,
+    atencao,
     receber: v("primary-400", "#60a5fa"),
-    perigo: v("danger-600", "#dc2626"),
-    atencao: v("warning-600", "#d97706"),
     linha: escuro ? v("ink-600", "#475569") : v("ink-300", "#cbd5e1"),
     linhaSancao: escuro ? v("danger-900", "#7f1d1d") : v("danger-200", "#fecaca"),
     foco: v("primary-500", "#3b82f6"),
   };
 }
 
-function estilos(c: ReturnType<typeof cores>): StylesheetJson {
+/** SVG de cada ícone, lido dos ícones do lucide que a tela desenha escondidos (o traço vem em `currentColor`). */
+type Icones = Partial<Record<TipoNo, string>>;
+
+function lerIcones(raiz: HTMLElement | null): Icones {
+  const icones: Icones = {};
+  raiz?.querySelectorAll<SVGSVGElement>("svg[data-tipo]").forEach((svg) => {
+    icones[svg.dataset.tipo as TipoNo] = svg.outerHTML;
+  });
+  return icones;
+}
+
+/** O ícone pintado na cor pedida, como imagem pro canvas. */
+function imagem(svg: string | undefined, cor: string): string {
+  if (!svg) return "none";
+  // Tamanho natural de 96px: com zoom o ícone continua nítido.
+  const pintado = svg
+    .replace(/currentColor/g, cor)
+    .replace('width="24"', 'width="96"')
+    .replace('height="24"', 'height="96"');
+  return `data:image/svg+xml;utf8,${encodeURIComponent(pintado)}`;
+}
+
+const TAMANHO: Record<TipoNo, number> = {
+  empresa: 34,
+  pessoa: 28,
+  "orgao-federal": 32,
+  "orgao-am": 32,
+  sancao: 26,
+  beneficio: 28,
+  registro: 28,
+  parlamentar: 32,
+  emenda: 30,
+  cargo: 26,
+};
+
+function estilos(c: ReturnType<typeof cores>, icones: Icones): StylesheetJson {
   return [
     {
       selector: "node",
@@ -171,30 +262,39 @@ function estilos(c: ReturnType<typeof cores>): StylesheetJson {
         "text-background-opacity": 0.85,
         "text-background-padding": "2px",
         "text-background-shape": "roundrectangle",
-        width: 22,
-        height: 22,
+        shape: "ellipse",
+        "background-width": "56%",
+        "background-height": "56%",
         "border-width": 0,
       },
     },
-    { selector: 'node[tipo = "empresa"]', style: { shape: "round-rectangle", "background-color": c.empresa, width: 30, height: 30 } },
-    { selector: 'node[tipo = "empresa"][?expandida]', style: { width: 40, height: 40, "font-weight": 600 } },
+    // O tipo do ponto está no ícone e na cor; a forma é sempre um círculo.
+    ...TIPOS.map((tipo) => {
+      const visual = c.tipos[tipo];
+      return {
+        selector: `node[tipo = "${tipo}"]`,
+        style: {
+          "background-color": visual.fundo,
+          "background-image": imagem(icones[tipo], visual.icone),
+          width: TAMANHO[tipo],
+          height: TAMANHO[tipo],
+          "border-width": visual.borda ? 2 : 0,
+          "border-color": visual.borda ?? visual.fundo,
+        },
+      };
+    }),
+    { selector: 'node[tipo = "empresa"][?expandida]', style: { width: 44, height: 44, "font-weight": 600 } },
     // Empresa só citada (sócia de outra, ou quem recebeu uma emenda), ainda não aberta: contorno tracejado.
     {
       selector: 'node[tipo = "empresa"][!expandida]',
-      style: { "background-color": c.fundo, "border-width": 2, "border-style": "dashed", "border-color": c.empresa },
+      style: {
+        "background-color": c.fundo,
+        "background-image": imagem(icones.empresa, c.empresa),
+        "border-width": 2,
+        "border-style": "dashed",
+        "border-color": c.empresa,
+      },
     },
-    { selector: 'node[tipo = "pessoa"]', style: { shape: "ellipse", "background-color": c.pessoa } },
-    { selector: 'node[tipo = "orgao-federal"]', style: { shape: "round-hexagon", "background-color": c.orgaoFederal, width: 26, height: 26 } },
-    {
-      selector: 'node[tipo = "orgao-am"]',
-      style: { shape: "round-diamond", "background-color": c.orgaoAm, "border-width": 2, "border-color": c.orgaoFederal, width: 26, height: 26 },
-    },
-    { selector: 'node[tipo = "sancao"]', style: { shape: "round-octagon", "background-color": c.perigo, width: 20, height: 20 } },
-    { selector: 'node[tipo = "beneficio"]', style: { shape: "round-tag", "background-color": c.beneficio } },
-    { selector: 'node[tipo = "registro"]', style: { shape: "barrel", "background-color": c.registro } },
-    { selector: 'node[tipo = "parlamentar"]', style: { shape: "round-pentagon", "background-color": c.parlamentar, width: 30, height: 30 } },
-    { selector: 'node[tipo = "emenda"]', style: { shape: "rhomboid", "background-color": c.emenda, width: 32, height: 22 } },
-    { selector: 'node[tipo = "cargo"]', style: { shape: "star", "background-color": c.atencao, width: 24, height: 24 } },
     { selector: 'node[alerta = "perigo"]', style: { "border-width": 4, "border-color": c.perigo, "border-style": "solid" } },
     { selector: 'node[alerta = "atencao"]', style: { "border-width": 4, "border-color": c.atencao, "border-style": "solid" } },
     { selector: "node:selected", style: { "overlay-color": c.foco, "overlay-opacity": 0.2, "overlay-padding": 6 } },
@@ -236,25 +336,44 @@ const LAYOUT: CoseLayoutOptions = {
 
 // ---------------------------------------------------------------------------
 
-function Legenda() {
-  const itens: [string, string][] = [
-    ["Empresa", "h-3 w-3 rounded-sm bg-primary-600"],
-    ["Empresa ainda não aberta", "h-3 w-3 rounded-sm border-2 border-dashed border-primary-600"],
-    ["Pessoa", "h-3 w-3 rounded-full bg-ink-500 dark:bg-ink-400"],
-    ["Órgão federal", "h-3 w-3 rotate-45 rounded-sm bg-accent-600"],
-    ["Órgão do Amazonas", "h-3 w-3 rotate-45 rounded-sm border-2 border-accent-600 bg-accent-100 dark:bg-accent-900"],
-    ["Sanção", "h-3 w-3 rounded-full bg-danger-600"],
-    ["Benefício fiscal", "h-3 w-3 rounded-sm bg-primary-300"],
-    ["SUFRAMA", "h-3 w-3 rounded bg-ink-400 dark:bg-ink-500"],
-    ["Autor de emenda", "h-3 w-3 rounded-sm bg-ink-800 dark:bg-ink-200"],
-    ["Emenda", "h-3 w-3 -skew-x-12 bg-success-600"],
-    ["Cargo público (PEP)", "h-3 w-3 rotate-45 bg-warning-600"],
-  ];
+/** O círculo com ícone da legenda: as mesmas cores que `cores()` dá ao mapa. */
+function Marcador({ tipo, classe }: { tipo: TipoNo; classe: string }) {
+  const Icone = ICONE_TIPO[tipo];
   return (
-    <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-ink-600 dark:text-ink-300">
-      {itens.map(([rotulo, classe]) => (
+    <span className={cn("inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full", classe)} aria-hidden>
+      <Icone className="h-3 w-3" />
+    </span>
+  );
+}
+
+const LEGENDA: [string, TipoNo, string][] = [
+  ["Empresa", "empresa", "bg-primary-600 text-white"],
+  ["Empresa ainda não aberta", "empresa", "border-2 border-dashed border-primary-600 bg-white text-primary-600 dark:bg-ink-900"],
+  ["Pessoa", "pessoa", "bg-ink-500 text-white"],
+  ["Órgão federal", "orgao-federal", "bg-accent-600 text-white"],
+  [
+    "Órgão do Amazonas",
+    "orgao-am",
+    "border-2 border-accent-600 bg-accent-100 text-accent-700 dark:bg-accent-900 dark:text-accent-300",
+  ],
+  ["Sanção", "sancao", "bg-danger-600 text-white"],
+  [
+    "Benefício fiscal",
+    "beneficio",
+    "border-2 border-primary-500 bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-200",
+  ],
+  ["SUFRAMA", "registro", "border-2 border-ink-400 bg-ink-100 text-ink-600 dark:border-ink-500 dark:bg-ink-800 dark:text-ink-300"],
+  ["Autor de emenda", "parlamentar", "bg-ink-800 text-white dark:bg-ink-200 dark:text-ink-900"],
+  ["Emenda", "emenda", "bg-success-600 text-white"],
+  ["Cargo público (PEP)", "cargo", "bg-warning-600 text-white"],
+];
+
+function Legenda() {
+  return (
+    <ul className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-ink-600 dark:text-ink-300">
+      {LEGENDA.map(([rotulo, tipo, classe]) => (
         <li key={rotulo} className="inline-flex items-center gap-1.5">
-          <span className={cn("inline-block shrink-0", classe)} aria-hidden />
+          <Marcador tipo={tipo} classe={classe} />
           {rotulo}
         </li>
       ))}
@@ -263,7 +382,7 @@ function Legenda() {
         Empenho a receber
       </li>
       <li className="inline-flex items-center gap-1.5">
-        <span className="inline-block h-3 w-3 rounded-sm border-2 border-danger-600 bg-primary-600" aria-hidden />
+        <Marcador tipo="empresa" classe="border-2 border-danger-600 bg-primary-600 text-white" />
         Contorno vermelho: sanção · âmbar: atenção (inativa, PEP)
       </li>
     </ul>
@@ -516,6 +635,8 @@ export function SinapseClient() {
   const searchParams = useSearchParams();
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const moldesRef = useRef<HTMLDivElement>(null);
+  const iconesRef = useRef<Icones>({});
   const cyRef = useRef<Core | null>(null);
   const layoutTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const iniciais = useRef({ cnpjs: listaDaUrl(searchParams.get("cnpj")), emendas: listaDaUrl(searchParams.get("emenda")) });
@@ -548,9 +669,10 @@ export function SinapseClient() {
     (async () => {
       const { default: cytoscape } = await import("cytoscape");
       if (cancelado || !containerRef.current) return;
+      iconesRef.current = lerIcones(moldesRef.current);
       cy = cytoscape({
         container: containerRef.current,
-        style: estilos(cores(ehEscuro())),
+        style: estilos(cores(ehEscuro()), iconesRef.current),
         minZoom: 0.2,
         maxZoom: 3,
         boxSelectionEnabled: false,
@@ -564,7 +686,7 @@ export function SinapseClient() {
     })();
 
     // O tema troca pela classe .dark no <html>: redesenha com as cores do novo tema.
-    const observador = new MutationObserver(() => cyRef.current?.style(estilos(cores(ehEscuro()))));
+    const observador = new MutationObserver(() => cyRef.current?.style(estilos(cores(ehEscuro()), iconesRef.current)));
     observador.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
 
     // O canvas não acompanha sozinho a caixa (celular girando, painel abrindo): ajusta e reenquadra.
@@ -908,7 +1030,7 @@ export function SinapseClient() {
             placeholder={modo === "cnpj" ? "00.000.000/0000-00" : "Ex.: 202471040014"}
             inputMode="numeric"
             leftIcon={
-              modo === "cnpj" ? <Building2 className="h-4 w-4" aria-hidden /> : <Landmark className="h-4 w-4" aria-hidden />
+              modo === "cnpj" ? <Building2 className="h-4 w-4" aria-hidden /> : <ScrollText className="h-4 w-4" aria-hidden />
             }
             value={valor}
             maxLength={modo === "cnpj" ? 18 : 12}
@@ -1018,6 +1140,14 @@ export function SinapseClient() {
           {abertas.length > 0 && ` Empresas abertas: ${abertas.map((c) => formatarCnpj(c)).join(", ")}.`}
           {emendas.length > 0 && ` Emendas: ${emendas.join(", ")}.`}
         </p>
+      </div>
+
+      {/* Moldes dos ícones do mapa: o Cytoscape desenha em canvas, então copia o SVG daqui e usa como imagem. */}
+      <div ref={moldesRef} hidden aria-hidden>
+        {TIPOS.map((tipo) => {
+          const Icone = ICONE_TIPO[tipo];
+          return <Icone key={tipo} data-tipo={tipo} />;
+        })}
       </div>
     </div>
   );

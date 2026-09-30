@@ -42,7 +42,7 @@ import type { NomeTecnico, ResultadoNomesTecnicos } from "@/types/nome-tecnico";
 const TOKEN_URL = "https://acesso.prd.apps.anvisa.gov.br/auth/realms/externo/protocol/openid-connect/token";
 const BASE_URL = "https://api-gateway.prd.apps.anvisa.gov.br/consultas-externas-api/api/v1";
 const TIMEOUT_MS = 10000;
-const USER_AGENT = "RadarLicitacoes/1.0";
+const USER_AGENT = "QBuscado/1.0";
 
 // Folga pra não usar um token que expiraria no meio da requisição.
 const MARGEM_EXPIRACAO_MS = 60_000;

@@ -18,7 +18,7 @@ export interface StatusServicos {
 }
 
 const TIMEOUT_MS = 6000;
-const USER_AGENT = "RadarLicitacoes/1.0";
+const USER_AGENT = "QBuscado/1.0";
 
 /**
  * O PNCP costuma resetar a conexão (ECONNRESET) de forma esporádica mesmo
@@ -101,7 +101,7 @@ async function statusBrasilApi(): Promise<NivelServico> {
  * vercel.json). Chamar a CGU daqui dava "indisponível" com a consulta
  * funcionando; em vez disso, testamos a própria rota de sanções, que é o
  * caminho que o usuário usa de verdade. `origem` é o endereço deste app
- * (ex.: https://radar-pncp-licitacoes.vercel.app).
+ * (ex.: https://qbuscado.com).
  */
 async function statusPortalTransparencia(origem: string): Promise<NivelServico> {
   if (!process.env.PORTAL_TRANSPARENCIA_API_KEY) return "nao_configurado";

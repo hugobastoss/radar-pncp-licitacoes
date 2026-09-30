@@ -177,7 +177,7 @@ async function consultarFonte(
     signal: AbortSignal.any(sinaisAbortar),
     // A BrasilAPI bloqueia (403) requisições sem User-Agent — o fetch do
     // Node, ao contrário do navegador, não manda um por padrão.
-    headers: { Accept: "application/json", "User-Agent": "RadarLicitacoes/1.0" },
+    headers: { Accept: "application/json", "User-Agent": "QBuscado/1.0" },
     next: { revalidate: CACHE_SEGUNDOS },
   });
 

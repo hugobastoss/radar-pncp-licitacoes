@@ -2,18 +2,18 @@ import type { Metadata } from "next";
 import { PaginaLegal, SecaoLegal } from "@/components/PaginaLegal";
 
 export const metadata: Metadata = {
-  title: "Política de Privacidade | Radar Licitações",
-  description: "Como o Radar Licitações trata dados ao pesquisar licitações públicas do PNCP.",
+  title: "Política de Privacidade | QBuscado",
+  description: "Como o QBuscado trata dados ao pesquisar licitações públicas do PNCP.",
 };
 
-const ATUALIZADO_EM = "22 de setembro de 2026";
+const ATUALIZADO_EM = "30 de setembro de 2026";
 
 export default function PoliticaDePrivacidadePage() {
   return (
     <PaginaLegal titulo="Política de Privacidade" atualizadoEm={ATUALIZADO_EM}>
       <SecaoLegal titulo="1. Resumo">
         <p>
-          O Radar Licitações não exige cadastro, login ou qualquer dado pessoal para ser usado. Esta página
+          O QBuscado não exige cadastro, login ou qualquer dado pessoal para ser usado. Esta página
           explica, de forma direta, o pouco que precisamos saber para o site funcionar.
         </p>
       </SecaoLegal>
@@ -26,18 +26,21 @@ export default function PoliticaDePrivacidadePage() {
         </p>
       </SecaoLegal>
 
-      <SecaoLegal titulo="3. Preferência de tema (armazenamento local)">
+      <SecaoLegal titulo="3. Armazenamento local no seu navegador">
         <p>
-          A escolha entre modo claro e escuro é salva apenas no armazenamento local do seu navegador
-          (localStorage), no seu próprio dispositivo. Essa informação nunca é enviada aos nossos servidores e
-          pode ser apagada a qualquer momento limpando os dados do site no navegador.
+          Três informações podem ficar guardadas no armazenamento local do seu navegador (localStorage), só no
+          seu dispositivo: a escolha entre modo claro e escuro, se o menu lateral está recolhido e as últimas
+          5 empresas consultadas na tela de CNPJ (CNPJ e nome da empresa), para você voltar a elas pelo menu.
+          CPFs consultados nunca são guardados. Essas informações nunca são enviadas aos nossos servidores. A
+          lista de empresas pode ser apagada pelo botão &quot;Limpar&quot; no menu, e tudo pode ser apagado a
+          qualquer momento limpando os dados do site no navegador.
         </p>
       </SecaoLegal>
 
       <SecaoLegal titulo="4. Cookies">
         <p>
-          Não utilizamos cookies de rastreamento, publicidade ou análise de comportamento. O único dado
-          guardado no seu navegador é a preferência de tema descrita acima.
+          Não utilizamos cookies de rastreamento, publicidade ou análise de comportamento. Tudo o que fica
+          guardado no seu navegador é o que está descrito acima.
         </p>
       </SecaoLegal>
 

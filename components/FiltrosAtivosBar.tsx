@@ -75,7 +75,7 @@ export function FiltrosAtivosBar({ filtros, onLimpar }: FiltrosAtivosBarProps) {
   if (ativos.length === 0) return null;
 
   return (
-    <div className="sticky top-16 z-20 flex h-12 items-center gap-2 overflow-x-auto border-b border-ink-200 bg-white px-4 scrollbar-fina dark:border-ink-700 dark:bg-ink-900 sm:px-6">
+    <div className="sticky top-14 z-20 flex h-12 items-center gap-2 overflow-x-auto border-b border-ink-200 bg-white px-4 scrollbar-fina dark:border-ink-700 dark:bg-ink-900 sm:px-6">
       <Button
         type="button"
         variant="ghost"

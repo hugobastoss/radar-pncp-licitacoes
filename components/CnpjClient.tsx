@@ -22,6 +22,7 @@ import { buscarDadosGovernoFederal } from "@/lib/api-governo-federal";
 import { buscarSancoes } from "@/lib/api-sancoes";
 import { buscarCertidaoTcu } from "@/lib/api-tcu";
 import { validarCnpj } from "@/lib/cnpj";
+import { registrarEmpresaRecente } from "@/lib/empresas-recentes";
 import {
   formatarCep,
   formatarCnpj,
@@ -409,6 +410,10 @@ export function CnpjClient() {
   const [certidaoTcu, setCertidaoTcu] = useState<EstadoCertidaoTcu>({ status: "carregando" });
   const [mensagemErro, setMensagemErro] = useState<string | undefined>();
   const abortRef = useRef<AbortController | null>(null);
+  // Último CNPJ (14 dígitos) consultado, pra distinguir a URL que a própria tela
+  // atualizou de um link para outra empresa com a tela já aberta.
+  const ultimoConsultadoRef = useRef<string | null>(null);
+  const cnpjDaUrl = searchParams.get("cnpj");
 
   const executarConsulta = useCallback(async (cnpj: string) => {
     abortRef.current?.abort();
@@ -462,6 +467,11 @@ export function CnpjClient() {
     if (resultado.status === "sucesso") {
       setEmpresa(resultado.empresa);
       setStatus("sucesso");
+      // Pro menu lateral (Consultas recentes). Fica só no navegador; CPF nunca vai pra lá.
+      registrarEmpresaRecente({
+        cnpj: resultado.empresa.cnpj,
+        nome: resultado.empresa.nomeFantasia || resultado.empresa.razaoSocial,
+      });
 
       // Depois do cadastro, não em paralelo: é o cadastro (UF e e-mail) que
       // diz se vale gastar uma consulta do limite apertado da CNPJá.
@@ -499,8 +509,21 @@ export function CnpjClient() {
 
     // Mantém a URL compartilhável com o último CNPJ válido consultado.
     const validacao = validarCnpj(consulta.cnpj);
-    if (validacao.valido) router.replace(`${pathname}?cnpj=${validacao.cnpj}`, { scroll: false });
+    if (validacao.valido) {
+      ultimoConsultadoRef.current = validacao.cnpj;
+      router.replace(`${pathname}?cnpj=${validacao.cnpj}`, { scroll: false });
+    }
   }, [consulta, executarConsulta, pathname, router]);
+
+  // Um link para outra empresa com esta tela aberta (as Consultas recentes do
+  // menu lateral) muda só a URL, sem montar a tela de novo: consulta daqui.
+  useEffect(() => {
+    if (!cnpjDaUrl) return;
+    const validacao = validarCnpj(cnpjDaUrl);
+    if (!validacao.valido || validacao.cnpj === ultimoConsultadoRef.current) return;
+    setValor(mascararCnpj(validacao.cnpj));
+    setConsulta({ cnpj: validacao.cnpj });
+  }, [cnpjDaUrl]);
 
   useEffect(() => {
     return () => {

@@ -106,7 +106,7 @@ export function StatusServicos({ variante = "compacta" }: StatusServicosProps) {
         onClick={() => setAberto((v) => !v)}
         aria-expanded={aberto}
         aria-label="Status dos serviços"
-        title="Status dos serviços externos usados pelo Radar Licitações."
+        title="Status dos serviços externos usados pelo QBuscado."
         className="inline-flex items-center gap-1.5 rounded-full border border-ink-200 px-2.5 py-1 text-xs font-medium text-ink-500 hover:bg-ink-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:border-ink-700 dark:text-ink-400 dark:hover:bg-ink-800"
       >
         <span className={cn("h-1.5 w-1.5 rounded-full", COR_PONTO[agregado])} aria-hidden />

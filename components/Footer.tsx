@@ -32,7 +32,7 @@ export function Footer() {
         </nav>
 
         <p className="mt-6 max-w-2xl text-xs leading-relaxed text-ink-500 dark:text-ink-400">
-          O Radar Licitações é uma plataforma independente de consulta e análise de dados públicos. Não
+          O QBuscado é uma plataforma independente de consulta e análise de dados públicos. Não
           possui vínculo institucional com o Portal Nacional de Contratações Públicas ou com órgãos do
           Governo Federal. Os dados apresentados são provenientes do PNCP e estão sujeitos às informações
           disponibilizadas pelos órgãos responsáveis. Tratamos dados
@@ -48,7 +48,7 @@ export function Footer() {
 
         <div className="mt-6 flex flex-col gap-2 border-t border-ink-100 pt-4 text-xs text-ink-400 dark:border-ink-800 dark:text-ink-500 sm:flex-row sm:items-center sm:justify-between">
           <p>
-            © {ANO_ATUAL} Radar Licitações. Dados públicos fornecidos pelo Portal Nacional de Contratações
+            © {ANO_ATUAL} QBuscado. Dados públicos fornecidos pelo Portal Nacional de Contratações
             Públicas (PNCP).
           </p>
           <p>

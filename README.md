@@ -1,10 +1,10 @@
-# Radar Licitações
+# QBuscado
 
-Pesquisa rápida de licitações e contratações públicas brasileiras, com dados consultados em tempo real no [PNCP](https://pncp.gov.br) (Portal Nacional de Contratações Públicas).
+Consulta inteligente de dados públicos brasileiros — licitações, empresas, sanções, emendas parlamentares, convênios e mais —, com dados consultados em tempo real nas fontes oficiais: [PNCP](https://pncp.gov.br) (Portal Nacional de Contratações Públicas), Receita Federal, Portal da Transparência, TCU e outras.
 
-**Demo:** [radar-pncp-licitacoes.vercel.app](https://radar-pncp-licitacoes.vercel.app/)
+**Site:** [qbuscado.com](https://qbuscado.com/)
 
-> Projeto independente, sem vínculo oficial com o governo. Veja o [aviso legal](https://radar-pncp-licitacoes.vercel.app/termos-de-uso) para mais detalhes.
+> Projeto independente, sem vínculo oficial com o governo. Veja o [aviso legal](https://qbuscado.com/termos-de-uso) para mais detalhes.
 
 ## Funcionalidades
 
@@ -23,6 +23,7 @@ Pesquisa rápida de licitações e contratações públicas brasileiras, com dad
 - Consulta de CEP e NCM
 - Indicador de status das fontes de dados no cabeçalho
 - Modo claro/escuro com preferência salva no navegador
+- Menu lateral com as ferramentas em grupos (recolhível no computador, em gaveta no celular) e as últimas empresas consultadas, guardadas só no navegador
 
 ## APIs utilizadas
 

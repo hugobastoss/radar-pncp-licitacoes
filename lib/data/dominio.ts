@@ -1,5 +1,5 @@
 /**
- * Vocabulário de domínio do Radar Licitações.
+ * Vocabulário de domínio do QBuscado.
  *
  * Estas listas cobrem os valores mais comuns hoje. A API do PNCP pode
  * devolver modalidades ou portais fora desta lista — nesse caso a interface

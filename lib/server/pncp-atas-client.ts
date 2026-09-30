@@ -24,7 +24,7 @@ const BASE_URL = "https://pncp.gov.br/api/search/";
 const TIMEOUT_MS = 10000;
 const TAMANHO_PAGINA = 10;
 const TENTATIVAS = 4;
-const USER_AGENT = "Mozilla/5.0 (compatible; RadarLicitacoes/1.0)";
+const USER_AGENT = "Mozilla/5.0 (compatible; QBuscado/1.0)";
 
 interface AtaBruta {
   numero_controle_pncp?: string;
