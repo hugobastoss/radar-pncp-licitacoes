@@ -136,7 +136,7 @@ export function Header() {
               <Menu className="h-5 w-5" aria-hidden />
             </button>
             <Link href="/" className="flex min-w-0 items-center gap-3 rounded-lg">
-              <Image src="/logo.png" alt="" width={32} height={32} className="h-8 w-8 shrink-0" priority />
+              <Image src="/icone_logo.png" alt="" width={32} height={32} className="h-8 w-8 shrink-0" priority />
               <div className="min-w-0 leading-tight">
                 <p className="truncate text-base font-semibold tracking-tight text-ink-900 dark:text-ink-50">
                   QBuscado

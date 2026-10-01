@@ -18,22 +18,35 @@
 /*
  * Design tokens do QBuscado.
  *
- * Paleta pensada para transmitir tecnologia, confiabilidade e organização:
- * fundo claro, cards brancos, azul como cor de marca, verde para sinais
- * positivos e âmbar/vermelho reservados a alertas e erros. Definidos como
- * variáveis CSS e mapeados no bloco @theme para virarem utilitários do
- * Tailwind (ex.: bg-primary-600, text-ink-700, bg-success-50). Os tons 300 e
- * 900 de success/warning/danger/accent existem só para o modo escuro
- * (texto/fundo com contraste adequado sobre superfícies escuras).
+ * A paleta sai do ícone (public/icone_logo.png): o azul do corpo da lupa é a
+ * cor de marca, o degradê azul → índigo marca as ações primárias, o roxo da
+ * parte de baixo é o acento e o navy do fundo original é o fundo do modo
+ * escuro. Verde para sinais positivos e âmbar/vermelho reservados a alertas e
+ * erros. Definidos como variáveis CSS e mapeados no bloco @theme para virarem
+ * utilitários do Tailwind (ex.: bg-primary-600, text-ink-700, bg-success-50).
+ * Os tons 300 e 900 de success/warning/danger/accent existem só para o modo
+ * escuro (texto/fundo com contraste adequado sobre superfícies escuras).
  */
 @theme {
-  /* Azul — cor de marca / ações primárias */
+  /* Marca — as cores do ícone, na ordem do degradê do anel (ciano → roxo) */
+  --color-brand-cyan: #22d3ee; /* brilhos e áreas iluminadas */
+  --color-brand-sky: #38bdf8; /* começo do cabo */
+  --color-brand-blue: #2196f3; /* corpo do ícone */
+  --color-brand-blue-deep: #2563eb; /* profundidade e transições */
+  --color-brand-violet: #6366f1; /* transição azul → roxo */
+  --color-brand-indigo: #4f46e5; /* parte de baixo e cabo */
+  --color-brand-indigo-deep: #3730a3; /* sombras e volume */
+  --color-brand-purple: #7c3aed; /* fim do degradê violeta */
+  --color-brand-purple-deep: #6d28d9; /* sombras e acentos */
+  --color-brand-night: #080d2a; /* fundo da versão original */
+
+  /* Azul — cor de marca / ações primárias (500 e 600 são o azul do ícone) */
   --color-primary-50: #eff6ff;
   --color-primary-100: #dbeafe;
   --color-primary-200: #bfdbfe;
   --color-primary-300: #93c5fd;
   --color-primary-400: #60a5fa;
-  --color-primary-500: #3b82f6;
+  --color-primary-500: #2196f3;
   --color-primary-600: #2563eb;
   --color-primary-700: #1d4ed8;
   --color-primary-800: #1e40af;
@@ -68,7 +81,7 @@
   --color-danger-700: #b91c1c;
   --color-danger-900: #7f1d1d;
 
-  /* Roxo — usado apenas para diferenciar badges de portal */
+  /* Roxo — o da parte de baixo do ícone; diferencia badges de portal e os órgãos no Sinapse */
   --color-accent-50: #f5f3ff;
   --color-accent-100: #ede9fe;
   --color-accent-300: #c4b5fd;
@@ -88,7 +101,7 @@
   --color-ink-700: #334155;
   --color-ink-800: #1e293b;
   --color-ink-900: #0f172a;
-  --color-ink-950: #020617;
+  --color-ink-950: #080d2a; /* o navy do fundo do ícone: fundo do modo escuro */
 
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;

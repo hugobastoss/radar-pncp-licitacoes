@@ -18,8 +18,9 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const VARIANT_CLASSES: Record<Variant, string> = {
+  // O degradê da parte de baixo do ícone (azul → índigo); desabilitado, volta a cor lisa.
   primary:
-    "bg-primary-600 text-white hover:bg-primary-700 active:bg-primary-800 disabled:bg-ink-200 disabled:text-ink-400 dark:disabled:bg-ink-800 dark:disabled:text-ink-600",
+    "bg-primary-600 bg-linear-to-r from-primary-600 to-brand-indigo text-white hover:from-primary-700 hover:to-brand-indigo-deep active:from-primary-800 active:to-brand-indigo-deep disabled:bg-none disabled:bg-ink-200 disabled:text-ink-400 dark:disabled:bg-ink-800 dark:disabled:text-ink-600",
   secondary:
     "bg-white text-ink-700 border border-ink-200 hover:bg-ink-50 active:bg-ink-100 disabled:text-ink-300 disabled:bg-ink-50 dark:bg-ink-900 dark:text-ink-200 dark:border-ink-700 dark:hover:bg-ink-800 dark:active:bg-ink-700 dark:disabled:text-ink-600 dark:disabled:bg-ink-900",
   ghost:
