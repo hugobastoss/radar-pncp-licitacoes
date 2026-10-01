@@ -21,7 +21,7 @@ export function Footer() {
             Política de Privacidade
           </Link>
           <a
-            href="https://github.com/hugobastoss/radar-pncp-licitacoes"
+            href="https://github.com/hugobastoss/site-qbuscado"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 text-ink-600 hover:text-ink-900 dark:text-ink-300 dark:hover:text-ink-50"

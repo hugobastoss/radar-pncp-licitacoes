@@ -70,7 +70,7 @@ export default function TermosDeUsoPage() {
         <p>
           Dúvidas sobre estes termos podem ser enviadas por meio do repositório do projeto no{" "}
           <a
-            href="https://github.com/hugobastoss/radar-pncp-licitacoes"
+            href="https://github.com/hugobastoss/site-qbuscado"
             target="_blank"
             rel="noopener noreferrer"
             className="font-medium text-primary-600 hover:underline dark:text-primary-400"
