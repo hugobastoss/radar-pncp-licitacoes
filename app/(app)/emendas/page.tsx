@@ -5,7 +5,7 @@ import { FORMATO_CODIGO_EMENDA } from "@/lib/emendas";
 export const metadata: Metadata = {
   title: "Emendas Parlamentares | QBuscado",
   description:
-    "Quanto cada emenda parlamentar já empenhou, liquidou e pagou, e quem recebeu o dinheiro — no Portal da Transparência.",
+    "Quanto cada emenda parlamentar já empenhou, liquidou e pagou, e quem recebeu o dinheiro, no Portal da Transparência.",
 };
 
 /**

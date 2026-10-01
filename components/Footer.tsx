@@ -34,8 +34,9 @@ export function Footer() {
         <p className="mt-6 max-w-2xl text-xs leading-relaxed text-ink-500 dark:text-ink-400">
           O QBuscado é uma plataforma independente de consulta e análise de dados públicos. Não
           possui vínculo institucional com o Portal Nacional de Contratações Públicas ou com órgãos do
-          Governo Federal. Os dados apresentados são provenientes do PNCP e estão sujeitos às informações
-          disponibilizadas pelos órgãos responsáveis. Tratamos dados
+          Governo Federal. Os dados apresentados vêm de diversas fontes oficiais (PNCP, Receita Federal,
+          Portal da Transparência, TCU e outras) e estão sujeitos às informações disponibilizadas por
+          cada órgão responsável. Tratamos dados
           pessoais conforme a LGPD (Lei nº 13.709/2018), veja a{" "}
           <Link
             href="/politica-de-privacidade"
@@ -46,22 +47,8 @@ export function Footer() {
           .
         </p>
 
-        <div className="mt-6 flex flex-col gap-2 border-t border-ink-100 pt-4 text-xs text-ink-400 dark:border-ink-800 dark:text-ink-500 sm:flex-row sm:items-center sm:justify-between">
-          <p>
-            © {ANO_ATUAL} QBuscado. Dados públicos fornecidos pelo Portal Nacional de Contratações
-            Públicas (PNCP).
-          </p>
-          <p>
-            Fonte dos dados:{" "}
-            <a
-              href="https://pncp.gov.br"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium text-ink-500 hover:underline dark:text-ink-400"
-            >
-              PNCP
-            </a>
-          </p>
+        <div className="mt-6 border-t border-ink-100 pt-4 text-xs text-ink-400 dark:border-ink-800 dark:text-ink-500">
+          <p>© {ANO_ATUAL} QBuscado.</p>
         </div>
       </div>
     </footer>

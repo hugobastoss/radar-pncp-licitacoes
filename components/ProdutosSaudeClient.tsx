@@ -176,17 +176,9 @@ export function ProdutosSaudeClient() {
 
   return (
     <div className="flex flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-      <div className="border-b border-ink-200 pb-4 dark:border-ink-700">
-        <h1 className="text-base font-semibold text-ink-900 dark:text-ink-50">Consultar produtos para saúde</h1>
-        <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">
-          Verifique o registro de dispositivos médicos e materiais hospitalares na ANVISA — situação, fabricante,
-          modelos, códigos de barras (UDI) e certificados de boas práticas.
-        </p>
-      </div>
-
       <form
         onSubmit={pesquisar}
-        className="rounded-2xl border border-ink-200 bg-white p-5 shadow-card dark:border-ink-700 dark:bg-ink-900 sm:p-6"
+        className="rounded-[10px] border border-ink-200 bg-white p-5 shadow-card dark:border-ink-700 dark:bg-ink-900 sm:p-6"
       >
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
           <div className="flex-1">
@@ -264,7 +256,7 @@ export function ProdutosSaudeClient() {
 
       {mostrarLista && resultado.itens.length > 0 && (
         <div ref={resultadoRef} className="scroll-mt-20">
-          <div className="rounded-t-2xl border border-b-0 border-ink-200 bg-white p-4 dark:border-ink-700 dark:bg-ink-900 sm:p-5">
+          <div className="rounded-t-[10px] border border-b-0 border-ink-200 bg-white p-4 dark:border-ink-700 dark:bg-ink-900 sm:p-5">
             <p className="text-xs text-ink-500 dark:text-ink-400">
               {formatarQuantidade(resultado.total)} {resultado.total === 1 ? "registro encontrado" : "registros encontrados"}{" "}
               por {descreverBusca(resultado)}

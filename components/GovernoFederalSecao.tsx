@@ -249,9 +249,17 @@ function BeneficiosFiscaisBloco({ dados }: { dados: BeneficiosFiscais }) {
 }
 
 /** Seção da consulta de CNPJ com o que a empresa tem de relação com o governo federal. */
-export function GovernoFederalSecao({ estado, cnpj }: { estado: EstadoGovernoFederal; cnpj: string }) {
+export function GovernoFederalSecao({
+  estado,
+  cnpj,
+  className,
+}: {
+  estado: EstadoGovernoFederal;
+  cnpj: string;
+  className?: string;
+}) {
   return (
-    <div className="mt-5 border-t border-ink-100 pt-5 dark:border-ink-800">
+    <div className={className}>
       <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">
         <Landmark className="h-3.5 w-3.5" aria-hidden />
         Relação com o governo federal

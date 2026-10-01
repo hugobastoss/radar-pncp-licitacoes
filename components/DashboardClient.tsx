@@ -321,9 +321,9 @@ export function DashboardClient() {
 
       <FiltrosAtivosBar filtros={filtrosAplicados} onLimpar={limparFiltros} />
 
-      {/* A margem de rolagem deixa o topo da lista abaixo do cabeçalho (56 px) e, com
+      {/* A margem de rolagem deixa o topo da lista abaixo do cabeçalho (96 px) e, com
           filtros aplicados, também da barra de filtros congelada (+48 px). */}
-      <div ref={resultadoRef} className={cn(temFiltrosAtivos ? "scroll-mt-28" : "scroll-mt-16", "flex flex-col")}>
+      <div ref={resultadoRef} className={cn(temFiltrosAtivos ? "scroll-mt-38" : "scroll-mt-26", "flex flex-col")}>
         <div
           className={cn(
             // Sem `overflow-hidden` de propósito (mesmo motivo da paginação
@@ -335,7 +335,7 @@ export function DashboardClient() {
             // filho ficam sob responsabilidade do próprio filho (ver
             // LoadingState, o único caso real aqui).
             "border border-ink-200 bg-white shadow-card dark:border-ink-700 dark:bg-ink-900",
-            mostrandoPaginacao ? "rounded-t-2xl border-b-0" : "rounded-2xl",
+            mostrandoPaginacao ? "rounded-t-[10px] border-b-0" : "rounded-[10px]",
           )}
         >
           {!filtrosAplicados && <EstadoInicial />}

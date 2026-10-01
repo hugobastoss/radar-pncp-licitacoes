@@ -532,7 +532,7 @@ function ListaCruzamentos({
         "min-w-0 border border-ink-200 dark:border-ink-700",
         flutuante
           ? "rounded-xl bg-white/95 p-3 shadow-popover backdrop-blur dark:bg-ink-900/95"
-          : "rounded-2xl bg-white p-5 shadow-card dark:bg-ink-900",
+          : "rounded-[10px] bg-white p-5 shadow-card dark:bg-ink-900",
         className,
       )}
     >
@@ -1241,20 +1241,9 @@ export function SinapseClient() {
 
   return (
     <div className="flex flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-      <div className="border-b border-ink-200 pb-4 dark:border-ink-700">
-        <h1 className="flex items-center gap-2 text-base font-semibold text-ink-900 dark:text-ink-50">
-          Sinapse
-          <Badge tone="accent">Beta</Badge>
-        </h1>
-        <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">
-          Mapa de relações: empresas, sócios, órgãos, sanções, benefícios, emendas e o dinheiro entre eles num só desenho.
-          Adicione mais de uma empresa ou emenda para ver o que elas têm em comum.
-        </p>
-      </div>
-
       <form
         onSubmit={adicionar}
-        className="rounded-2xl border border-ink-200 bg-white p-5 shadow-card dark:border-ink-700 dark:bg-ink-900 sm:p-6"
+        className="rounded-[10px] border border-ink-200 bg-white p-5 shadow-card dark:border-ink-700 dark:bg-ink-900 sm:p-6"
       >
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-[12rem_minmax(0,1fr)_auto] sm:items-end">
           <Select
@@ -1319,7 +1308,7 @@ export function SinapseClient() {
             "min-w-0 overflow-hidden bg-white dark:bg-ink-900",
             telaCheia
               ? "fixed inset-0 z-50"
-              : "relative self-start rounded-2xl border border-ink-200 shadow-card dark:border-ink-700",
+              : "relative self-start rounded-[10px] border border-ink-200 shadow-card dark:border-ink-700",
           )}
         >
           <div
@@ -1387,7 +1376,7 @@ export function SinapseClient() {
               className={cn(
                 "absolute z-10 flex flex-col overflow-hidden rounded-lg border border-ink-200 bg-white shadow-card dark:border-ink-700 dark:bg-ink-900",
                 telaCheia && painelAberto ? "right-3 sm:right-[23.25rem]" : "right-3",
-                telaCheia ? "top-14" : "bottom-3",
+                telaCheia ? "top-24" : "bottom-3",
               )}
             >
               {(
@@ -1425,7 +1414,7 @@ export function SinapseClient() {
           )}
 
           {telaCheia && painelAberto && (
-            <aside className="scrollbar-fina absolute bottom-3 right-3 top-14 z-20 flex w-[calc(100%-1.5rem)] flex-col gap-5 overflow-y-auto rounded-xl border border-ink-200 bg-white/95 p-5 shadow-popover backdrop-blur dark:border-ink-700 dark:bg-ink-900/95 sm:w-[22rem]">
+            <aside className="scrollbar-fina absolute bottom-3 right-3 top-24 z-20 flex w-[calc(100%-1.5rem)] flex-col gap-5 overflow-y-auto rounded-xl border border-ink-200 bg-white/95 p-5 shadow-popover backdrop-blur dark:border-ink-700 dark:bg-ink-900/95 sm:w-[22rem]">
               {conteudoPainel}
             </aside>
           )}
@@ -1457,7 +1446,7 @@ export function SinapseClient() {
         </div>
 
         {painelAberto && !telaCheia && (
-          <aside className="relative flex min-w-0 flex-col gap-5 rounded-2xl border border-ink-200 bg-white p-5 shadow-card scrollbar-fina dark:border-ink-700 dark:bg-ink-900 lg:max-h-[600px] lg:overflow-y-auto">
+          <aside className="relative flex min-w-0 flex-col gap-5 rounded-[10px] border border-ink-200 bg-white p-5 shadow-card scrollbar-fina dark:border-ink-700 dark:bg-ink-900 lg:max-h-[600px] lg:overflow-y-auto">
             {conteudoPainel}
           </aside>
         )}

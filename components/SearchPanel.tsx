@@ -50,7 +50,7 @@ export function SearchPanel({
   return (
     <form
       onSubmit={aoSubmeter}
-      className="rounded-2xl border border-ink-200 bg-white p-5 shadow-card dark:border-ink-700 dark:bg-ink-900 sm:p-6"
+      className="rounded-[10px] border border-ink-200 bg-white p-5 shadow-card dark:border-ink-700 dark:bg-ink-900 sm:p-6"
       aria-label="Pesquisa rápida de licitações"
     >
       <div className="border-b border-ink-200 pb-4 dark:border-ink-700">

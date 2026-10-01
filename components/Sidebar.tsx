@@ -23,7 +23,7 @@ export function Sidebar() {
   return (
     <aside
       data-lateral
-      className="scrollbar-fina hidden w-60 shrink-0 self-start overflow-y-auto border-r border-ink-200 bg-white transition-[width] duration-200 dark:border-ink-700 dark:bg-ink-900 lg:sticky lg:top-14 lg:block lg:h-[calc(100dvh-3.5rem)] menu-recolhido:w-16"
+      className="scrollbar-fina hidden w-60 overflow-y-auto border-r border-ink-200 bg-white transition-[width] duration-200 dark:border-ink-700 dark:bg-ink-900 lg:fixed lg:top-24 lg:left-0 lg:z-30 lg:block lg:h-[calc(100dvh-6rem)] menu-recolhido:w-16"
     >
       <div className="flex justify-end px-2 pt-3 menu-recolhido:justify-center">
         <button

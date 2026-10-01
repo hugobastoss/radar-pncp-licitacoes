@@ -16,6 +16,14 @@
 @custom-variant menu-recolhido (&:where([data-menu="recolhido"] [data-lateral], [data-menu="recolhido"] [data-lateral] *));
 
 /*
+ * Mesmo estado, mas pro conteúdo ao lado do menu — que agora é fixed (saiu
+ * do fluxo do flex), então a margem reservada pra ele precisa encolher
+ * junto quando ele recolhe. Sem o escopo [data-lateral] do variant acima,
+ * porque esse elemento está fora do aside.
+ */
+@custom-variant menu-recolhido-fora (&:where([data-menu="recolhido"] *));
+
+/*
  * Design tokens do QBuscado.
  *
  * A paleta sai do ícone (public/icone_logo.png): o azul do corpo da lupa é a
@@ -103,7 +111,7 @@
   --color-ink-900: #0f172a;
   --color-ink-950: #080d2a; /* o navy do fundo do ícone: fundo do modo escuro */
 
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
   /* Sombras suaves — evitar contraste forte, comum a SaaS profissionais */

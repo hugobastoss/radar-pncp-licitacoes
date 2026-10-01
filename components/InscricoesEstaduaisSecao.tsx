@@ -16,7 +16,7 @@ type Estado = { status: "nao_consultado" } | { status: "carregando" } | Resultad
  *
  * Use com `key={cnpj}` pra voltar ao botão quando a empresa muda.
  */
-export function InscricoesEstaduaisSecao({ cnpj }: { cnpj: string }) {
+export function InscricoesEstaduaisSecao({ cnpj, className }: { cnpj: string; className?: string }) {
   const [estado, setEstado] = useState<Estado>({ status: "nao_consultado" });
 
   async function consultar() {
@@ -27,7 +27,7 @@ export function InscricoesEstaduaisSecao({ cnpj }: { cnpj: string }) {
   const podeConsultar = estado.status !== "sucesso" && estado.status !== "carregando";
 
   return (
-    <div className="mt-5 border-t border-ink-100 pt-5 dark:border-ink-800">
+    <div className={className}>
       <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">
         <FileBadge className="h-3.5 w-3.5" aria-hidden />
         Inscrições estaduais

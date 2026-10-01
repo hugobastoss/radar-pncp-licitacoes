@@ -3,12 +3,15 @@
 import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { ChevronDown, ChevronUp, CircleHelp, Clock, Menu } from "lucide-react";
 import { useClickOutside } from "@/lib/hooks/useClickOutside";
 import { MenuFerramentas } from "@/components/MenuFerramentas";
+import { Badge } from "@/components/ui/Badge";
 import { Drawer } from "@/components/ui/Drawer";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { StatusServicos } from "@/components/ui/StatusServicos";
+import { CABECALHOS } from "@/lib/cabecalhos";
 import { formatarDataHoraCurta } from "@/lib/formatters";
 import { inscreverRelogio, lerAgora, lerAgoraNoServidor } from "@/lib/relogio";
 
@@ -113,17 +116,22 @@ export function Header() {
   const [gavetaAberta, setGavetaAberta] = useState(false);
   // Estável entre renderizações: o Drawer refaz o efeito de foco quando `onFechar` muda.
   const fecharGaveta = useCallback(() => setGavetaAberta(false), []);
+  const pathname = usePathname();
+  // Sem entrada pra rota atual (a "/", a tela de pouso, e qualquer rota nova
+  // ainda não cadastrada): mostra o nome do site em vez do título de uma ferramenta.
+  // O ícone, porém, é sempre a logo — só o título e a descrição mudam por tela.
+  const pagina = CABECALHOS[pathname];
 
   return (
     <>
       <header className="sticky top-0 z-40 border-b border-ink-200 bg-white/95 backdrop-blur dark:border-ink-700 dark:bg-ink-900/95">
-        {/* 56 px (h-14). Quem gruda embaixo dela conta com essa altura: o menu lateral
+        {/* 96 px (h-24). Quem gruda embaixo dela conta com essa altura: o menu lateral
             (Sidebar), a barra de filtros (FiltrosAtivosBar) e o cabeçalho da tabela (ResultsTable). */}
-        <div className="flex h-14 items-center justify-between gap-3 px-4 sm:px-6">
-          <div className="flex min-w-0 items-center gap-1">
+        <div className="flex h-24 items-center justify-between gap-3 px-4 sm:px-6">
+          <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
-              className="-ml-2 rounded-lg p-2 text-ink-600 hover:bg-ink-100 dark:text-ink-300 dark:hover:bg-ink-800 lg:hidden"
+              className="-ml-2 shrink-0 rounded-lg p-2 text-ink-600 hover:bg-ink-100 dark:text-ink-300 dark:hover:bg-ink-800 lg:hidden"
               aria-label="Abrir menu"
               aria-expanded={gavetaAberta}
               onClick={(e) => {
@@ -136,13 +144,21 @@ export function Header() {
               <Menu className="h-5 w-5" aria-hidden />
             </button>
             <Link href="/" className="flex min-w-0 items-center gap-3 rounded-lg">
-              <Image src="/icone_logo.png" alt="" width={32} height={32} className="h-8 w-8 shrink-0" priority />
+              <Image
+                src="/icone_logo.png"
+                alt=""
+                width={48}
+                height={48}
+                className="h-10 w-10 shrink-0 rounded-xl sm:h-12 sm:w-12"
+                priority
+              />
               <div className="min-w-0 leading-tight">
-                <p className="truncate text-base font-semibold tracking-tight text-ink-900 dark:text-ink-50">
-                  QBuscado
+                <p className="flex items-center gap-2 truncate text-lg font-bold tracking-tight text-ink-900 dark:text-ink-50 sm:text-xl">
+                  {pagina?.titulo ?? "QBuscado"}
+                  {pagina?.beta && <Badge tone="accent">Beta</Badge>}
                 </p>
-                <p className="truncate text-xs text-ink-500 dark:text-ink-400">
-                  Consulta inteligente de dados públicos
+                <p className="mt-0.5 truncate text-xs text-ink-500 dark:text-ink-400 sm:text-sm">
+                  {pagina?.descricao ?? "Consulta inteligente de dados públicos"}
                 </p>
               </div>
             </Link>
@@ -157,7 +173,7 @@ export function Header() {
         </div>
       </header>
 
-      {/* Fora do <header>: o backdrop-blur dele prenderia o position: fixed da gaveta dentro dos 56 px da barra. */}
+      {/* Fora do <header>: o backdrop-blur dele prenderia o position: fixed da gaveta dentro da barra. */}
       {/* Status, ajuda e tema rolam junto com o menu: num rodapé fixo, em tela baixa
           (celular deitado), eles tomariam a altura toda e o menu sumiria. */}
       <Drawer aberto={gavetaAberta} onFechar={fecharGaveta} titulo="Menu" lado="esquerda">

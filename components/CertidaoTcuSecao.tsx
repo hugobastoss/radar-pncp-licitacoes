@@ -40,7 +40,7 @@ function ItemCertidao({ item: i }: { item: ItemCertidaoTcu }) {
           >
             {ROTULO_SITUACAO[i.situacao]}
           </span>{" "}
-          — {i.descricao} <span className="text-xs text-ink-500 dark:text-ink-400">({i.emissor})</span>
+          : {i.descricao} <span className="text-xs text-ink-500 dark:text-ink-400">({i.emissor})</span>
         </p>
         {i.observacao && <p className="mt-0.5 text-xs text-ink-600 dark:text-ink-300">{i.observacao}</p>}
       </div>

@@ -4,12 +4,25 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { BadgePercent, Building2, HeartPulse, Loader2, Network, Search, ShieldAlert, ShieldCheck, TriangleAlert, Users } from "lucide-react";
+import {
+  Banknote,
+  Building2,
+  HeartPulse,
+  Loader2,
+  Network,
+  Search,
+  ShieldAlert,
+  ShieldCheck,
+  TriangleAlert,
+  Users,
+} from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { Tabs } from "@/components/ui/Tabs";
 import { Campo } from "@/components/LicitacaoDetails";
 import { CertidaoTcuSecao } from "@/components/CertidaoTcuSecao";
+import { ConsultasRecentesCard } from "@/components/ConsultasRecentesCard";
 import type { EstadoCertidaoTcu } from "@/components/CertidaoTcuSecao";
 import { ContratosAmSecao } from "@/components/ContratosAmSecao";
 import { DominioEmailLinha } from "@/components/DominioEmailLinha";
@@ -68,6 +81,18 @@ type EstadoSancoes =
   | { status: "nao_configurado" }
   | { status: "erro"; mensagem?: string };
 
+// Mesmo cartão em toda a tela: bloco principal, abas e cada bloco lateral.
+const CARTAO = "rounded-[10px] border border-ink-200 bg-white p-5 shadow-card dark:border-ink-700 dark:bg-ink-900 sm:p-6";
+
+function TituloSecao({ icone: Icone, children }: { icone: typeof ShieldAlert; children: React.ReactNode }) {
+  return (
+    <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">
+      <Icone className="h-3.5 w-3.5" aria-hidden />
+      {children}
+    </p>
+  );
+}
+
 function descreverSimples(opcao: OpcaoRegime): string {
   if (opcao.optante) {
     return opcao.dataOpcao ? `Optante desde ${formatarDataSimples(opcao.dataOpcao)}` : "Optante";
@@ -85,184 +110,139 @@ function descreverMei(opcao: OpcaoRegime): string {
   return "Não";
 }
 
-function TextoCnae({ cnae }: { cnae: Cnae }) {
+/** Aba "Atividades Econômicas": atividade principal + secundárias, numa tabela só. */
+function TabelaAtividades({ empresa }: { empresa: Empresa }) {
+  const atividades: (Cnae & { tipo: "Principal" | "Secundária" })[] = [
+    ...(empresa.atividadePrincipal ? [{ ...empresa.atividadePrincipal, tipo: "Principal" as const }] : []),
+    ...empresa.atividadesSecundarias.map((a) => ({ ...a, tipo: "Secundária" as const })),
+  ];
+
+  if (atividades.length === 0) {
+    return <p className="text-sm text-ink-500 dark:text-ink-400">Nenhuma atividade econômica informada.</p>;
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="sticky top-0 bg-white dark:bg-ink-900">
+          <tr className="border-b border-ink-100 text-left text-xs font-medium uppercase tracking-wide text-ink-500 dark:border-ink-800 dark:text-ink-400">
+            <th className="py-2.5 pr-3 font-medium">CNAE</th>
+            <th className="py-2.5 pr-3 font-medium">Tipo</th>
+            <th className="py-2.5 font-medium">Descrição</th>
+          </tr>
+        </thead>
+        <tbody>
+          {atividades.map((a, indice) => (
+            <tr key={`${a.codigo}-${indice}`} className="border-b border-ink-50 last:border-0 dark:border-ink-900">
+              <td className="whitespace-nowrap py-3 pr-3 tabular-nums text-ink-900 dark:text-ink-50">
+                {a.codigo ?? "—"}
+              </td>
+              <td className="whitespace-nowrap py-3 pr-3 text-ink-700 dark:text-ink-200">{a.tipo}</td>
+              <td className="py-3 text-ink-700 dark:text-ink-200">{a.descricao}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** Aba "SUFRAMA": inscrições e incentivos (só quando a CNPJá foi consultada). */
+function AbaSuframa({ empresa, complemento }: { empresa: Empresa; complemento: EstadoComplemento }) {
+  // Área de atuação da SUFRAMA: Amazônia Ocidental (AM, RO, RR, AC) e Amapá.
+  const naArea = UFS_AREA_SUFRAMA.has(empresa.uf ?? "");
+
+  if (complemento.status === "nao_consultado") {
+    return <p className="text-sm text-ink-500 dark:text-ink-400">Fora da área de atuação da SUFRAMA.</p>;
+  }
+  if (complemento.status === "carregando") {
+    return (
+      <p className="flex items-center gap-1.5 text-sm text-ink-500 dark:text-ink-400">
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+        Consultando inscrição SUFRAMA…
+      </p>
+    );
+  }
+  if (complemento.status === "indisponivel") {
+    return (
+      <p className="text-sm text-ink-500 dark:text-ink-400">
+        {complemento.mensagem ?? "Não foi possível consultar a SUFRAMA neste momento."}
+      </p>
+    );
+  }
+
+  const inscricoes = complemento.complemento.suframa;
+  if (inscricoes.length === 0) {
+    return (
+      <p className="text-sm text-ink-600 dark:text-ink-300">
+        {naArea ? "Sem inscrição na SUFRAMA." : "Fora da área de atuação da SUFRAMA, e sem inscrição."}
+      </p>
+    );
+  }
+
   return (
     <>
-      {cnae.codigo && <span className="tabular-nums text-ink-500 dark:text-ink-400">{cnae.codigo} · </span>}
-      {cnae.descricao}
+      <ul className="space-y-3">
+        {inscricoes.map((inscricao) => (
+          <li key={inscricao.numero} className="text-sm">
+            <p className="flex flex-wrap items-center gap-2">
+              <span className="font-medium tabular-nums text-ink-900 dark:text-ink-50">
+                Inscrição {inscricao.numero}
+              </span>
+              {inscricao.situacao && (
+                <Badge tone={inscricao.situacao.toLowerCase() === "ativa" ? "success" : "danger"}>
+                  {inscricao.situacao}
+                </Badge>
+              )}
+              {inscricao.desde && (
+                <span className="text-xs text-ink-500 dark:text-ink-400">
+                  desde {formatarDataSimples(inscricao.desde)}
+                </span>
+              )}
+            </p>
+            {inscricao.incentivos.length > 0 && (
+              <ul className="mt-1.5 space-y-1 text-xs text-ink-600 dark:text-ink-300">
+                {inscricao.incentivos.map((i) => (
+                  <li key={`${i.tributo}-${i.fundamento}`}>
+                    <span className="font-medium text-ink-800 dark:text-ink-100">
+                      {i.tributo}
+                      {i.beneficio && `: ${i.beneficio}`}
+                    </span>
+                    {i.finalidade && ` para ${i.finalidade.toLowerCase()}`}
+                    {i.fundamento && <span className="text-ink-500 dark:text-ink-400"> ({i.fundamento})</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 text-xs text-ink-400 dark:text-ink-500">
+        Fonte: CNPJá, a partir dos dados da SUFRAMA
+        {complemento.complemento.atualizadoEm && ` — atualizados em ${formatarData(complemento.complemento.atualizadoEm)}`}
+        . Pode ter até 45 dias de atraso.
+      </p>
     </>
   );
 }
 
-function SecaoSancoes({ sancoes }: { sancoes: EstadoSancoes }) {
-  return (
-    <div className="mt-5 border-t border-ink-100 pt-5 dark:border-ink-800">
-      <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">
-        <ShieldAlert className="h-3.5 w-3.5" aria-hidden />
-        Sanções (CEIS/CNEP)
-      </p>
-
-      {sancoes.status === "carregando" && (
-        <p className="mt-2 flex items-center gap-1.5 text-sm text-ink-500 dark:text-ink-400">
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-          Consultando sanções…
-        </p>
-      )}
-
-      {sancoes.status === "nao_configurado" && (
-        <p className="mt-2 text-sm text-ink-500 dark:text-ink-400">
-          Consulta de sanções ainda não configurada nesta instância.
-        </p>
-      )}
-
-      {sancoes.status === "erro" && (
-        <p className="mt-2 text-sm text-danger-600 dark:text-danger-400">
-          {sancoes.mensagem ?? "Não foi possível consultar sanções neste momento."}
-        </p>
-      )}
-
-      {sancoes.status === "sucesso" && (
-        <>
-          {sancoes.sancoes.length === 0 ? (
-            <p className="mt-2 flex items-center gap-1.5 text-sm text-success-700 dark:text-success-300">
-              <ShieldCheck className="h-4 w-4" aria-hidden />
-              Nenhuma sanção encontrada no CEIS ou no CNEP.
-            </p>
-          ) : (
-            <>
-              <p className="mt-2 text-sm text-ink-700 dark:text-ink-200">{descreverResumoSancoes(sancoes.sancoes)}</p>
-              <ul className="mt-3 space-y-2">
-                {sancoes.sancoes.map((sancao) => (
-                  <SancaoItem key={`${sancao.tipo}-${sancao.id}`} sancao={sancao} />
-                ))}
-              </ul>
-            </>
-          )}
-          <p className="mt-3 text-xs text-ink-400 dark:text-ink-500">Fonte: Portal da Transparência (CGU).</p>
-        </>
-      )}
-    </div>
-  );
-}
-
-// Área de atuação da SUFRAMA: Amazônia Ocidental (AM, RO, RR, AC) e Amapá.
-// É onde ficam praticamente todas as inscrições (30.485 na base aberta de
-// 2023, uma só fora daqui).
-const UFS_AREA_SUFRAMA = new Set(["AM", "RO", "RR", "AC", "AP"]);
-
-/** A CNPJá tem limite apertado — só consulta quando pode acrescentar algo. */
-function precisaComplemento(empresa: Empresa): boolean {
-  return UFS_AREA_SUFRAMA.has(empresa.uf ?? "") || !empresa.email;
-}
-
-function SecaoSuframa({ empresa, complemento }: { empresa: Empresa; complemento: EstadoComplemento }) {
-  const naArea = UFS_AREA_SUFRAMA.has(empresa.uf ?? "");
-  const inscricoes = complemento.status === "sucesso" ? complemento.complemento.suframa : [];
-  // Fora da área, a seção só aparece se a empresa tiver inscrição — "sem SUFRAMA" é o normal lá.
-  if (!naArea && inscricoes.length === 0) return null;
-  if (complemento.status === "nao_consultado") return null;
-
-  return (
-    <div className="mt-5 border-t border-ink-100 pt-5 dark:border-ink-800">
-      <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">
-        <BadgePercent className="h-3.5 w-3.5" aria-hidden />
-        SUFRAMA (Zona Franca de Manaus)
-      </p>
-
-      {complemento.status === "carregando" && (
-        <p className="mt-2 flex items-center gap-1.5 text-sm text-ink-500 dark:text-ink-400">
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-          Consultando inscrição SUFRAMA…
-        </p>
-      )}
-      {complemento.status === "indisponivel" && (
-        <p className="mt-2 text-sm text-ink-500 dark:text-ink-400">
-          {complemento.mensagem ?? "Não foi possível consultar a SUFRAMA neste momento."}
-        </p>
-      )}
-      {complemento.status === "sucesso" && inscricoes.length === 0 && (
-        <p className="mt-2 text-sm text-ink-600 dark:text-ink-300">Sem inscrição na SUFRAMA.</p>
-      )}
-      {inscricoes.length > 0 && (
-        <ul className="mt-2 space-y-3">
-          {inscricoes.map((inscricao) => (
-            <li key={inscricao.numero} className="text-sm">
-              <p className="flex flex-wrap items-center gap-2">
-                <span className="font-medium tabular-nums text-ink-900 dark:text-ink-50">
-                  Inscrição {inscricao.numero}
-                </span>
-                {inscricao.situacao && (
-                  <Badge tone={inscricao.situacao.toLowerCase() === "ativa" ? "success" : "danger"}>
-                    {inscricao.situacao}
-                  </Badge>
-                )}
-                {inscricao.desde && (
-                  <span className="text-xs text-ink-500 dark:text-ink-400">
-                    desde {formatarDataSimples(inscricao.desde)}
-                  </span>
-                )}
-              </p>
-              {inscricao.incentivos.length > 0 && (
-                <ul className="mt-1.5 space-y-1 text-xs text-ink-600 dark:text-ink-300">
-                  {inscricao.incentivos.map((i) => (
-                    <li key={`${i.tributo}-${i.fundamento}`}>
-                      <span className="font-medium text-ink-800 dark:text-ink-100">
-                        {i.tributo}
-                        {i.beneficio && ` — ${i.beneficio}`}
-                      </span>
-                      {i.finalidade && ` para ${i.finalidade.toLowerCase()}`}
-                      {i.fundamento && <span className="text-ink-500 dark:text-ink-400"> ({i.fundamento})</span>}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-      {complemento.status === "sucesso" && (
-        <p className="mt-2 text-xs text-ink-400 dark:text-ink-500">
-          Fonte: CNPJá, a partir dos dados da SUFRAMA
-          {complemento.complemento.atualizadoEm &&
-            ` — atualizados em ${formatarData(complemento.complemento.atualizadoEm)}`}
-          . Pode ter até 45 dias de atraso.
-        </p>
-      )}
-    </div>
-  );
-}
-
-function EmpresaCard({
+function CabecalhoEmpresaCard({
   empresa,
   sancoes,
-  governoFederal,
-  complemento,
-  contratosAm,
-  certidaoTcu,
   listaSuja,
-  dominio,
-  transferencias,
   ans,
 }: {
   empresa: Empresa;
   sancoes: EstadoSancoes;
-  governoFederal: EstadoGovernoFederal;
-  complemento: EstadoComplemento;
-  contratosAm: EstadoContratosAm;
-  certidaoTcu: EstadoCertidaoTcu;
   listaSuja: EstadoListaSuja;
-  dominio: EstadoDominio;
-  transferencias: EstadoTransferencias;
   ans: EstadoAns;
 }) {
   const ativa = empresa.situacaoCadastral?.toUpperCase() === "ATIVA";
   const telefones = empresa.telefones.map(formatarTelefone).join(" · ");
   const resumoSancoes = sancoes.status === "sucesso" ? resumirSancoes(sancoes.sancoes) : undefined;
-  // A Receita (BrasilAPI) muitas vezes vem sem e-mail; a CNPJá costuma ter o corporativo.
-  const emailsCnpja = complemento.status === "sucesso" ? complemento.complemento.emails : [];
 
   return (
-    <div className="rounded-2xl border border-ink-200 bg-white p-5 shadow-card dark:border-ink-700 dark:bg-ink-900 sm:p-6">
+    <div className={CARTAO}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-lg font-semibold text-ink-900 dark:text-ink-50">{empresa.razaoSocial}</p>
@@ -331,56 +311,9 @@ function EmpresaCard({
         <Campo rotulo="Porte" valor={empresa.porte ?? "Não informado"} />
         <Campo rotulo="Capital social" valor={formatarMoeda(empresa.capitalSocial)} />
         <Campo rotulo="Data de abertura" valor={formatarDataSimples(empresa.dataInicioAtividade) ?? "Não informada"} />
-        <Campo rotulo="Simples Nacional" valor={descreverSimples(empresa.simples)} />
-        <Campo rotulo="MEI" valor={descreverMei(empresa.mei)} />
-        {empresa.regimeTributario && (
-          <Campo
-            rotulo="Regime tributário"
-            valor={`${empresa.regimeTributario.forma} (${empresa.regimeTributario.ano})`}
-          />
-        )}
         <Campo rotulo={empresa.telefones.length > 1 ? "Telefones" : "Telefone"} valor={telefones || "Não informado"} />
-        <Campo
-          rotulo="E-mail"
-          valor={
-            empresa.email ??
-            (emailsCnpja.length > 0 ? (
-              <>
-                {emailsCnpja.join(" · ")}
-                <span className="text-xs text-ink-500 dark:text-ink-400"> (via CNPJá)</span>
-              </>
-            ) : complemento.status === "carregando" ? (
-              "Consultando…"
-            ) : (
-              "Não informado"
-            ))
-          }
-        />
+        <Campo rotulo="E-mail" valor={empresa.email ?? "Não informado"} />
       </dl>
-
-      <DominioEmailLinha estado={dominio} cnpjEmpresa={empresa.cnpj} />
-
-      <div className="mt-5">
-        <Campo
-          rotulo="Atividade principal"
-          valor={empresa.atividadePrincipal ? <TextoCnae cnae={empresa.atividadePrincipal} /> : "Não informada"}
-        />
-      </div>
-
-      {empresa.atividadesSecundarias.length > 0 && (
-        <div className="mt-5">
-          <dt className="text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">
-            Atividades secundárias
-          </dt>
-          <ul className="mt-1.5 space-y-1 text-sm text-ink-700 dark:text-ink-200">
-            {empresa.atividadesSecundarias.map((atividade) => (
-              <li key={`${atividade.codigo}-${atividade.descricao}`}>
-                <TextoCnae cnae={atividade} />
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
 
       <div className="mt-5">
         <Campo
@@ -397,43 +330,215 @@ function EmpresaCard({
           }
         />
       </div>
-
-      <SecaoSuframa empresa={empresa} complemento={complemento} />
-
-      <InscricoesEstaduaisSecao key={empresa.cnpj} cnpj={empresa.cnpj} />
-
-      {empresa.socios.length > 0 && (
-        <div className="mt-5 border-t border-ink-100 pt-5 dark:border-ink-800">
-          <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">
-            <Users className="h-3.5 w-3.5" aria-hidden />
-            Quadro de sócios
-          </p>
-          <ul className="mt-2 space-y-2">
-            {empresa.socios.map((socio) => (
-              <li key={`${socio.nome}-${socio.qualificacao}`} className="text-sm">
-                <span className="font-medium text-ink-900 dark:text-ink-50">{socio.nome}</span>
-                <span className="text-ink-500 dark:text-ink-400"> — {socio.qualificacao}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <SecaoSancoes sancoes={sancoes} />
-
-      <CertidaoTcuSecao
-        estado={certidaoTcu}
-        cnpj={empresa.cnpj}
-        className="mt-5 border-t border-ink-100 pt-5 dark:border-ink-800"
-      />
-
-      <GovernoFederalSecao estado={governoFederal} cnpj={empresa.cnpj} />
-
-      <TransferenciasEspeciaisSecao estado={transferencias} />
-
-      <ContratosAmSecao estado={contratosAm} cnpj={empresa.cnpj} />
     </div>
   );
+}
+
+function RegimeTributarioCard({ empresa, complemento }: { empresa: Empresa; complemento: EstadoComplemento }) {
+  const emailsCnpja = complemento.status === "sucesso" ? complemento.complemento.emails : [];
+
+  return (
+    <div className={CARTAO}>
+      <TituloSecao icone={Banknote}>Regime tributário</TituloSecao>
+      <dl className="mt-3 space-y-3">
+        {empresa.regimeTributario && (
+          <Campo
+            rotulo="Forma de tributação"
+            valor={`${empresa.regimeTributario.forma} (${empresa.regimeTributario.ano})`}
+          />
+        )}
+        <Campo rotulo="Simples Nacional" valor={descreverSimples(empresa.simples)} />
+        <Campo rotulo="MEI" valor={descreverMei(empresa.mei)} />
+        {!empresa.email && emailsCnpja.length > 0 && (
+          <Campo
+            rotulo="E-mail corporativo"
+            valor={
+              <>
+                {emailsCnpja.join(" · ")} <span className="text-xs text-ink-500 dark:text-ink-400">(via CNPJá)</span>
+              </>
+            }
+          />
+        )}
+      </dl>
+    </div>
+  );
+}
+
+function SociosCard({ socios }: { socios: Empresa["socios"] }) {
+  if (socios.length === 0) return null;
+  return (
+    <div className={CARTAO}>
+      <TituloSecao icone={Users}>Sócios e administradores</TituloSecao>
+      <ul className="mt-3 space-y-2">
+        {socios.map((socio) => (
+          <li key={`${socio.nome}-${socio.qualificacao}`} className="text-sm">
+            <span className="font-medium text-ink-900 dark:text-ink-50">{socio.nome}</span>
+            {socio.dataEntrada && (
+              <span className="text-ink-500 dark:text-ink-400"> — desde {formatarDataSimples(socio.dataEntrada)}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function SecaoSancoes({ sancoes }: { sancoes: EstadoSancoes }) {
+  return (
+    <div className={CARTAO}>
+      <TituloSecao icone={ShieldAlert}>Sanções (CEIS/CNEP)</TituloSecao>
+
+      {sancoes.status === "carregando" && (
+        <p className="mt-2 flex items-center gap-1.5 text-sm text-ink-500 dark:text-ink-400">
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          Consultando sanções…
+        </p>
+      )}
+
+      {sancoes.status === "nao_configurado" && (
+        <p className="mt-2 text-sm text-ink-500 dark:text-ink-400">
+          Consulta de sanções ainda não configurada nesta instância.
+        </p>
+      )}
+
+      {sancoes.status === "erro" && (
+        <p className="mt-2 text-sm text-danger-600 dark:text-danger-400">
+          {sancoes.mensagem ?? "Não foi possível consultar sanções neste momento."}
+        </p>
+      )}
+
+      {sancoes.status === "sucesso" && (
+        <>
+          {sancoes.sancoes.length === 0 ? (
+            <p className="mt-2 flex items-center gap-1.5 text-sm text-success-700 dark:text-success-300">
+              <ShieldCheck className="h-4 w-4" aria-hidden />
+              Nenhuma sanção encontrada no CEIS ou no CNEP.
+            </p>
+          ) : (
+            <>
+              <p className="mt-2 text-sm text-ink-700 dark:text-ink-200">{descreverResumoSancoes(sancoes.sancoes)}</p>
+              <ul className="mt-3 space-y-2">
+                {sancoes.sancoes.map((sancao) => (
+                  <SancaoItem key={`${sancao.tipo}-${sancao.id}`} sancao={sancao} />
+                ))}
+              </ul>
+            </>
+          )}
+          <p className="mt-3 text-xs text-ink-400 dark:text-ink-500">Fonte: Portal da Transparência (CGU).</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+function EmpresaResultado({
+  empresa,
+  sancoes,
+  governoFederal,
+  complemento,
+  contratosAm,
+  certidaoTcu,
+  listaSuja,
+  dominio,
+  transferencias,
+  ans,
+}: {
+  empresa: Empresa;
+  sancoes: EstadoSancoes;
+  governoFederal: EstadoGovernoFederal;
+  complemento: EstadoComplemento;
+  contratosAm: EstadoContratosAm;
+  certidaoTcu: EstadoCertidaoTcu;
+  listaSuja: EstadoListaSuja;
+  dominio: EstadoDominio;
+  transferencias: EstadoTransferencias;
+  ans: EstadoAns;
+}) {
+  const abas = [
+    { value: "atividades", label: "Atividades Econômicas", content: <TabelaAtividades empresa={empresa} /> },
+    {
+      value: "inscricoes",
+      label: "Inscrições Estaduais",
+      content: <InscricoesEstaduaisSecao key={empresa.cnpj} cnpj={empresa.cnpj} />,
+    },
+    { value: "suframa", label: "SUFRAMA", content: <AbaSuframa empresa={empresa} complemento={complemento} /> },
+  ];
+
+  // O CSS puro não resolve "o card de abas termina na mesma altura da
+  // lateral, e rola por dentro se precisar": como as duas colunas têm altura
+  // automática (nenhuma é fixa), esticar uma pelo conteúdo da outra exigiria
+  // que o navegador soubesse a altura da lateral ANTES de medir o conteúdo
+  // das abas — só dá pra fazer isso medindo de verdade. Sem o ResizeObserver,
+  // o card de abas cresceria pra caber toda a tabela, empurrando a lateral.
+  const cabecalhoRef = useRef<HTMLDivElement>(null);
+  const lateralRef = useRef<HTMLDivElement>(null);
+  const [alturaAbas, setAlturaAbas] = useState<number>();
+
+  useEffect(() => {
+    function recalcular() {
+      if (window.innerWidth < 1024 || !cabecalhoRef.current || !lateralRef.current) {
+        setAlturaAbas(undefined);
+        return;
+      }
+      const GAP_PX = 16; // gap-4 entre o cabeçalho e o card de abas
+      const altura = lateralRef.current.offsetHeight - cabecalhoRef.current.offsetHeight - GAP_PX;
+      setAlturaAbas(altura > 0 ? altura : undefined);
+    }
+
+    recalcular();
+    const observer = new ResizeObserver(recalcular);
+    if (cabecalhoRef.current) observer.observe(cabecalhoRef.current);
+    if (lateralRef.current) observer.observe(lateralRef.current);
+    window.addEventListener("resize", recalcular);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", recalcular);
+    };
+  }, []);
+
+  return (
+    <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+      <div className="flex flex-col gap-4 lg:flex-[2]">
+        <div ref={cabecalhoRef}>
+          <CabecalhoEmpresaCard empresa={empresa} sancoes={sancoes} listaSuja={listaSuja} ans={ans} />
+        </div>
+        <div
+          className={`${CARTAO} flex flex-col overflow-hidden`}
+          style={alturaAbas !== undefined ? { height: alturaAbas } : undefined}
+        >
+          <Tabs items={abas} className="min-h-0 flex-1" />
+        </div>
+      </div>
+
+      <div ref={lateralRef} className="flex flex-col gap-4 lg:flex-[1]">
+        <RegimeTributarioCard empresa={empresa} complemento={complemento} />
+        <DominioEmailLinha estado={dominio} cnpjEmpresa={empresa.cnpj} className={CARTAO} />
+        <SociosCard socios={empresa.socios} />
+        <SecaoSancoes sancoes={sancoes} />
+        <div className={CARTAO}>
+          <CertidaoTcuSecao estado={certidaoTcu} cnpj={empresa.cnpj} />
+        </div>
+        <div className={CARTAO}>
+          <GovernoFederalSecao estado={governoFederal} cnpj={empresa.cnpj} />
+        </div>
+        <TransferenciasEspeciaisSecao estado={transferencias} className={CARTAO} />
+        <div className={CARTAO}>
+          <ContratosAmSecao estado={contratosAm} cnpj={empresa.cnpj} />
+        </div>
+        <ConsultasRecentesCard className={CARTAO} />
+      </div>
+    </div>
+  );
+}
+
+// Área de atuação da SUFRAMA: Amazônia Ocidental (AM, RO, RR, AC) e Amapá.
+// É onde ficam praticamente todas as inscrições (30.485 na base aberta de
+// 2023, uma só fora daqui).
+const UFS_AREA_SUFRAMA = new Set(["AM", "RO", "RR", "AC", "AP"]);
+
+/** A CNPJá tem limite apertado — só consulta quando pode acrescentar algo. */
+function precisaComplemento(empresa: Empresa): boolean {
+  return UFS_AREA_SUFRAMA.has(empresa.uf ?? "") || !empresa.email;
 }
 
 export function CnpjClient() {
@@ -610,18 +715,8 @@ export function CnpjClient() {
 
   return (
     <div className="flex flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-      <div className="border-b border-ink-200 pb-4 dark:border-ink-700">
-        <h1 className="text-base font-semibold text-ink-900 dark:text-ink-50">Consultar CNPJ</h1>
-        <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">
-          Consulte dados cadastrais de empresas na base da Receita Federal, com as sanções (CEIS/CNEP) e a relação
-          com o governo federal — contratos e pagamentos.
-        </p>
-      </div>
 
-      <form
-        onSubmit={pesquisar}
-        className="rounded-2xl border border-ink-200 bg-white p-5 shadow-card dark:border-ink-700 dark:bg-ink-900 sm:p-6"
-      >
+      <form onSubmit={pesquisar} className={CARTAO}>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="flex-1">
             <Input
@@ -666,7 +761,7 @@ export function CnpjClient() {
       )}
 
       {status === "sucesso" && empresa && (
-        <EmpresaCard
+        <EmpresaResultado
           empresa={empresa}
           sancoes={sancoes}
           governoFederal={governoFederal}

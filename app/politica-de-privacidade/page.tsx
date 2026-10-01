@@ -63,7 +63,7 @@ export default function PoliticaDePrivacidadePage() {
 
       <SecaoLegal titulo="6. Dados exibidos nos resultados de pesquisa">
         <p>
-          As informações exibidas nos resultados — licitações, empresas, sócios, sanções, emendas e as demais —
+          As informações exibidas nos resultados (licitações, empresas, sócios, sanções, emendas e as demais)
           são dados públicos obtidos de fontes oficiais no momento da consulta: PNCP, Receita Federal, Portal da
           Transparência (CGU), TCU, Ministério do Trabalho e Emprego, ANS, TransfereGov e registro.br, entre
           outras. Algumas dessas fontes publicam dados de pessoas físicas, como os cadastros de sanções e o

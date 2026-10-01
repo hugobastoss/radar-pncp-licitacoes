@@ -49,11 +49,19 @@ function ItemContrato({ contrato: c }: { contrato: ContratoEstadual }) {
 }
 
 /** Seção da consulta de CNPJ com os contratos da empresa com o Governo do Amazonas (SGC da SEFAZ-AM). */
-export function ContratosAmSecao({ estado, cnpj }: { estado: EstadoContratosAm; cnpj: string }) {
+export function ContratosAmSecao({
+  estado,
+  cnpj,
+  className,
+}: {
+  estado: EstadoContratosAm;
+  cnpj: string;
+  className?: string;
+}) {
   const [todos, setTodos] = useState(false);
 
   return (
-    <div className="mt-5 border-t border-ink-100 pt-5 dark:border-ink-800">
+    <div className={className}>
       <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">
         <FileSignature className="h-3.5 w-3.5" aria-hidden />
         Contratos com o Governo do Amazonas

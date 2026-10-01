@@ -22,7 +22,7 @@ function ProcessoCard({ processo }: { processo: ProcessoJudicial }) {
   const sigiloso = processo.nivelSigilo > 0;
 
   return (
-    <div className="rounded-2xl border border-ink-200 bg-white p-5 shadow-card dark:border-ink-700 dark:bg-ink-900 sm:p-6">
+    <div className="rounded-[10px] border border-ink-200 bg-white p-5 shadow-card dark:border-ink-700 dark:bg-ink-900 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-2">
           <Scale className="mt-0.5 h-5 w-5 shrink-0 text-primary-600 dark:text-primary-400" aria-hidden />
@@ -139,17 +139,9 @@ export function ProcessoJudicialClient() {
 
   return (
     <div className="flex flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-      <div className="border-b border-ink-200 pb-4 dark:border-ink-700">
-        <h1 className="text-base font-semibold text-ink-900 dark:text-ink-50">Consultar processo judicial</h1>
-        <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">
-          Consulte os metadados públicos de um processo (classe, assuntos, órgão julgador e andamentos) direto na
-          base do CNJ. Selecione o tribunal e informe o número completo do processo.
-        </p>
-      </div>
-
       <form
         onSubmit={pesquisar}
-        className="rounded-2xl border border-ink-200 bg-white p-5 shadow-card dark:border-ink-700 dark:bg-ink-900 sm:p-6"
+        className="rounded-[10px] border border-ink-200 bg-white p-5 shadow-card dark:border-ink-700 dark:bg-ink-900 sm:p-6"
       >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="w-full sm:w-72">

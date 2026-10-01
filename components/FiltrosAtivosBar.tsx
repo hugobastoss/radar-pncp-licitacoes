@@ -78,7 +78,7 @@ export function FiltrosAtivosBar({ filtros, onLimpar }: FiltrosAtivosBarProps) {
     // Transparente: o fundo é o da própria página (ink-50 / ink-950), levemente
     // translúcido e com desfoque — parada, a barra some no fundo; congelada, os
     // resultados passam por trás sem atrapalhar a leitura dos filtros.
-    <div className="sticky top-14 z-20 flex h-12 items-center gap-2 overflow-x-auto border-b border-ink-200 bg-ink-50/80 px-4 backdrop-blur scrollbar-fina dark:border-ink-700 dark:bg-ink-950/80 sm:px-6">
+    <div className="sticky top-24 z-20 flex h-12 items-center gap-2 overflow-x-auto border-b border-ink-200 bg-ink-50/80 px-4 backdrop-blur scrollbar-fina dark:border-ink-700 dark:bg-ink-950/80 sm:px-6">
       <Button
         type="button"
         variant="ghost"

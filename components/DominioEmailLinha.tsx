@@ -13,12 +13,32 @@ export type EstadoDominio = ResultadoRegistroDominio | { status: "carregando" } 
  * Não desenha nada enquanto não há o que dizer (domínio fora do .br ou de
  * provedor de e-mail, domínio não registrado, consulta em andamento).
  */
-export function DominioEmailLinha({ estado, cnpjEmpresa }: { estado: EstadoDominio; cnpjEmpresa: string }) {
+function TituloDominio() {
+  return (
+    <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">
+      <Globe className="h-3.5 w-3.5" aria-hidden />
+      Domínio
+    </p>
+  );
+}
+
+export function DominioEmailLinha({
+  estado,
+  cnpjEmpresa,
+  className,
+}: {
+  estado: EstadoDominio;
+  cnpjEmpresa: string;
+  className?: string;
+}) {
   if (estado.status === "erro_servidor" || estado.status === "limite") {
     return (
-      <p className="mt-3 text-xs text-ink-500 dark:text-ink-400">
-        {estado.mensagem ?? "Não foi possível consultar o registro.br neste momento."}
-      </p>
+      <div className={className}>
+        <TituloDominio />
+        <p className="mt-2 text-sm text-ink-500 dark:text-ink-400">
+          {estado.mensagem ?? "Não foi possível consultar o registro.br neste momento."}
+        </p>
+      </div>
     );
   }
   if (estado.status !== "sucesso" || !estado.registro?.titular) return null;
@@ -29,10 +49,10 @@ export function DominioEmailLinha({ estado, cnpjEmpresa }: { estado: EstadoDomin
   const desde = criadoEm ? `, desde ${criadoEm.slice(0, 4)}` : "";
 
   return (
-    <p className="mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm text-ink-600 dark:text-ink-300">
-      <Globe className="h-3.5 w-3.5 shrink-0 text-ink-400 dark:text-ink-500" aria-hidden />
-      <span>
-        Domínio <span className="font-medium text-ink-800 dark:text-ink-100">{dominio}</span> registrado{" "}
+    <div className={className}>
+      <TituloDominio />
+      <p className="mt-2 text-sm text-ink-600 dark:text-ink-300">
+        <span className="font-medium text-ink-800 dark:text-ink-100">{dominio}</span> registrado{" "}
         {daPropriaEmpresa ? (
           <>pela própria empresa{desde}.</>
         ) : titular.cnpj ? (
@@ -56,8 +76,8 @@ export function DominioEmailLinha({ estado, cnpjEmpresa }: { estado: EstadoDomin
             {desde}.
           </>
         )}
-      </span>
-      <span className="text-xs text-ink-400 dark:text-ink-500">Fonte: registro.br</span>
-    </p>
+      </p>
+      <p className="mt-2 text-xs text-ink-400 dark:text-ink-500">Fonte: registro.br</p>
+    </div>
   );
 }
