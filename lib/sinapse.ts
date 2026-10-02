@@ -163,7 +163,7 @@ export function comCadastro(modelo: ModeloSinapse, empresa: Empresa): ModeloSina
     info: [
       ["Razão social", empresa.razaoSocial],
       ["CNPJ", formatarCnpj(empresa.cnpj) ?? empresa.cnpj],
-      ["Situação", empresa.situacaoCadastral ?? "—"],
+      // Situação já aparece no detalhe, logo abaixo do nome — não repete aqui.
       ["Atividade", empresa.atividadePrincipal?.descricao ?? "—"],
       ["Endereço", [empresa.endereco, empresa.bairro, local].filter(Boolean).join(", ") || "—"],
       ["Telefone", empresa.telefones.join(" · ") || "—"],

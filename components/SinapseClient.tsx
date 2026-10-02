@@ -12,6 +12,7 @@ import {
   Check,
   ChevronDown,
   Building2,
+  Crosshair,
   Download,
   Expand,
   Factory,
@@ -771,7 +772,6 @@ function PainelNo({
   estadoCpf,
   onSelecionar,
   onAbrir,
-  onCentralizar,
   onCarregar,
   onConsultarCpf,
 }: {
@@ -781,7 +781,6 @@ function PainelNo({
   estadoCpf?: EstadoCpf;
   onSelecionar: (id: string) => void;
   onAbrir: (cnpj: string) => void;
-  onCentralizar: (id: string) => void;
   onCarregar: (cnpj: string, fonte: FonteSobDemanda, razaoSocial?: string) => void;
   onConsultarCpf: (idPessoa: string, documento: string | undefined, cpf: string) => void;
 }) {
@@ -855,9 +854,6 @@ function PainelNo({
             Abrir ligações desta empresa
           </Button>
         )}
-        <Button size="sm" variant="ghost" onClick={() => onCentralizar(no.id)}>
-          Centralizar
-        </Button>
         {no.tipo === "empresa" && no.cnpj && (
           <Link
             href={`/cnpj?cnpj=${no.cnpj}`}
@@ -1423,7 +1419,6 @@ export function SinapseClient() {
           estadoCpf={consultasCpf[noSelecionado.id]}
           onSelecionar={focar}
           onAbrir={abrirEmpresa}
-          onCentralizar={centralizar}
           onCarregar={carregarSobDemanda}
           onConsultarCpf={consultarCpfDoSocio}
         />
@@ -1488,6 +1483,18 @@ export function SinapseClient() {
                 >
                   <span className="hidden sm:inline">Ajustar</span>
                 </Button>
+                {selecionado && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    aria-label="Centralizar"
+                    title="Centralizar o ponto selecionado"
+                    leftIcon={<Crosshair className="h-4 w-4" aria-hidden />}
+                    onClick={() => centralizar(selecionado)}
+                  >
+                    <span className="hidden sm:inline">Centralizar</span>
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="secondary"
