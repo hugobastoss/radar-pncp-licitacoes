@@ -1436,41 +1436,56 @@ export function SinapseClient() {
                 <Button
                   size="sm"
                   variant="secondary"
+                  aria-label="Ajustar"
+                  title="Reenquadrar o mapa"
                   leftIcon={<Maximize2 className="h-4 w-4" aria-hidden />}
                   onClick={() => cyRef.current?.animate({ fit: { eles: cyRef.current.elements().not(".filtro-oculto"), padding: 40 } }, { duration: 300 })}
                 >
-                  Ajustar
+                  <span className="hidden sm:inline">Ajustar</span>
                 </Button>
                 <Button
                   size="sm"
                   variant="secondary"
+                  aria-label={linkCopiado ? "Link copiado" : "Compartilhar"}
+                  title="Copiar um link que reabre o mapa como está agora"
                   leftIcon={
                     linkCopiado ? <Check className="h-4 w-4" aria-hidden /> : <Share2 className="h-4 w-4" aria-hidden />
                   }
                   onClick={compartilhar}
                 >
-                  {linkCopiado ? "Link copiado" : "Compartilhar"}
+                  <span className="hidden sm:inline">{linkCopiado ? "Link copiado" : "Compartilhar"}</span>
                 </Button>
                 <Button
                   size="sm"
                   variant="secondary"
+                  aria-label="Exportar"
+                  title="Baixar o mapa como imagem"
                   leftIcon={<Download className="h-4 w-4" aria-hidden />}
                   onClick={exportarImagem}
                 >
-                  Exportar
+                  <span className="hidden sm:inline">Exportar</span>
                 </Button>
-                <Button size="sm" variant="secondary" leftIcon={<Trash2 className="h-4 w-4" aria-hidden />} onClick={limpar}>
-                  Limpar
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  aria-label="Limpar"
+                  title="Limpar o mapa"
+                  leftIcon={<Trash2 className="h-4 w-4" aria-hidden />}
+                  onClick={limpar}
+                >
+                  <span className="hidden sm:inline">Limpar</span>
                 </Button>
                 <div className="relative" ref={filtrosRef}>
                   <Button
                     size="sm"
                     variant="secondary"
+                    aria-label="Filtros"
+                    title="Mostrar ou ocultar categorias de ligações"
                     leftIcon={<SlidersHorizontal className="h-4 w-4" aria-hidden />}
                     aria-expanded={filtrosAberto}
                     onClick={() => setFiltrosAberto((v) => !v)}
                   >
-                    Filtros
+                    <span className="hidden sm:inline">Filtros</span>
                     {ocultos.size > 0 && <Badge tone="accent" className="ml-1">{ocultos.size}</Badge>}
                   </Button>
                   {filtrosAberto && (
@@ -1517,18 +1532,20 @@ export function SinapseClient() {
                 }
                 onClick={() => setTelaCheia((v) => !v)}
               >
-                {telaCheia ? "Sair" : "Tela cheia"}
+                <span className="hidden sm:inline">{telaCheia ? "Sair" : "Tela cheia"}</span>
               </Button>
             )}
             <div className="relative" ref={formRef}>
               <Button
                 size="sm"
                 variant="secondary"
+                aria-label="Adicionar"
+                title="Adicionar uma empresa ou emenda ao mapa"
                 leftIcon={<Plus className="h-4 w-4" aria-hidden />}
                 aria-expanded={formAberto}
                 onClick={() => setFormAberto((v) => !v)}
               >
-                Adicionar
+                <span className="hidden sm:inline">Adicionar</span>
               </Button>
               {formAberto && (
                 <form
@@ -1537,6 +1554,7 @@ export function SinapseClient() {
                 >
                   <Select
                     label="Adicionar"
+                    hideLabel
                     value={modo}
                     onChange={(e) => {
                       setModo(e.target.value as "cnpj" | "emenda");
@@ -1550,6 +1568,7 @@ export function SinapseClient() {
                   <div className="mt-3">
                     <Input
                       label={modo === "cnpj" ? "CNPJ" : "Código da emenda"}
+                      hideLabel
                       placeholder={modo === "cnpj" ? "00.000.000/0000-00" : "Ex.: 202471040014"}
                       inputMode="numeric"
                       autoFocus
@@ -1582,7 +1601,7 @@ export function SinapseClient() {
                 leftIcon={<PanelRightOpen className="h-4 w-4" aria-hidden />}
                 onClick={() => setPainelAberto(true)}
               >
-                Painel
+                <span className="hidden sm:inline">Painel</span>
               </Button>
             )}
           </div>
