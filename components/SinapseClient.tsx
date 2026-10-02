@@ -393,8 +393,9 @@ const LAYOUT: CoseLayoutOptions = {
   fit: true,
   padding: 40,
   nodeDimensionsIncludeLabels: true,
-  nodeRepulsion: () => 9000,
-  idealEdgeLength: () => 90,
+  nodeRepulsion: () => 4500,
+  idealEdgeLength: () => 55,
+  gravity: 120,
 };
 
 // ---------------------------------------------------------------------------
@@ -731,6 +732,38 @@ function ConsultaCpfSocio({
   );
 }
 
+/** Uma seção do painel que recolhe sem sair do card — só o título fica, o resto esconde. */
+function SecaoRecolhivel({
+  titulo,
+  contagem,
+  abertaInicial = true,
+  children,
+}: {
+  titulo: string;
+  contagem?: number;
+  abertaInicial?: boolean;
+  children: ReactNode;
+}) {
+  const [aberta, setAberta] = useState(abertaInicial);
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setAberta((v) => !v)}
+        aria-expanded={aberta}
+        className="flex w-full items-center justify-between gap-2 py-0.5 text-xs font-medium uppercase tracking-wide text-ink-500 hover:text-ink-700 dark:text-ink-400 dark:hover:text-ink-200"
+      >
+        <span>
+          {titulo}
+          {contagem !== undefined && ` (${contagem})`}
+        </span>
+        <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 transition-transform", !aberta && "-rotate-90")} aria-hidden />
+      </button>
+      {aberta && <div className="mt-1.5">{children}</div>}
+    </div>
+  );
+}
+
 function PainelNo({
   no,
   modelo,
@@ -774,17 +807,47 @@ function PainelNo({
         {no.detalhe && <p className="mt-0.5 text-xs text-ink-500 dark:text-ink-400">{no.detalhe}</p>}
       </div>
 
-      {/* Uma coluna só: rótulo em cima, valor embaixo — o painel é estreito demais pra lado a lado. */}
-      <dl className="space-y-2.5 text-sm">
-        {no.info.map(([rotulo, valor]) => (
-          <div key={rotulo}>
-            <dt className="text-xs text-ink-500 dark:text-ink-400">{rotulo}</dt>
-            <dd className="mt-0.5 break-words text-ink-700 dark:text-ink-200">{valor}</dd>
+      {pendentes.length > 0 && (
+        <div>
+          <div className="flex flex-wrap gap-2">
+            {pendentes.map((s) => (
+              <Button
+                key={s.fonte}
+                size="sm"
+                variant="secondary"
+                leftIcon={<Plus className="h-4 w-4" aria-hidden />}
+                onClick={() => onCarregar(no.cnpj!, s.fonte, razaoSocial)}
+              >
+                {s.botao}
+              </Button>
+            ))}
           </div>
-        ))}
-      </dl>
+          <p className="mt-2 text-xs text-ink-400 dark:text-ink-500">
+            Empenhos e convênios são consultas pesadas: só entram no mapa quando você pede. Convênios procura pelo nome
+            da entidade, então só acham prefeituras, secretarias e entidades que recebem repasse.
+          </p>
+        </div>
+      )}
 
-      {fontes && <ListaFontes fontes={fontes} />}
+      {no.info.length > 0 && (
+        <SecaoRecolhivel titulo="Informações">
+          {/* Uma coluna só: rótulo em cima, valor embaixo — o painel é estreito demais pra lado a lado. */}
+          <dl className="space-y-2.5 text-sm">
+            {no.info.map(([rotulo, valor]) => (
+              <div key={rotulo}>
+                <dt className="text-xs text-ink-500 dark:text-ink-400">{rotulo}</dt>
+                <dd className="mt-0.5 break-words text-ink-700 dark:text-ink-200">{valor}</dd>
+              </div>
+            ))}
+          </dl>
+        </SecaoRecolhivel>
+      )}
+
+      {fontes && (
+        <SecaoRecolhivel titulo="Fontes consultadas">
+          <ListaFontes fontes={fontes} />
+        </SecaoRecolhivel>
+      )}
 
       <div className="flex flex-wrap gap-2">
         {no.tipo === "empresa" && no.cnpj && !no.expandida && (
@@ -792,17 +855,6 @@ function PainelNo({
             Abrir ligações desta empresa
           </Button>
         )}
-        {pendentes.map((s) => (
-          <Button
-            key={s.fonte}
-            size="sm"
-            variant="secondary"
-            leftIcon={<Plus className="h-4 w-4" aria-hidden />}
-            onClick={() => onCarregar(no.cnpj!, s.fonte, razaoSocial)}
-          >
-            {s.botao}
-          </Button>
-        ))}
         <Button size="sm" variant="ghost" onClick={() => onCentralizar(no.id)}>
           Centralizar
         </Button>
@@ -819,19 +871,12 @@ function PainelNo({
           </Link>
         )}
       </div>
-      {pendentes.length > 0 && (
-        <p className="text-xs text-ink-400 dark:text-ink-500">
-          Empenhos e convênios são consultas pesadas: só entram no mapa quando você pede. Convênios procura pelo nome da
-          entidade, então só acham prefeituras, secretarias e entidades que recebem repasse.
-        </p>
-      )}
 
       {podeConsultarCpf && <ConsultaCpfSocio no={no} estado={estadoCpf} onConsultar={onConsultarCpf} />}
 
       {ligacoes.length > 0 && (
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">Ligações ({ligacoes.length})</p>
-          <ul className="mt-1.5 space-y-1">
+        <SecaoRecolhivel titulo="Ligações" contagem={ligacoes.length}>
+          <ul className="space-y-1">
             {ligacoes.map(({ aresta, outro }) => (
               <li key={aresta.id}>
                 <button
@@ -845,7 +890,7 @@ function PainelNo({
               </li>
             ))}
           </ul>
-        </div>
+        </SecaoRecolhivel>
       )}
     </div>
   );
