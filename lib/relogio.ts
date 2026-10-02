@@ -14,7 +14,7 @@ export function inscreverRelogio(callback: () => void) {
   };
   // Acerta o horário ao montar: o valor guardado pode ser de quando o módulo carregou.
   atualizar();
-  const intervalo = setInterval(atualizar, 10000);
+  const intervalo = setInterval(atualizar, 1000);
   return () => clearInterval(intervalo);
 }
 

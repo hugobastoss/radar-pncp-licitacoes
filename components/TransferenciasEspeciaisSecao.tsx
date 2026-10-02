@@ -68,11 +68,11 @@ export function TransferenciasEspeciaisSecao({
                   Ver a emenda
                 </Link>
                 <Link
-                  href={`/sinapse?emenda=${t.numeroEmenda}`}
+                  href={`/rastros?emenda=${t.numeroEmenda}`}
                   className="inline-flex items-center gap-1 font-medium text-primary-600 hover:underline dark:text-primary-400"
                 >
                   <Network className="h-3 w-3" aria-hidden />
-                  Ver no mapa Sinapse
+                  Ver no mapa Rastros
                 </Link>
               </p>
             )}

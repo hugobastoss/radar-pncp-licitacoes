@@ -12,6 +12,10 @@ export interface CabecalhoPagina {
 }
 
 export const CABECALHOS: Record<string, CabecalhoPagina> = {
+  "/ajuda": {
+    titulo: "Ajuda",
+    descricao: "O que cada busca traz, e de onde vem a informação.",
+  },
   "/licitacoes": {
     titulo: "Licitações",
     descricao: "Busque licitações em aberto, direto nas fontes oficiais do PNCP.",
@@ -52,8 +56,8 @@ export const CABECALHOS: Record<string, CabecalhoPagina> = {
     titulo: "Consultar sanções (CEIS/CNEP)",
     descricao: "Verifique se uma empresa está impedida ou punida de contratar.",
   },
-  "/sinapse": {
-    titulo: "Sinapse",
+  "/rastros": {
+    titulo: "Rastros",
     descricao: "Mapa de relações entre empresas, sócios, órgãos e sanções.",
     beta: true,
   },

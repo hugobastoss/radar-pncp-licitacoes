@@ -251,11 +251,11 @@ function CabecalhoEmpresaCard({
           )}
           <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">{formatarCnpj(empresa.cnpj)}</p>
           <Link
-            href={`/sinapse?cnpj=${empresa.cnpj}`}
+            href={`/rastros?cnpj=${empresa.cnpj}`}
             className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:underline dark:text-primary-400"
           >
             <Network className="h-3.5 w-3.5" aria-hidden />
-            Ver no mapa Sinapse (beta)
+            Ver no mapa Rastros (beta)
           </Link>
         </div>
         <div className="flex flex-wrap gap-2">

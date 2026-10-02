@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { PaginaLegal, SecaoLegal } from "@/components/PaginaLegal";
 
 export const metadata: Metadata = {
@@ -6,7 +7,7 @@ export const metadata: Metadata = {
   description: "Como o QBuscado trata dados ao pesquisar licitações públicas do PNCP.",
 };
 
-const ATUALIZADO_EM = "30 de setembro de 2026";
+const ATUALIZADO_EM = "2 de outubro de 2026";
 
 export default function PoliticaDePrivacidadePage() {
   return (
@@ -75,7 +76,19 @@ export default function PoliticaDePrivacidadePage() {
       <SecaoLegal titulo="7. Compartilhamento com terceiros">
         <p>
           Não vendemos, alugamos ou compartilhamos dados de visitantes com terceiros, pelo simples fato de
-          não coletarmos dados pessoais além do descrito acima.
+          não coletarmos dados pessoais além do descrito acima. O rodapé do site traz um link para um quadro
+          de sugestões e relatos de bugs, hospedado na UserJot. Esse link leva a um site de terceiro,
+          independente do QBuscado: qualquer informação enviada por lá (inclusive e-mail, se você optar por
+          se identificar) é tratada conforme a{" "}
+          <a
+            href="https://userjot.com/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-primary-600 hover:underline dark:text-primary-400"
+          >
+            política de privacidade da UserJot
+          </a>
+          , não por nós.
         </p>
       </SecaoLegal>
 
@@ -84,7 +97,11 @@ export default function PoliticaDePrivacidadePage() {
           Como não processamos dados pessoais além de informações técnicas de infraestrutura, a maior parte
           dos direitos previstos na Lei Geral de Proteção de Dados (LGPD) não se aplica operacionalmente ao
           uso deste site. Ainda assim, se quiser exercer algum direito ou tirar dúvidas, entre em contato
-          pelos canais indicados abaixo.
+          pelos canais indicados abaixo. Veja a página de{" "}
+          <Link href="/lgpd" className="font-medium text-primary-600 hover:underline dark:text-primary-400">
+            LGPD
+          </Link>{" "}
+          para o detalhamento da base legal e dos seus direitos como titular.
         </p>
       </SecaoLegal>
 

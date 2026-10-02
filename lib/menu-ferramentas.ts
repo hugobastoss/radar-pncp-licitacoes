@@ -51,7 +51,7 @@ export const GRUPOS: { titulo: string; itens: ItemMenu[] }[] = [
       { href: "/cpf", label: "CPF", icone: UserRound },
       { href: "/processos", label: "Processos", icone: Scale },
       { href: "/sancoes", label: "Sanções", icone: ShieldAlert },
-      { href: "/sinapse", label: "Sinapse", icone: Network, beta: true },
+      { href: "/rastros", label: "Rastros", icone: Network, beta: true },
     ],
   },
   {

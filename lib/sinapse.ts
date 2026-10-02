@@ -40,7 +40,6 @@ export type TipoAresta =
   | "federal"
   | "am"
   | "sancao"
-  | "a-receber"
   | "convenio"
   | "beneficio"
   | "registro"
@@ -52,6 +51,14 @@ export type TipoAresta =
   | "mesmo-endereco"
   | "mesmo-telefone"
   | "mesmo-email";
+
+/**
+ * Pros filtros de visualização: o que alimentou cada ligação. Quase sempre é
+ * só o `tipo` da aresta, mas "federal" e "am" juntam contratos/pagamentos com
+ * empenhos a receber numa aresta só (pra não duplicar a ligação com o mesmo
+ * órgão — ver comEmpenhosFederais/comEmpenhosAm), daí os dois tipos a mais.
+ */
+export type FonteAresta = TipoAresta | "federal-empenho" | "am-empenho";
 
 export interface NoSinapse {
   id: string;
@@ -83,6 +90,8 @@ export interface ArestaSinapse {
   valor?: number;
   /** Nas coincidências (mesmo telefone, e-mail ou endereço): o valor repetido, que vira o título do cruzamento. */
   comum?: string;
+  /** O que alimenta esta ligação, pros filtros de visualização; quando ausente, a tela usa `[tipo]`. */
+  fontes?: FonteAresta[];
 }
 
 export interface ModeloSinapse {
@@ -122,6 +131,12 @@ function comNo(modelo: ModeloSinapse, no: NoSinapse): ModeloSinapse {
 
 function comAresta(modelo: ModeloSinapse, aresta: ArestaSinapse): ModeloSinapse {
   return { ...modelo, arestas: { ...modelo.arestas, [aresta.id]: aresta } };
+}
+
+/** Acrescenta uma fonte à ligação existente (empenhos emendando contratos/pagamentos no mesmo órgão). */
+function comFonte(existente: ArestaSinapse | undefined, fonte: FonteAresta): FonteAresta[] {
+  const atuais = existente?.fontes ?? (existente ? [existente.tipo] : []);
+  return atuais.includes(fonte) ? atuais : [...atuais, fonte];
 }
 
 /** Ponto da empresa ainda sem dados — aparece na hora em que o CNPJ é adicionado. */
@@ -415,13 +430,20 @@ export function comEmpenhosFederais(modelo: ModeloSinapse, cnpj: string, resulta
   let m = modelo;
   for (const [chave, o] of [...porOrgao.entries()].sort((a, b) => b[1].valor - a[1].valor).slice(0, MAXIMO_ORGAOS_POR_EMPRESA)) {
     m = comNo(m, { id: chave, tipo: "orgao-federal", rotulo: o.nome, detalhe: "Governo federal", info: [["Órgão", o.nome], ["Esfera", "Federal"]] });
+    // Mesmo id de aresta que comGovernoFederal usa pro mesmo órgão: emenda o rótulo
+    // em vez de criar uma segunda ligação pro mesmo ponto (contratos/pagamentos e
+    // "a receber" são a mesma relação empresa-órgão, só vistas por fontes diferentes).
+    const idAresta = `federal:${cnpj}>${chave}`;
+    const existente = m.arestas[idAresta];
+    const receber = `a receber ${formatarMoeda(o.valor)} (${o.empenhos} ${o.empenhos === 1 ? "empenho" : "empenhos"})`;
     m = comAresta(m, {
-      id: `receber-federal:${cnpj}>${chave}`,
+      id: idAresta,
       origem: idE,
       destino: chave,
-      tipo: "a-receber",
-      rotulo: `a receber ${formatarMoeda(o.valor)} (${o.empenhos} ${o.empenhos === 1 ? "empenho" : "empenhos"})`,
-      valor: o.valor,
+      tipo: "federal",
+      rotulo: existente ? `${existente.rotulo} · ${receber}` : receber,
+      valor: (existente?.valor ?? 0) + o.valor,
+      fontes: comFonte(existente, "federal-empenho"),
     });
   }
   return comInfo(m, idE, "A receber (federal)", resultado.totais.aReceber > 0 ? formatarMoeda(resultado.totais.aReceber) : "nada a receber");
@@ -441,13 +463,18 @@ export function comEmpenhosAm(modelo: ModeloSinapse, cnpj: string, resultado: Re
   for (const [ug, o] of porUg) {
     const id = `orgao-am:${ug}`;
     m = comNo(m, { id, tipo: "orgao-am", rotulo: o.nome, detalhe: "Governo do Amazonas", info: [["Órgão", o.nome], ["Esfera", "Estadual (AM)"], ["UG", ug]] });
+    // Mesmo id de aresta que comContratosAm usa pro mesmo órgão (ver comEmpenhosFederais acima).
+    const idAresta = `am:${cnpj}>${id}`;
+    const existente = m.arestas[idAresta];
+    const receber = `a receber ${formatarMoeda(o.valor)} (${o.contratos} ${o.contratos === 1 ? "contrato" : "contratos"})`;
     m = comAresta(m, {
-      id: `receber-am:${cnpj}>${id}`,
+      id: idAresta,
       origem: idE,
       destino: id,
-      tipo: "a-receber",
-      rotulo: `a receber ${formatarMoeda(o.valor)} (${o.contratos} ${o.contratos === 1 ? "contrato" : "contratos"})`,
-      valor: o.valor,
+      tipo: "am",
+      rotulo: existente ? `${existente.rotulo} · ${receber}` : receber,
+      valor: (existente?.valor ?? 0) + o.valor,
+      fontes: comFonte(existente, "am-empenho"),
     });
   }
   return comInfo(m, idE, "A receber (Amazonas)", resultado.totais.aReceber > 0 ? formatarMoeda(resultado.totais.aReceber) : "nada a receber");
@@ -805,7 +832,7 @@ export function encontrarCruzamentos(modelo: ModeloSinapse): Cruzamento[] {
       }
     }
     if (no.tipo === "orgao-federal" || no.tipo === "orgao-am") {
-      const empresas = empresasLigadas(no.id, ["federal", "am", "a-receber", "convenio"]);
+      const empresas = empresasLigadas(no.id, ["federal", "am", "convenio"]);
       if (empresas.length >= 2) {
         lista.push({ id: `orgao:${no.id}`, tipo: "orgao-comum", titulo: no.rotulo, descricao: empresas.map(nome).join(" · "), foco: no.id, gravidade: "info" });
       }
@@ -838,4 +865,19 @@ export function encontrarCruzamentos(modelo: ModeloSinapse): Cruzamento[] {
   }
   const peso = { perigo: 0, atencao: 1, info: 2 };
   return lista.sort((x, y) => peso[x.gravidade] - peso[y.gravidade]);
+}
+
+export interface ResumoCruzamentos {
+  total: number;
+  perigo: number;
+  atencao: number;
+}
+
+/** Contagem por gravidade, pro resumo no topo da lista de cruzamentos. */
+export function resumirCruzamentos(cruzamentos: Cruzamento[]): ResumoCruzamentos {
+  return {
+    total: cruzamentos.length,
+    perigo: cruzamentos.filter((c) => c.gravidade === "perigo").length,
+    atencao: cruzamentos.filter((c) => c.gravidade === "atencao").length,
+  };
 }

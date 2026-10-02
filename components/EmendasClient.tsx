@@ -314,11 +314,11 @@ function CartaoEmenda({ emenda: e }: { emenda: EmendaParlamentar }) {
         </button>
         <LinkExterno href={linkEmenda(e.codigo)}>Ver no Portal da Transparência</LinkExterno>
         <Link
-          href={`/sinapse?emenda=${e.codigo}`}
+          href={`/rastros?emenda=${e.codigo}`}
           className="inline-flex items-center gap-1 text-primary-600 hover:underline dark:text-primary-400"
         >
           <Network className="h-3.5 w-3.5" aria-hidden />
-          Ver no mapa Sinapse
+          Ver no mapa Rastros
         </Link>
       </div>
 

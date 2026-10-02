@@ -9,8 +9,10 @@ import {
   ArrowUpRight,
   BadgePercent,
   BriefcaseBusiness,
+  Check,
   ChevronDown,
   Building2,
+  Download,
   Expand,
   Factory,
   Landmark,
@@ -22,8 +24,10 @@ import {
   PanelRightOpen,
   Plus,
   ScrollText,
+  Share2,
   ShieldAlert,
   Shrink,
+  SlidersHorizontal,
   Trash2,
   TriangleAlert,
   UserRound,
@@ -51,6 +55,7 @@ import { cn } from "@/lib/cn";
 import { dominioDoEmail } from "@/lib/dominio-email";
 import { FORMATO_CODIGO_EMENDA } from "@/lib/emendas";
 import { formatarCnpj, mascararCnpj, mascararCpf } from "@/lib/formatters";
+import { useClickOutside } from "@/lib/hooks/useClickOutside";
 import {
   comBeneficiosFiscais,
   comCadastro,
@@ -72,8 +77,9 @@ import {
   idEmenda,
   idEmpresa,
   MODELO_VAZIO,
+  resumirCruzamentos,
 } from "@/lib/sinapse";
-import type { Cruzamento, ModeloSinapse, NoSinapse, TipoNo } from "@/lib/sinapse";
+import type { Cruzamento, FonteAresta, ModeloSinapse, NoSinapse, ResumoCruzamentos, TipoNo } from "@/lib/sinapse";
 import type { Empresa } from "@/types/cnpj";
 
 // Cada empresa aberta custa de 5 a ~30 chamadas às fontes (a CGU tem cota de 400/min pro app inteiro).
@@ -102,7 +108,7 @@ type Fonte =
   | "empenhosAm"
   | "convenios"
   | "emenda";
-type FonteSobDemanda = "empenhosFederais" | "empenhosAm" | "convenios";
+type FonteSobDemanda = "am" | "empenhosFederais" | "empenhosAm" | "convenios";
 type EstadoFonte = "carregando" | "ok" | "vazio" | "limite" | "erro";
 
 const ROTULO_FONTE: Record<Fonte, string> = {
@@ -114,8 +120,8 @@ const ROTULO_FONTE: Record<Fonte, string> = {
   complemento: "SUFRAMA e e-mail (CNPJá)",
   dominio: "Dono do domínio do e-mail (registro.br)",
   am: "Contratos do Governo do Amazonas",
-  empenhosFederais: "Empenhos a receber — federal",
-  empenhosAm: "Empenhos a receber — Amazonas",
+  empenhosFederais: "Empenhos a receber: federal",
+  empenhosAm: "Empenhos a receber: Amazonas",
   convenios: "Convênios (CGU)",
   emenda: "Emenda e quem recebeu (CGU)",
 };
@@ -124,11 +130,12 @@ const ROTULO_ESTADO: Record<EstadoFonte, string> = {
   carregando: "consultando…",
   ok: "no mapa",
   vazio: "nada encontrado",
-  limite: "limite de consultas — tente de novo em 1 minuto",
+  limite: "limite de consultas, tente de novo em 1 minuto",
   erro: "não respondeu",
 };
 
 const SOB_DEMANDA: { fonte: FonteSobDemanda; botao: string }[] = [
+  { fonte: "am", botao: "Contratos com o Governo do Amazonas" },
   { fonte: "empenhosFederais", botao: "Empenhos a receber (federal)" },
   { fonte: "empenhosAm", botao: "Empenhos a receber (Amazonas)" },
   { fonte: "convenios", botao: "Convênios desta entidade" },
@@ -162,6 +169,47 @@ const ICONE_TIPO: Record<TipoNo, LucideIcon> = {
 };
 
 const TIPOS = Object.keys(ICONE_TIPO) as TipoNo[];
+
+/** Filtros de visualização: ocultar uma fonte esconde a ligação e, com ela, o ponto que fica sem nenhuma ligação visível. */
+const GRUPOS_FILTRO: { grupo: string; itens: { fonte: FonteAresta; rotulo: string }[] }[] = [
+  {
+    grupo: "Relações diretas",
+    itens: [
+      { fonte: "socio", rotulo: "Sócios" },
+      { fonte: "federal", rotulo: "Contratos e pagamentos (federal)" },
+      { fonte: "federal-empenho", rotulo: "Empenhos a receber (federal)" },
+      { fonte: "am", rotulo: "Contratos (Governo do Amazonas)" },
+      { fonte: "am-empenho", rotulo: "Empenhos a receber (Amazonas)" },
+      { fonte: "convenio", rotulo: "Convênios" },
+      { fonte: "beneficio", rotulo: "Benefícios fiscais" },
+      { fonte: "registro", rotulo: "SUFRAMA" },
+    ],
+  },
+  {
+    grupo: "Sanções e PEP",
+    itens: [
+      { fonte: "sancao", rotulo: "Sanções" },
+      { fonte: "pep", rotulo: "Pessoa politicamente exposta" },
+      { fonte: "servidor", rotulo: "Vínculo de servidor público" },
+    ],
+  },
+  {
+    grupo: "Emendas parlamentares",
+    itens: [
+      { fonte: "autoria", rotulo: "Autoria de emenda" },
+      { fonte: "emenda-pagamento", rotulo: "Quem recebeu a emenda" },
+    ],
+  },
+  {
+    grupo: "Coincidências",
+    itens: [
+      { fonte: "dominio", rotulo: "Mesmo dono de domínio" },
+      { fonte: "mesmo-endereco", rotulo: "Mesmo endereço" },
+      { fonte: "mesmo-telefone", rotulo: "Mesmo telefone" },
+      { fonte: "mesmo-email", rotulo: "Mesmo e-mail" },
+    ],
+  },
+];
 
 type EstadoCpf = { status: "carregando" } | { status: "ok" } | { status: "erro"; mensagem: string };
 
@@ -218,7 +266,6 @@ function cores(escuro: boolean) {
     emenda,
     perigo,
     atencao,
-    receber: v("primary-400", "#60a5fa"),
     linha: escuro ? v("ink-600", "#475569") : v("ink-300", "#cbd5e1"),
     linhaSancao: escuro ? v("danger-900", "#7f1d1d") : v("danger-200", "#fecaca"),
     foco: v("primary-500", "#3b82f6"),
@@ -318,7 +365,6 @@ function estilos(c: ReturnType<typeof cores>, icones: Icones): StylesheetJson {
       style: { width: "data(largura)", "line-color": c.linha, "curve-style": "bezier", opacity: 0.85 },
     },
     { selector: 'edge[tipo = "sancao"]', style: { "line-color": c.linhaSancao } },
-    { selector: 'edge[tipo = "a-receber"]', style: { "line-style": "dotted", "line-color": c.receber } },
     { selector: 'edge[tipo = "emenda-pagamento"]', style: { "line-color": c.emenda } },
     { selector: 'edge[tipo = "pep"], edge[tipo = "servidor"], edge[tipo = "dominio"]', style: { "line-style": "dashed" } },
     {
@@ -328,6 +374,8 @@ function estilos(c: ReturnType<typeof cores>, icones: Icones): StylesheetJson {
     // O texto de cada ligação fica no painel: no desenho ele cobria os pontos.
     { selector: "edge.destaque", style: { "line-color": c.foco, opacity: 1, "z-index": 10 } },
     { selector: ".apagado", style: { opacity: 0.22 } },
+    // Filtros de visualização: a ligação some, e o ponto some junto se ficar sem nenhuma ligação visível.
+    { selector: ".filtro-oculto", style: { display: "none" } },
   ];
 }
 
@@ -505,6 +553,26 @@ const ROTULO_CRUZAMENTO: Record<Cruzamento["tipo"], string> = {
   "mesmo-dono-dominio": "Domínio",
 };
 
+/** Resumo por gravidade, ao lado do título da lista de cruzamentos. */
+function ResumoCruzamentosBadge({ resumo }: { resumo: ResumoCruzamentos }) {
+  if (resumo.perigo > 0) {
+    return (
+      <Badge tone="danger" icon={<TriangleAlert className="h-3 w-3" aria-hidden />}>
+        {resumo.perigo} de risco
+      </Badge>
+    );
+  }
+  if (resumo.atencao > 0) {
+    return (
+      <Badge tone="warning" icon={<TriangleAlert className="h-3 w-3" aria-hidden />}>
+        {resumo.atencao} pra atenção
+      </Badge>
+    );
+  }
+  if (resumo.total > 0) return <Badge>{resumo.total}</Badge>;
+  return null;
+}
+
 /**
  * Os cruzamentos lado a lado, numa faixa que rola na horizontal. Fora da tela
  * cheia é um card abaixo do mapa; na tela cheia (`flutuante`), uma faixa por
@@ -512,6 +580,7 @@ const ROTULO_CRUZAMENTO: Record<Cruzamento["tipo"], string> = {
  */
 function ListaCruzamentos({
   cruzamentos,
+  resumo,
   onFocar,
   pontos,
   flutuante = false,
@@ -519,6 +588,7 @@ function ListaCruzamentos({
   className,
 }: {
   cruzamentos: Cruzamento[];
+  resumo: ResumoCruzamentos;
   onFocar: (id: string) => void;
   pontos: number;
   flutuante?: boolean;
@@ -537,8 +607,12 @@ function ListaCruzamentos({
       )}
     >
       <div className="flex items-center justify-between gap-2">
-        <h2 id="titulo-cruzamentos" className="text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">
+        <h2
+          id="titulo-cruzamentos"
+          className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400"
+        >
           Cruzamentos encontrados
+          <ResumoCruzamentosBadge resumo={resumo} />
         </h2>
         {onRecolher && (
           <button
@@ -830,10 +904,26 @@ export function SinapseClient() {
   }, [telaCheia]);
   const [modo, setModo] = useState<"cnpj" | "emenda">("cnpj");
   const [valor, setValor] = useState("");
-  const [incluirAm, setIncluirAm] = useState(true);
   const [erroForm, setErroForm] = useState<string | undefined>();
+  const [formAberto, setFormAberto] = useState(false);
+  const formRef = useRef<HTMLDivElement>(null);
+  useClickOutside(formRef, () => setFormAberto(false), formAberto);
+
+  const [ocultos, setOcultos] = useState<Set<FonteAresta>>(() => new Set());
+  const [filtrosAberto, setFiltrosAberto] = useState(false);
+  const filtrosRef = useRef<HTMLDivElement>(null);
+  useClickOutside(filtrosRef, () => setFiltrosAberto(false), filtrosAberto);
+  function alternarFiltro(fonte: FonteAresta) {
+    setOcultos((atual) => {
+      const novo = new Set(atual);
+      if (novo.has(fonte)) novo.delete(fonte);
+      else novo.add(fonte);
+      return novo;
+    });
+  }
 
   const cruzamentos = useMemo(() => encontrarCruzamentos(modelo), [modelo]);
+  const resumo = useMemo(() => resumirCruzamentos(cruzamentos), [cruzamentos]);
   const consultando = Object.values(fontes).reduce(
     (s, f) => s + Object.values(f).filter((e) => e === "carregando").length,
     0,
@@ -917,9 +1007,17 @@ export function SinapseClient() {
       for (const a of Object.values(modelo.arestas)) {
         if (!ids.has(a.origem) || !ids.has(a.destino)) continue;
         ids.add(a.id);
-        const dados = { id: a.id, source: a.origem, target: a.destino, tipo: a.tipo, rotulo: a.rotulo, largura: largura(a.valor) };
+        const dados = {
+          id: a.id,
+          source: a.origem,
+          target: a.destino,
+          tipo: a.tipo,
+          rotulo: a.rotulo,
+          largura: largura(a.valor),
+          fontes: a.fontes ?? [a.tipo],
+        };
         const el = cy.getElementById(a.id);
-        if (el.nonempty()) el.data({ rotulo: dados.rotulo, largura: dados.largura });
+        if (el.nonempty()) el.data({ rotulo: dados.rotulo, largura: dados.largura, fontes: dados.fontes });
         else {
           cy.add({ group: "edges", data: dados });
           novos++;
@@ -935,6 +1033,27 @@ export function SinapseClient() {
       layoutTimer.current = setTimeout(() => cyRef.current?.layout(LAYOUT).run(), 150);
     }
   }, [modelo, pronto]);
+
+  // Filtros de visualização: esconde as ligações das fontes ocultas, e junto, o ponto que fica sem nenhuma visível.
+  // Empresa e emenda são o que foi pesquisado: ficam visíveis mesmo sem ligações.
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy || !pronto) return;
+    cy.batch(() => {
+      cy.edges().forEach((e) => {
+        const fontesArestas = (e.data("fontes") as FonteAresta[] | undefined) ?? [];
+        e.toggleClass("filtro-oculto", fontesArestas.length > 0 && fontesArestas.every((f) => ocultos.has(f)));
+      });
+      cy.nodes().forEach((n) => {
+        const tipo = n.data("tipo") as TipoNo;
+        if (tipo === "empresa" || tipo === "emenda") {
+          n.removeClass("filtro-oculto");
+          return;
+        }
+        n.toggleClass("filtro-oculto", n.connectedEdges().not(".filtro-oculto").empty());
+      });
+    });
+  }, [ocultos, modelo, pronto]);
 
   // Destaca o ponto escolhido e as ligações dele; apaga o resto.
   useEffect(() => {
@@ -967,16 +1086,16 @@ export function SinapseClient() {
       const validacao = validarCnpj(entrada);
       if (!validacao.valido) {
         setErroForm(validacao.mensagem);
-        return;
+        return false;
       }
       const cnpj = validacao.cnpj;
       setErroForm(undefined);
       if (selecionar) setSelecionado(idEmpresa(cnpj));
 
-      if (abertasRef.current.includes(cnpj)) return;
+      if (abertasRef.current.includes(cnpj)) return true;
       if (abertasRef.current.length >= MAXIMO_EMPRESAS) {
         setErroForm(`Nesta versão beta o mapa abre até ${MAXIMO_EMPRESAS} empresas. Limpe o mapa para começar outro.`);
-        return;
+        return false;
       }
       abertasRef.current = [...abertasRef.current, cnpj];
       setAbertas(abertasRef.current);
@@ -1046,22 +1165,22 @@ export function SinapseClient() {
           r.beneficiosFiscais?.renunciasPorAno.length;
         return temAlgo ? "ok" : "vazio";
       });
-      if (incluirAm) {
-        consultarFonte(cnpj, "am", buscarContratosAm(cnpj), (r) => {
+      return true;
+    },
+    [consultarFonte],
+  );
+
+  /** Contratos AM, empenhos e convênios: pesados demais pra entrar sozinhos; o painel da empresa pede. */
+  const carregarSobDemanda = useCallback(
+    (cnpj: string, fonte: FonteSobDemanda, razaoSocial?: string) => {
+      if (fonte === "am") {
+        consultarFonte(cnpj, fonte, buscarContratosAm(cnpj), (r) => {
           if (r.status === "erro_servidor") throw new Error("Amazonas");
           if (r.status !== "sucesso") return "vazio";
           setModelo((m) => comContratosAm(m, cnpj, r.contratos));
           return r.contratos.length ? "ok" : "vazio";
         });
-      }
-    },
-    [incluirAm, consultarFonte],
-  );
-
-  /** Empenhos e convênios: pesados demais pra entrar sozinhos; o painel da empresa pede. */
-  const carregarSobDemanda = useCallback(
-    (cnpj: string, fonte: FonteSobDemanda, razaoSocial?: string) => {
-      if (fonte === "empenhosFederais") {
+      } else if (fonte === "empenhosFederais") {
         consultarFonte(cnpj, fonte, buscarEmpenhosFederais(cnpj), (r) => {
           if (r.status === "limite") return "limite";
           if (r.status === "erro_servidor") throw new Error("empenhos federais");
@@ -1093,15 +1212,15 @@ export function SinapseClient() {
       const codigo = entrada.replace(/\D/g, "");
       if (!FORMATO_CODIGO_EMENDA.test(codigo)) {
         setErroForm("Código da emenda inválido: são 12 dígitos, como aparece na tela de Emendas (ex.: 202471040014).");
-        return;
+        return false;
       }
       setErroForm(undefined);
       const id = idEmenda(codigo);
       if (selecionar) setSelecionado(id);
-      if (emendasRef.current.includes(codigo)) return;
+      if (emendasRef.current.includes(codigo)) return true;
       if (emendasRef.current.length >= MAXIMO_EMENDAS) {
         setErroForm(`Nesta versão beta o mapa abre até ${MAXIMO_EMENDAS} emendas. Limpe o mapa para começar outro.`);
-        return;
+        return false;
       }
       emendasRef.current = [...emendasRef.current, codigo];
       setEmendas(emendasRef.current);
@@ -1112,6 +1231,7 @@ export function SinapseClient() {
         const emenda = re.status === "sucesso" ? re.itens[0] : undefined;
         if (!emenda) {
           setErroForm(`A emenda ${codigo} não foi encontrada no Portal da Transparência.`);
+          setFormAberto(true);
           emendasRef.current = emendasRef.current.filter((c) => c !== codigo);
           setEmendas(emendasRef.current);
           return "vazio";
@@ -1119,6 +1239,7 @@ export function SinapseClient() {
         setModelo((m) => comEmenda(m, emenda, rd.status === "sucesso" ? rd : null));
         return "ok";
       });
+      return true;
     },
     [consultarFonte],
   );
@@ -1140,7 +1261,7 @@ export function SinapseClient() {
     }
   }, []);
 
-  // Abre o que veio na URL (/sinapse?cnpj=A,B&emenda=C) quando o grafo fica pronto.
+  // Abre o que veio na URL (/rastros?cnpj=A,B&emenda=C) quando o grafo fica pronto.
   useEffect(() => {
     if (!pronto) return;
     const { cnpjs, emendas: codigos } = iniciais.current;
@@ -1160,9 +1281,9 @@ export function SinapseClient() {
   function adicionar(evento: FormEvent) {
     evento.preventDefault();
     if (!valor.trim()) return;
-    if (modo === "cnpj") abrirEmpresa(valor);
-    else abrirEmenda(valor);
+    const ok = modo === "cnpj" ? abrirEmpresa(valor) : abrirEmenda(valor);
     setValor("");
+    if (ok) setFormAberto(false);
   }
 
   function limpar() {
@@ -1175,6 +1296,36 @@ export function SinapseClient() {
     setConsultasCpf({});
     setSelecionado(null);
     setErroForm(undefined);
+  }
+
+  // Link que reabre o mapa como está agora (mesmo formato que a URL já aceita pra abrir várias empresas de uma vez).
+  const linkCompartilhavel = useMemo(() => {
+    const params = new URLSearchParams();
+    if (abertas.length > 0) params.set("cnpj", abertas.join(","));
+    if (emendas.length > 0) params.set("emenda", emendas.join(","));
+    const consulta = params.toString();
+    return consulta ? `${pathname}?${consulta}` : pathname;
+  }, [abertas, emendas, pathname]);
+
+  const [linkCopiado, setLinkCopiado] = useState(false);
+  async function compartilhar() {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}${linkCompartilhavel}`);
+      setLinkCopiado(true);
+      setTimeout(() => setLinkCopiado(false), 2000);
+    } catch {
+      // Sem permissão de área de transferência (página sem HTTPS, navegador bloqueando).
+    }
+  }
+
+  // Imagem do mapa como está na tela: cytoscape já sabe desenhar só os elementos visíveis nesse tamanho.
+  function exportarImagem() {
+    const cy = cyRef.current;
+    if (!cy) return;
+    const link = document.createElement("a");
+    link.href = cy.png({ full: true, scale: 2, bg: ehEscuro() ? "#0f172a" : "#ffffff" });
+    link.download = `rastros-${new Date().toISOString().slice(0, 10)}.png`;
+    link.click();
   }
 
   // Aproxima ou afasta mantendo o meio do mapa no lugar.
@@ -1241,82 +1392,28 @@ export function SinapseClient() {
 
   return (
     <div className="flex flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-      <form
-        onSubmit={adicionar}
-        className="rounded-[10px] border border-ink-200 bg-white p-5 shadow-card dark:border-ink-700 dark:bg-ink-900 sm:p-6"
-      >
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[12rem_minmax(0,1fr)_auto] sm:items-end">
-          <Select
-            label="Adicionar"
-            value={modo}
-            onChange={(e) => {
-              setModo(e.target.value as "cnpj" | "emenda");
-              setValor("");
-              setErroForm(undefined);
-            }}
-          >
-            <option value="cnpj">Empresa (CNPJ)</option>
-            <option value="emenda">Emenda (código)</option>
-          </Select>
-          <Input
-            label={modo === "cnpj" ? "CNPJ" : "Código da emenda"}
-            placeholder={modo === "cnpj" ? "00.000.000/0000-00" : "Ex.: 202471040014"}
-            inputMode="numeric"
-            leftIcon={
-              modo === "cnpj" ? <Building2 className="h-4 w-4" aria-hidden /> : <ScrollText className="h-4 w-4" aria-hidden />
-            }
-            value={valor}
-            maxLength={modo === "cnpj" ? 18 : 12}
-            error={erroForm}
-            onChange={(e) => setValor(modo === "cnpj" ? mascararCnpj(e.target.value) : e.target.value.replace(/\D/g, ""))}
-            onClear={() => setValor("")}
-          />
-          <Button type="submit" leftIcon={<Plus className="h-4 w-4" aria-hidden />}>
-            Adicionar ao mapa
-          </Button>
-        </div>
-        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
-          <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-ink-700 dark:text-ink-200">
-            <input
-              type="checkbox"
-              className="h-4 w-4 rounded border-ink-300 text-primary-600 focus-visible:ring-2 focus-visible:ring-primary-500 dark:border-ink-600 dark:bg-ink-800"
-              checked={incluirAm}
-              onChange={(e) => setIncluirAm(e.target.checked)}
-            />
-            Incluir contratos do Governo do Amazonas
-            <span className="text-xs text-ink-400 dark:text-ink-500">(mais lento)</span>
-          </label>
-          {totalNos === 0 && (
-            <button
-              type="button"
-              onClick={() => EXEMPLO.forEach((cnpj) => abrirEmpresa(cnpj, false))}
-              className="text-sm font-medium text-primary-600 hover:underline dark:text-primary-400"
-            >
-              Ver um exemplo com duas empresas
-            </button>
-          )}
-        </div>
-      </form>
-
       <div className={cn("grid grid-cols-1 gap-4", painelAberto && !telaCheia && "lg:grid-cols-[minmax(0,1fr)_22rem]")}>
         {/* O mesmo elemento nos dois modos (o Cytoscape está preso ao div do mapa): só as classes mudam. */}
         <div
           role={telaCheia ? "dialog" : undefined}
           aria-modal={telaCheia || undefined}
-          aria-label={telaCheia ? "Sinapse em tela cheia" : undefined}
+          aria-label={telaCheia ? "Rastros em tela cheia" : undefined}
           className={cn(
-            "min-w-0 overflow-hidden bg-white dark:bg-ink-900",
+            "min-w-0 bg-white dark:bg-ink-900",
             telaCheia
               ? "fixed inset-0 z-50"
               : "relative self-start rounded-[10px] border border-ink-200 shadow-card dark:border-ink-700",
           )}
         >
-          <div
-            ref={containerRef}
-            role="img"
-            aria-label={`Mapa de relações com ${totalNos} pontos e ${totalArestas} ligações. Os detalhes de cada ponto ficam no painel e os cruzamentos, na lista de cruzamentos.`}
-            className={cn("w-full", telaCheia ? "h-dvh" : "h-[420px] lg:h-[600px]")}
-          />
+          {/* Só o canvas recorta nos cantos arredondados: o resto (popovers, painéis) não pode ficar preso a isso. */}
+          <div className={cn("overflow-hidden", !telaCheia && "rounded-[10px]")}>
+            <div
+              ref={containerRef}
+              role="img"
+              aria-label={`Mapa de relações com ${totalNos} pontos e ${totalArestas} ligações. Os detalhes de cada ponto ficam no painel e os cruzamentos, na lista de cruzamentos.`}
+              className={cn("w-full", telaCheia ? "h-dvh" : "h-[420px] lg:h-[600px]")}
+            />
+          </div>
           {totalNos === 0 && (
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 px-6 text-center">
               <Network className="h-8 w-8 text-ink-300 dark:text-ink-600" aria-hidden />
@@ -1324,53 +1421,171 @@ export function SinapseClient() {
                 Adicione um CNPJ ou uma emenda para começar o mapa. Cada empresa traz sócios, órgãos que contratam com
                 ela, sanções e benefícios; cada emenda traz o autor e quem recebeu o dinheiro.
               </p>
+              <button
+                type="button"
+                onClick={() => EXEMPLO.forEach((cnpj) => abrirEmpresa(cnpj, false))}
+                className="pointer-events-auto text-sm font-medium text-primary-600 hover:underline dark:text-primary-400"
+              >
+                Ver um exemplo com duas empresas
+              </button>
             </div>
           )}
-          {(totalNos > 0 || !painelAberto || telaCheia) && (
-            <div className="absolute right-3 top-3 z-30 flex flex-wrap justify-end gap-2">
-              {totalNos > 0 && (
-                <>
+          <div className="absolute right-3 top-3 z-30 flex flex-wrap justify-end gap-2">
+            {totalNos > 0 && (
+              <>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  leftIcon={<Maximize2 className="h-4 w-4" aria-hidden />}
+                  onClick={() => cyRef.current?.animate({ fit: { eles: cyRef.current.elements().not(".filtro-oculto"), padding: 40 } }, { duration: 300 })}
+                >
+                  Ajustar
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  leftIcon={
+                    linkCopiado ? <Check className="h-4 w-4" aria-hidden /> : <Share2 className="h-4 w-4" aria-hidden />
+                  }
+                  onClick={compartilhar}
+                >
+                  {linkCopiado ? "Link copiado" : "Compartilhar"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  leftIcon={<Download className="h-4 w-4" aria-hidden />}
+                  onClick={exportarImagem}
+                >
+                  Exportar
+                </Button>
+                <Button size="sm" variant="secondary" leftIcon={<Trash2 className="h-4 w-4" aria-hidden />} onClick={limpar}>
+                  Limpar
+                </Button>
+                <div className="relative" ref={filtrosRef}>
                   <Button
                     size="sm"
                     variant="secondary"
-                    leftIcon={<Maximize2 className="h-4 w-4" aria-hidden />}
-                    onClick={() => cyRef.current?.animate({ fit: { eles: cyRef.current.elements(), padding: 40 } }, { duration: 300 })}
+                    leftIcon={<SlidersHorizontal className="h-4 w-4" aria-hidden />}
+                    aria-expanded={filtrosAberto}
+                    onClick={() => setFiltrosAberto((v) => !v)}
                   >
-                    Ajustar
+                    Filtros
+                    {ocultos.size > 0 && <Badge tone="accent" className="ml-1">{ocultos.size}</Badge>}
                   </Button>
-                  <Button size="sm" variant="secondary" leftIcon={<Trash2 className="h-4 w-4" aria-hidden />} onClick={limpar}>
-                    Limpar
+                  {filtrosAberto && (
+                    <div className="absolute right-0 top-full z-40 mt-2 max-h-[28rem] w-72 overflow-y-auto rounded-[10px] border border-ink-200 bg-white p-4 shadow-popover dark:border-ink-700 dark:bg-ink-900">
+                      <p className="text-sm font-semibold text-ink-900 dark:text-ink-50">Mostrar no mapa</p>
+                      <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">
+                        Desmarque uma categoria pra ocultar as ligações dela; o ponto some junto se ficar sem nenhuma
+                        ligação visível.
+                      </p>
+                      {GRUPOS_FILTRO.map(({ grupo, itens }) => (
+                        <div key={grupo} className="mt-3 first:mt-3">
+                          <p className="text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">{grupo}</p>
+                          <div className="mt-1">
+                            {itens.map(({ fonte, rotulo }) => (
+                              <label
+                                key={fonte}
+                                className="flex items-center gap-2 rounded-md px-1.5 py-1.5 text-sm text-ink-700 hover:bg-ink-50 dark:text-ink-200 dark:hover:bg-ink-800"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={!ocultos.has(fonte)}
+                                  onChange={() => alternarFiltro(fonte)}
+                                  className="h-4 w-4 shrink-0 rounded border-ink-300 text-primary-600 focus:ring-2 focus:ring-primary-500 dark:border-ink-600 dark:bg-ink-900"
+                                />
+                                {rotulo}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+            {(totalNos > 0 || telaCheia) && (
+              <Button
+                size="sm"
+                variant="secondary"
+                aria-label={telaCheia ? "Sair da tela cheia" : "Tela cheia"}
+                title={telaCheia ? "Sair da tela cheia (Esc)" : "Ver o mapa na tela toda"}
+                leftIcon={
+                  telaCheia ? <Shrink className="h-4 w-4" aria-hidden /> : <Expand className="h-4 w-4" aria-hidden />
+                }
+                onClick={() => setTelaCheia((v) => !v)}
+              >
+                {telaCheia ? "Sair" : "Tela cheia"}
+              </Button>
+            )}
+            <div className="relative" ref={formRef}>
+              <Button
+                size="sm"
+                variant="secondary"
+                leftIcon={<Plus className="h-4 w-4" aria-hidden />}
+                aria-expanded={formAberto}
+                onClick={() => setFormAberto((v) => !v)}
+              >
+                Adicionar
+              </Button>
+              {formAberto && (
+                <form
+                  onSubmit={adicionar}
+                  className="absolute right-0 top-full z-40 mt-2 w-80 rounded-[10px] border border-ink-200 bg-white p-4 shadow-popover dark:border-ink-700 dark:bg-ink-900 sm:w-96"
+                >
+                  <Select
+                    label="Adicionar"
+                    value={modo}
+                    onChange={(e) => {
+                      setModo(e.target.value as "cnpj" | "emenda");
+                      setValor("");
+                      setErroForm(undefined);
+                    }}
+                  >
+                    <option value="cnpj">Empresa (CNPJ)</option>
+                    <option value="emenda">Emenda (código)</option>
+                  </Select>
+                  <div className="mt-3">
+                    <Input
+                      label={modo === "cnpj" ? "CNPJ" : "Código da emenda"}
+                      placeholder={modo === "cnpj" ? "00.000.000/0000-00" : "Ex.: 202471040014"}
+                      inputMode="numeric"
+                      autoFocus
+                      leftIcon={
+                        modo === "cnpj" ? (
+                          <Building2 className="h-4 w-4" aria-hidden />
+                        ) : (
+                          <ScrollText className="h-4 w-4" aria-hidden />
+                        )
+                      }
+                      value={valor}
+                      maxLength={modo === "cnpj" ? 18 : 12}
+                      error={erroForm}
+                      onChange={(e) => setValor(modo === "cnpj" ? mascararCnpj(e.target.value) : e.target.value.replace(/\D/g, ""))}
+                      onClear={() => setValor("")}
+                    />
+                  </div>
+                  <Button type="submit" fullWidth className="mt-3" leftIcon={<Plus className="h-4 w-4" aria-hidden />}>
+                    Adicionar ao mapa
                   </Button>
-                </>
-              )}
-              {!painelAberto && (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  aria-label="Mostrar painel"
-                  title="Mostrar o painel de detalhes"
-                  leftIcon={<PanelRightOpen className="h-4 w-4" aria-hidden />}
-                  onClick={() => setPainelAberto(true)}
-                >
-                  Painel
-                </Button>
-              )}
-              {(totalNos > 0 || telaCheia) && (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  aria-label={telaCheia ? "Sair da tela cheia" : "Tela cheia"}
-                  title={telaCheia ? "Sair da tela cheia (Esc)" : "Ver o mapa na tela toda"}
-                  leftIcon={
-                    telaCheia ? <Shrink className="h-4 w-4" aria-hidden /> : <Expand className="h-4 w-4" aria-hidden />
-                  }
-                  onClick={() => setTelaCheia((v) => !v)}
-                >
-                  {telaCheia ? "Sair" : "Tela cheia"}
-                </Button>
+                </form>
               )}
             </div>
-          )}
+            {!painelAberto && (
+              <Button
+                size="sm"
+                variant="secondary"
+                aria-label="Mostrar painel"
+                title="Mostrar o painel de detalhes"
+                leftIcon={<PanelRightOpen className="h-4 w-4" aria-hidden />}
+                onClick={() => setPainelAberto(true)}
+              >
+                Painel
+              </Button>
+            )}
+          </div>
           {totalNos > 0 && (
             <div
               className={cn(
@@ -1423,6 +1638,7 @@ export function SinapseClient() {
             (cruzamentosAbertos ? (
               <ListaCruzamentos
                 cruzamentos={cruzamentos}
+                resumo={resumo}
                 onFocar={focar}
                 pontos={abertas.length + emendas.length}
                 flutuante
@@ -1435,7 +1651,7 @@ export function SinapseClient() {
             ) : (
               <Button
                 size="sm"
-                variant="secondary"
+                variant={resumo.perigo > 0 ? "danger" : "secondary"}
                 className="absolute bottom-3 left-3 z-10"
                 aria-label={`Mostrar cruzamentos (${cruzamentos.length})`}
                 onClick={() => setCruzamentosAbertos(true)}
@@ -1452,7 +1668,14 @@ export function SinapseClient() {
         )}
       </div>
 
-      {!telaCheia && <ListaCruzamentos cruzamentos={cruzamentos} onFocar={focar} pontos={abertas.length + emendas.length} />}
+      {!telaCheia && (
+        <ListaCruzamentos
+          cruzamentos={cruzamentos}
+          resumo={resumo}
+          onFocar={focar}
+          pontos={abertas.length + emendas.length}
+        />
+      )}
 
       <div className="flex flex-col gap-3">
         <Legenda />
@@ -1460,7 +1683,7 @@ export function SinapseClient() {
           <TriangleAlert className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
           Versão beta. Fontes: Receita Federal (BrasilAPI), CNPJá, Portal da Transparência (CGU), TCU, MTE, registro.br e
           SEFAZ-AM. O CPF dos
-          sócios vem mascarado da Receita, então o mapa liga pessoas pelo nome e pelos dígitos visíveis do CPF — só entre
+          sócios vem mascarado da Receita, então o mapa liga pessoas pelo nome e pelos dígitos visíveis do CPF, só entre
           pontos que estão no mapa. Cada empresa mostra até 20 órgãos, os de maior valor.
           {abertas.length > 0 && ` Empresas abertas: ${abertas.map((c) => formatarCnpj(c)).join(", ")}.`}
           {emendas.length > 0 && ` Emendas: ${emendas.join(", ")}.`}

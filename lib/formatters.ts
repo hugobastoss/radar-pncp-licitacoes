@@ -32,6 +32,13 @@ const formatadorHora = new Intl.DateTimeFormat("pt-BR", {
   timeZone: "America/Sao_Paulo",
 });
 
+const formatadorHoraComSegundos = new Intl.DateTimeFormat("pt-BR", {
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  timeZone: "America/Sao_Paulo",
+});
+
 /**
  * Formata uma data-calendário pura ("AAAA-MM-DD", sem instante/fuso
  * associado — ex.: data de abertura de uma empresa) só rearranjando o
@@ -157,6 +164,14 @@ export function formatarDataHoraCurta(isoDate: string | undefined): string {
   const data = new Date(isoDate);
   if (Number.isNaN(data.getTime())) return "Data não informada";
   return `${formatadorData.format(data)} · ${formatadorHora.format(data)}`;
+}
+
+/** Igual a formatarDataHoraCurta, mas com segundos — usado só no relógio ao vivo do cabeçalho. */
+export function formatarDataHoraComSegundos(isoDate: string | undefined): string {
+  if (!isoDate) return "Data não informada";
+  const data = new Date(isoDate);
+  if (Number.isNaN(data.getTime())) return "Data não informada";
+  return `${formatadorData.format(data)} · ${formatadorHoraComSegundos.format(data)}`;
 }
 
 export function formatarDataHora(isoDate: string | Date | undefined): string {
